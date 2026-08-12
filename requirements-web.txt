@@ -1,0 +1,15 @@
+# MARI · Voice web front-end (the tap-to-speak UI + WebSocket bridge).
+# Independent of the GPU s2s stack so the UI can run on any machine.
+fastapi>=0.110
+uvicorn[standard]>=0.27
+websockets>=12.0     # Soniox realtime STT (Urdu)
+httpx>=0.27          # vLLM Qwen (LLM), Uplift TTS (Urdu)
+numpy>=1.26          # PCM handling
+
+# English runs locally (the s2s built-ins), not the remote APIs:
+faster-whisper>=1.0  # English STT (GPU/CPU)
+soundfile>=0.12      # WAV encoding for local Kokoro
+# kokoro>=0.7  misaki[en]   # English TTS — needs Python <=3.12 (pins numpy==1.26.4,
+#                             which has no wheel on 3.13). Installs cleanly in the
+#                             Docker/ECS runtime. Until then English TTS uses the
+#                             browser voice fallback automatically.

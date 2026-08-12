@@ -1,0 +1,97 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+
+# Don't stack reviews when someone pushes several times in a row.
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Skip drafts; they get reviewed when marked ready.
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          # Uses a Claude Pro/Max subscription token, not an API key.
+          # Generate with `claude setup-token` and store as a repo secret.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Post every inline comment immediately instead of buffering it for
+          # post-session "real review vs. test probe" classification — that
+          # classifier is what silently dropped every finding on the first
+          # attempt at this. (docs: claude-code-action inputs, classify_inline_comments)
+          classify_inline_comments: "false"
+          # Temporary: prints Claude's full tool-call transcript to the Actions
+          # log so a misfire is diagnosable. Turn back to "false" once inline
+          # comments are confirmed landing — the log otherwise carries file
+          # contents Claude read, which is unnecessary exposure long-term.
+          show_full_output: "true"
+          prompt: |
+            Review pull request #${{ github.event.pull_request.number }}
+            in ${{ github.repository }}.
+
+            Read the diff with `gh pr diff`, then open the files it touches
+            to check the changes against their surrounding code.
+
+            For each finding, call the create_inline_comment tool directly —
+            do not use `gh api` or `gh pr review` for this, and do not try
+            to build a review payload by hand:
+
+              create_inline_comment(
+                path: "server/app.py",
+                line: 239,              // must be a line shown in `gh pr diff`
+                side: "RIGHT",
+                body: "**IMPORTANT** — <finding, specific to this line>",
+                confirmed: true,        // post now; omitting this buffers and
+                                        // may never post at all
+              )
+
+            `line` must be a line the diff actually touches (added, or
+            unchanged context). If a real finding sits on a line the diff
+            doesn't cover, put it in the final summary instead of forcing an
+            inline comment onto the wrong line.
+
+            After every finding is posted, write one final top-level comment
+            with `gh pr comment` containing just the tally, e.g.
+            "2 IMPORTANT, 1 NIT — see inline comments." If you found nothing
+            important, post that plainly instead of manufacturing findings.
+
+            This is MARI, a real-time speech-to-speech kiosk: a FastAPI
+            server (`server/`) streaming between vLLM, Soniox/Uplift for
+            Urdu, and faster-whisper/kokoro for English, with a browser
+            client in `web/`. Weight your attention accordingly:
+
+            - Correctness bugs: races in the async streaming paths,
+              unawaited coroutines, websocket/session state that leaks
+              between turns, unhandled provider errors that would wedge
+              a live conversation.
+            - Secrets: every credential must come from an APP_* env var
+              via `server/config.py`. Flag any literal key, and any key
+              or token that could reach a log line or an HTTP response.
+            - Resource handling: audio buffers, websockets, and HTTP
+              clients that aren't closed on the error path.
+            - Browser client: unhandled promise rejections, mic streams
+              or AudioContexts that aren't torn down.
+
+            Report only issues you can tie to specific lines. Tag each
+            finding IMPORTANT (fix before merge) or NIT (minor). Do not
+            comment on formatting or naming.
+          claude_args: |
+            --max-turns 30
+            --model claude-sonnet-5
+            --allowed-tools "Read,Grep,Glob,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),mcp__github_inline_comment__create_inline_comment"
