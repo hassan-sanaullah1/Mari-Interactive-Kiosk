@@ -21,6 +21,7 @@ the UI never dead-ends.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import os
@@ -34,6 +35,7 @@ from pydantic import BaseModel
 
 from . import config as C
 from . import providers
+from . import avatar
 
 WEB_DIR = C.WEB_DIR
 
@@ -67,6 +69,9 @@ async def _warmup() -> None:
     import asyncio
 
     asyncio.create_task(providers.warm("en"))
+    # Dial the Audio2Face gRPC channel eagerly so the first reply's lipsync
+    # isn't delayed by connection setup. No-op when A2F isn't configured.
+    asyncio.create_task(avatar.warm())
 
 
 @app.get("/")
@@ -172,8 +177,10 @@ async def voice(request: Request, lang: str = "en") -> dict:
 # ------------------------------------------------------------------ #
 # Streaming pipeline over WebSocket — the low-latency path the UI uses.
 #   client → {"start",lang}  <wav bytes…>  {"end"}
-#   server → {"stt",text} · then per sentence: {"reply",text} {"tts",mime} <audio> ·
+#   server → {"stt",text} · then per sentence: {"reply",text} {"tts",mime,clip} <audio> ·
 #            finally {"done",spoken}
+#            plus, out of band, {"lipsync",uid,names?,frames} — Audio2Face blendshape
+#            keyframes for the avatar, keyed to the matching {"tts"} message's `clip`.
 # Streaming the LLM sentence-by-sentence and synthesizing each as it lands means the
 # first audio plays long before the full reply is finished.
 # ------------------------------------------------------------------ #
@@ -259,25 +266,79 @@ async def llm_stream_sentences(text: str, lang: str):
                 yield s, True
 
 
+_turn_seq = 0
+
+
 async def run_reply(sock: WebSocket, transcript: str, lang: str) -> None:
-    """From the final transcript: stream LLM sentences → TTS each → push audio."""
-    await sock.send_json({"type": "stt", "text": transcript, "lang": lang})
-    if not transcript:
-        await sock.send_json({"type": "done", "spoken": False})
-        return
-    spoken = False
-    async for sentence, is_demo in llm_stream_sentences(transcript, lang):
-        await sock.send_json({"type": "reply", "text": sentence, "demo": is_demo})
-        if C.tts_ready(lang):
-            try:
-                audio, mime = await providers.tts(sentence, lang)
-                if audio:
-                    await sock.send_json({"type": "tts", "mime": mime})
-                    await sock.send_bytes(audio)
-                    spoken = True
-            except Exception as exc:
-                await sock.send_json({"type": "warn", "message": f"tts: {exc}"})
-    await sock.send_json({"type": "done", "spoken": spoken})
+    """From the final transcript: stream LLM sentences → TTS each → push audio.
+
+    The synthesized audio is ALSO handed to Audio2Face (one clip per sentence)
+    when it's configured; its blendshape frames are published on this same
+    socket as {"type":"lipsync"} messages, tagged with the clip id carried on
+    the sentence's {"type":"tts"} message so the browser can line the frames up
+    with the exact <audio> element it plays. The A2F work runs in background
+    tasks — the audio path's timing is unchanged.
+    """
+    global _turn_seq
+    _turn_seq += 1
+    turn_id = f"t{_turn_seq}"
+
+    # The reply path and the A2F publishers both write to this socket; Starlette
+    # WebSockets are not safe for concurrent sends, so everything goes through
+    # one lock (which also keeps each {"tts"} header glued to its audio bytes).
+    lock = asyncio.Lock()
+
+    async def send_json(payload: dict) -> None:
+        async with lock:
+            await sock.send_json(payload)
+
+    async def send_audio(header: dict, audio: bytes) -> None:
+        async with lock:
+            await sock.send_json(header)
+            await sock.send_bytes(audio)
+
+    a2f = avatar.get_a2f_client()
+    lips = avatar.LipsyncTurn(a2f, send_json, turn_id) if a2f is not None else None
+
+    try:
+        await send_json({"type": "stt", "text": transcript, "lang": lang})
+        if not transcript:
+            await send_json({"type": "done", "spoken": False})
+            return
+        spoken = False
+        async for sentence, is_demo in llm_stream_sentences(transcript, lang):
+            await send_json({"type": "reply", "text": sentence, "demo": is_demo})
+            if C.tts_ready(lang):
+                # Open (and start priming) this sentence's A2F clip before
+                # synthesis, so the stream is warm by the time audio exists.
+                clip = lips.open_clip() if lips is not None else None
+                try:
+                    audio, mime = await providers.tts(sentence, lang)
+                    if audio:
+                        header = {"type": "tts", "mime": mime}
+                        if clip is not None:
+                            header["clip"] = clip
+                        await send_audio(header, audio)
+                        spoken = True
+                        if clip is not None:
+                            # The same bytes the user is about to hear — fanned
+                            # out to A2F, with no second synthesis pass.
+                            lips.feed(clip, audio, mime)
+                    elif clip is not None:
+                        lips.cancel(clip)
+                except Exception as exc:
+                    if clip is not None:
+                        lips.cancel(clip)
+                    await send_json({"type": "warn", "message": f"tts: {exc}"})
+        await send_json({"type": "done", "spoken": spoken})
+        if lips is not None:
+            # Hold the socket open until the last clip's frames are out — the
+            # browser is still playing the audio they belong to.
+            await lips.drain()
+    except Exception:
+        if lips is not None:
+            await lips.abort()
+        raise
 
 
 @app.websocket("/ws")

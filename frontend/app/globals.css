@@ -1,0 +1,144 @@
+/* MARI kiosk — design tokens + reset.
+   Geometry below is measured off UI-sample-images/UI.png, whose design space is
+   2000 x 1125. Every size is expressed in those reference units and multiplied by
+   --s, so the whole composition scales as one piece instead of relying on
+   per-breakpoint coordinates. */
+
+:root {
+  /* 1 reference unit, clamped so the controls stay usable on small screens. */
+  --s: clamp(0.62px, min(calc(100vw / 2000), calc(100vh / 1125)), 1.15px);
+
+  /* Palette sampled from the reference image. */
+  --blue: #0077dc;
+  --blue-hover: #0f88ee;
+
+  /* The dock's ✕ / pause are ALWAYS this dark, in either theme, fully opaque —
+     they sit over the artwork and the avatar, not over a themed surface. */
+  --dock-surface: #1f2021;
+  --dock-surface-hover: #343537;
+  --dock-icon: #ffffff;
+
+  /* --- control sizes ---
+     Desktop numbers come from UI.png (2000x1125 space); the mobile block below
+     re-derives every one of them from mobile_UI.png (402x874 space), so the two
+     layouts share components but not coordinates. */
+  --mic: calc(144 * var(--s));
+  --mic-ring1: 1.222; /* halo diameter, as a multiple of --mic */
+  --mic-ring1-a: 0.28;
+  --mic-ring2: 1.222; /* desktop has a single ring: ring2 matches ring1, alpha 0 */
+  --mic-ring2-a: 0;
+  --dock-btn: calc(59 * var(--s));
+  --dock-gap: calc(58.5 * var(--s));
+  --dock-bottom: calc(23.5 * var(--s));
+
+  --pill-h: calc(58 * var(--s));
+  --pill-seg: calc(127 * var(--s));
+  --pill-pad: calc(5 * var(--s));
+  --pill-font: calc(21 * var(--s));
+  --pill-gap: calc(22 * var(--s));
+  --theme-btn: calc(59 * var(--s));
+  --launcher: calc(63 * var(--s));
+
+  /* Distance from the viewport edges for the bottom control row. */
+  --edge-x: calc(78 * var(--s));
+  --edge-y: calc(52 * var(--s));
+}
+
+/* --- phones: a separate 402x874 design space, measured off mobile_UI.png ---
+   --s is redefined here, so every calc() below is in mobile reference units. */
+@media (max-width: 760px) {
+  :root {
+    --s: min(calc(100vw / 402), calc(100vh / 874), 1.35px);
+
+    --mic: calc(64 * var(--s));
+    --mic-ring1: 1.1875; /* mobile shows a two-tone halo: dense inner ring... */
+    --mic-ring1-a: 0.45;
+    --mic-ring2: 1.406; /* ...and a softer outer one */
+    --mic-ring2-a: 0.21;
+    --dock-btn: calc(32 * var(--s));
+    --dock-gap: calc(22 * var(--s));
+    --dock-bottom: calc(104.5 * var(--s));
+
+    --pill-h: calc(45 * var(--s));
+    --pill-seg: calc(79 * var(--s));
+    --pill-pad: calc(5 * var(--s));
+    --pill-font: calc(15 * var(--s));
+    --pill-gap: calc(12.5 * var(--s));
+    --theme-btn: calc(46 * var(--s));
+    --launcher: calc(45 * var(--s));
+
+    --edge-x: calc(16 * var(--s));
+    --edge-y: calc(25.5 * var(--s));
+  }
+}
+
+/* --- dark (default) --- */
+:root,
+:root[data-theme="dark"] {
+  --surface: #1f2021; /* sampled opaque off the reference */
+  --surface-raised: #323334; /* user bubble */
+  --surface-sunken: #171819; /* composer well */
+  --surface-hover: #343537;
+  --hairline: rgba(255, 255, 255, 0.08);
+  --text: #ffffff;
+  --text-dim: rgba(255, 255, 255, 0.62);
+  --placeholder: rgba(255, 255, 255, 0.42);
+  --shadow: rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+/* --- light --- */
+:root[data-theme="light"] {
+  --surface: #f4f5f7;
+  --surface-raised: #e3e5e9;
+  --surface-sunken: #ffffff;
+  --surface-hover: #e8eaee;
+  --hairline: rgba(0, 0, 0, 0.1);
+  --text: #14161a;
+  --text-dim: rgba(20, 22, 26, 0.6);
+  --placeholder: rgba(20, 22, 26, 0.45);
+  --shadow: rgba(0, 0, 0, 0.32);
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #04121f;
+  color: var(--text);
+  font-family: var(--font-ui), "Segoe UI", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  overflow: hidden; /* full-bleed kiosk canvas — nothing scrolls but the chat log */
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--blue-hover);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

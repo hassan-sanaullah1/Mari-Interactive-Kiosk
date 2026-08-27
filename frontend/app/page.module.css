@@ -1,0 +1,69 @@
+/* Full-bleed kiosk canvas. Layers, back to front:
+   0 background art · 10 avatar · 20 controls · 30 chat panel */
+
+.root {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* The supplied artwork, drawn as an actual <img> — never re-created in CSS. */
+.bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center bottom;
+  z-index: 0;
+  user-select: none;
+  pointer-events: none;
+}
+
+.langBar {
+  position: absolute;
+  left: var(--edge-x);
+  bottom: var(--edge-y);
+  z-index: 20;
+}
+
+.dock {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: var(--dock-bottom);
+  z-index: 20;
+}
+
+.chatLayer {
+  z-index: 30;
+}
+
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: calc(230 * var(--s));
+  transform: translateX(-50%);
+  z-index: 40;
+  max-width: min(calc(620 * var(--s)), 88vw);
+  padding: calc(13 * var(--s)) calc(22 * var(--s));
+  border-radius: calc(999 * var(--s));
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--hairline);
+  box-shadow: 0 calc(8 * var(--s)) calc(28 * var(--s)) var(--shadow);
+  font-size: calc(16 * var(--s));
+  text-align: center;
+  cursor: pointer;
+}
+
+/* Phones follow mobile_UI.png: the dock sits above a single bottom row holding
+   the language pill + theme switch on the left and the chat launcher on the
+   right. Positions come from --edge-x/--edge-y/--dock-bottom in globals.css. */
+@media (max-width: 760px) {
+  .toast {
+    bottom: calc(220 * var(--s));
+    font-size: calc(13 * var(--s));
+    padding: calc(10 * var(--s)) calc(16 * var(--s));
+  }
+}

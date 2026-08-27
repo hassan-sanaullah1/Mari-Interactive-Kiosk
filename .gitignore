@@ -10,3 +10,6 @@ models/
 *.bin
 .DS_Store
 Thumbs.db
+
+# A2F deploy secrets (NGC key)
+deploy/a2f/.env

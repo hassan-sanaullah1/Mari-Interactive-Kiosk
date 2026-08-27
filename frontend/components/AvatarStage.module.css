@@ -1,0 +1,42 @@
+/* The 3D presenter's area.
+   Sized and placed to match where the figure stands in the reference composition:
+   horizontally centred, standing on the bottom edge, ~700 reference units wide.
+   The Three.js canvas fills this box exactly and is transparent, so the kiosk
+   artwork behind it shows through — see components/avatar/AvatarScene.tsx. */
+
+.stage {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  /* Wider than the ~700-unit space the figure occupies in the reference: the
+     talking animation swings her arms well outside her standing outline, and
+     the canvas edge clips them. The camera frames her by height, so the extra
+     width is gesture headroom only — it does not change how large she reads. */
+  width: min(calc(1180 * var(--s)), 100vw);
+  height: min(calc(1035 * var(--s)), 100%);
+  z-index: 10;
+  pointer-events: none; /* controls sit above and stay clickable */
+  /* The canvas is absolutely positioned inside, so nothing it does can push
+     the page around or introduce a scrollbar. */
+  overflow: hidden;
+}
+
+/* R3F renders <canvas> as this element's only child. Pin it to the box so a
+   momentary size mismatch during a resize can never lay out as extra content. */
+.stage > canvas {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+  background: transparent;
+}
+
+/* Phones: mobile_UI.png frames the presenter tighter and taller. */
+@media (max-width: 760px) {
+  .stage {
+    width: 100vw; /* same reason as above — phones have no width to spare */
+    height: min(calc(690 * var(--s)), 100%);
+  }
+}

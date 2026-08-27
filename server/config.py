@@ -89,6 +89,17 @@ KOKORO_TOKEN = env("APP_REMOTE_TTS_TOKEN")
 KOKORO_MODEL = env("APP_REMOTE_TTS_MODEL", "kokoro")
 KOKORO_FORMAT = env("APP_REMOTE_TTS_RESPONSE_FORMAT", "mp3")
 
+# ── Audio2Face-3D (avatar lipsync) — NVIDIA NIM over gRPC ───────────
+#    Unset APP_A2F_URL ⇒ no lipsync frames; everything else runs unchanged.
+#    Forms: host:port · grpc://host:port · grpcs://host[:port] (TLS + API key)
+A2F_URL = env("APP_A2F_URL")
+A2F_API_KEY = env("APP_A2F_API_KEY")
+A2F_TLS_CA = env("APP_A2F_TLS_CA")
+# How many reply sentences may be in flight at the NIM at once. Must not exceed
+# the NIM's own `stream_number` (deploy/a2f/configs/deployment_config.yaml),
+# which is 1 on a 6GB GPU and 3 on a full-size one.
+A2F_MAX_CLIPS = max(1, int(env("APP_A2F_MAX_CLIPS", "1")))
+
 # ── Voices ──────────────────────────────────────────────────────────
 # English TTS = Kokoro voice name; Urdu TTS = Uplift (uses UPLIFT_VOICE above,
 # not a Kokoro name), so VOICE_UR only applies if Urdu is ever routed to Kokoro.
@@ -126,4 +137,12 @@ def status() -> dict:
             "ur": {"provider": "uplift", "ready": tts_ready("ur"), "voice": UPLIFT_VOICE},
             "en": {"provider": en_tts, "ready": tts_ready("en"), "voice": VOICE_EN},
         },
+        "avatar": _avatar_status(),
     }
+
+
+def _avatar_status() -> dict:
+    """Lipsync readiness — imported lazily so config stays dependency-free."""
+    from .avatar import a2f_status
+
+    return {"a2f": a2f_status()}

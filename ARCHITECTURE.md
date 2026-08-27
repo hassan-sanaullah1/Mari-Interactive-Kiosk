@@ -213,3 +213,145 @@ Planned next steps (from the original migration plan), in order:
 - **Not adding RAG/Qdrant/LiveKit/3D-avatar code here** — those belong to the
   separate production kiosk repo. If/when this repo merges with that one, revisit
   this document's recommendation with the combined system in view.
+
+## Avatar: Three.js GLB presenter + Audio2Face lipsync
+
+Added on top of the pipeline above; it consumes the existing speech workflow and
+changes none of it. Reference: `THREEJS_A2F_INTEGRATION.md` (the working
+implementation this was ported from) — section numbers below point into it.
+
+```
+existing turn:  mic ─► /ws ─► STT ─► LLM ─► TTS ──► {"tts"} + audio bytes ─► <audio> playback
+                                              │
+avatar addition:                              └──► Audio2Face-3D NIM (gRPC)
+                                                        │  52 ARKit blendshape
+                                                        │  weight frames @30fps
+                                                        ▼
+                                       {"type":"lipsync",uid,names?,frames} on the SAME /ws
+                                                        ▼
+                                    blendshapePlayer → a2fMorphs → girl11.glb morph targets
+```
+
+### Backend (`server/avatar/`)
+
+| File | Role |
+|---|---|
+| `a2f_client.py` | gRPC client to the A2F-3D NIM — near-verbatim port (§6–§8). One shared channel; one `ProcessAudioStream` per clip; silence priming; ~1s coalesced writes; 3-frame batches (first frame alone). Guarded import: no `grpcio`/`nvidia_ace` ⇒ `AVAILABLE = False` and lipsync is simply off. |
+| `lipsync.py` | `LipsyncTurn` — one A2F clip per reply sentence. `open_clip()` opens and primes the stream *before* TTS runs, `feed()` hands it the exact audio bytes the browser is playing. Decodes mp3/wav → 16 kHz PCM16 (PyAV), trims the NIM's ~1.5s trailing silence, publishes batches. 2 concurrent clips, 2 failed opens disable A2F for the turn. |
+| `__init__.py` | `get_a2f_client()` (process-wide, lazily built from config), `warm()`, `a2f_status()` for `/healthz`. |
+
+`server/app.py`'s `run_reply` is the only touched route: it opens a clip per
+sentence, tags the sentence's `{"tts"}` message with `clip`, and feeds A2F the
+same bytes it just sent. All A2F work is in background tasks, so audio timing is
+unchanged; the socket is held open by `drain()` until the last clip's frames are
+out. Both the reply path and the A2F publishers share one send lock (Starlette
+WebSockets are not safe for concurrent sends).
+
+### Frontend (`frontend/`)
+
+| File | Role |
+|---|---|
+| `lib/blendshapePlayer.ts` | Buffers clips by uid, interpolates keyframes, applies rig calibration, and gates playback on frame arrival (`waitForFrames`). `?a2f=off`, `?a2fGain=`, `?a2fShapes=`, `?a2fOffset=` still work. |
+| `lib/a2fMorphs.ts` | Resolves the 52 ARKit names against the rig (direct, case-insensitive; 50/52 match) and writes `morphTargetInfluences` with a ~50ms follow filter, clamping, and decay to rest. |
+| `components/avatar/AvatarModel.tsx` | The rig: 3-layer crossfade pool over `CINEMA_4D_Main`'s breathing/listening/talking segments (§5), procedural blink, per-frame lipsync at `useFrame` priority −1. |
+| `components/avatar/AvatarScene.tsx` | Transparent `<Canvas>` (the kiosk artwork is behind it), the ported lighting rig, and container-driven framing. |
+| `components/avatar/state.ts` | `Mode` → `AvatarState`, and the GLB path. |
+| `components/AvatarStage.tsx` | Same placed/sized box as the placeholder it replaced; loads the scene client-side only. |
+
+**Calibration is per-deployment, not inherited.** This NIM build does not
+normalise its output: measured over real Urdu TTS sentences, `JawOpen` peaks at
+**2.53** (p95 1.48) while every other mouth shape stays under ~0.9. The source
+repo's constants (0.55 global, `jawOpen` 0.3 of that) therefore held the jaw's
+p95 at 0.24 and the mouth read as murmuring. Now 0.9 global with `jawOpen` at
+0.375 (0.3375 effective) — jaw p95 ~0.50, peak ~0.85, no clipping against the
+`[0,1]` clamp. Re-measure if you change NIM build or rig; `?a2fGain=` /
+`?a2fShapes=jawopen:` override live.
+
+**Playback gate.** The NIM is clip-in/burst-out, so a clip's first frames land
+after its audio is ready — measured ~540ms for the first sentence of a turn.
+Playing immediately meant the opening syllables ran with the mouth at rest, so a
+sentence's audio now waits (up to 700ms) for its frames. This is §10's
+`APP_A2F_PLAYBACK_DELAY` made adaptive: later sentences are A2F'd while the
+previous one plays, so they resolve instantly and pay nothing, and if A2F is
+down the audio still plays on the timeout, just without lipsync.
+
+**Timing — the one deliberate divergence from the source.** The original ran over
+a single continuous LiveKit audio track, so it anchored one wall clock per turn
+and the backend pre-offset each sentence onto that timeline. Here the browser
+plays one `<audio>` element per sentence, so each clip keeps its own timeline and
+is sampled against **that element's `currentTime`**. The audio playhead is the
+clock: no wall-clock drift, no offsets to compound, and pause/resume or a
+late-starting element stay in sync for free.
+
+### What must be running
+
+1. The FastAPI server and the frontend, as before.
+2. `pip install grpcio av && pip install --no-deps nvidia-ace==1.2.0` — the
+   `--no-deps` matters: `nvidia-ace`'s metadata pins `protobuf==4.24.1`, which
+   conflicts with `onnxruntime`. Its generated stubs run fine on protobuf 7.
+3. `frontend/public/models/girl11.glb` — gitignored (`models/` in
+   `.gitignore`), so it is placed per environment.
+4. **The Audio2Face-3D NIM**, via `deploy/a2f/` (see below). Without it
+   everything else works and the avatar simply doesn't move its mouth — there is
+   no fallback lipsync by design (§4/§15.6).
+
+### Running the NIM — `deploy/a2f/`
+
+```bash
+docker login nvcr.io -u '$oauthtoken' -p "$NGC_API_KEY"
+cd deploy/a2f
+cp .env.example .env          # put your NGC key in it (gitignored)
+docker compose --profile init up nim-init   # first host only: ~10GB model pull
+docker compose up -d
+docker compose logs -f nim    # ready at "[GrpcServer] Running..."
+```
+
+Then in the repo-root `.env`:
+
+```
+APP_A2F_URL=127.0.0.1:52000
+APP_A2F_API_KEY=          # the local NIM has no auth of its own — see below
+APP_A2F_MAX_CLIPS=1       # must be <= the NIM's stream_number
+```
+
+**Fitting a 6GB GPU.** The stock config does not fit an RTX 4050, and both
+failures present as a crash loop rather than a clear message, so the shipped
+config differs from NVIDIA's defaults in two places:
+
+- `stream_number: 3 → 1` (`configs/deployment_config.yaml`). Each stream holds
+  its own TensorRT execution context.
+- `trt_model_generation.a2e` batch shapes `10 → 1/2`
+  (`configs/advanced_config.yaml`). Audio2Emotion is FP32-only and its context
+  is the single largest allocation: ~3GB at batch 10, a few hundred MB at 2.
+  **The engine is cached, so editing this alone does nothing** — delete it and
+  regenerate:
+
+  ```bash
+  docker run --rm -v mari_a2f_cache:/c alpine rm -f /c/a2e.trt
+  docker run --rm --gpus all -v mari_a2f_cache:/tmp/a2x \
+    -v "$PWD/configs:/mnt/configs:ro" --env-file .env \
+    --entrypoint bash nvcr.io/nim/nvidia/audio2face-3d:2.0 \
+    -c 'python3 /opt/nvidia/a2f_pipeline/service/generate_trt_models.py \
+        --advanced-config /mnt/configs/advanced_config.yaml'
+  ```
+
+  The pipeline does **not** build engines on demand — it exits with "Please
+  generate TRT engines using: ./service/generate_trt_models.py".
+
+On a full-size GPU, raise both back toward the defaults (and `APP_A2F_MAX_CLIPS`
+with `stream_number`); it is throughput, not correctness, that changes.
+
+**Security.** This NIM has no authentication — the bearer-token check in a real
+deployment lives in a TLS edge proxy in front of it. The compose file therefore
+publishes to `127.0.0.1:52000` only. Do not change that to `52000:52000` on a
+shared or internet-facing host; for a real deployment put it behind a proxy that
+checks a token and use the `grpcs://` form of `APP_A2F_URL` with
+`APP_A2F_API_KEY`.
+
+**Diagnosing.** `/healthz` reports `avatar.a2f`. In the browser console,
+`window.__A2F.state` shows messages/frames received, the active clip, and the
+live gains — the fastest way to tell a backend problem from a rendering one.
+Note the NIM emits blendshape names in PascalCase (`JawOpen`) while the rig uses
+camelCase (`jawOpen`); the resolve step is case-insensitive on purpose (§15.5).
+This build emits 68 names (52 ARKit + 16 tongue shapes) and 50 of them land on
+the rig — the misses are the tongue set plus the two documented rig gaps.

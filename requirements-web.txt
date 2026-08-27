@@ -13,3 +13,11 @@ soundfile>=0.12      # WAV encoding for local Kokoro
 #                             which has no wheel on 3.13). Installs cleanly in the
 #                             Docker/ECS runtime. Until then English TTS uses the
 #                             browser voice fallback automatically.
+
+# Avatar lipsync — Audio2Face-3D (optional; without these APP_A2F_URL is ignored).
+# Install nvidia-ace with --no-deps: its metadata pins protobuf==4.24.1, which
+# conflicts with onnxruntime here, and the generated stubs work fine on newer
+# protobuf runtimes.
+grpcio>=1.60          # transport to the A2F NIM
+# nvidia-ace==1.2.0   # pip install --no-deps nvidia-ace==1.2.0  (A2F protos)
+av>=11.0              # decode TTS mp3/wav to the 16 kHz PCM A2F expects
