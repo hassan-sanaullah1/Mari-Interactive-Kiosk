@@ -66,19 +66,7 @@ async def _warmup() -> None:
     isn't slowed by model load. No-op if English uses the remote APIs / models absent."""
     import asyncio
 
-    async def warm() -> None:
-        if C.EN_STT == "local":
-            try:
-                await asyncio.to_thread(providers._get_whisper)
-            except Exception:
-                pass
-        if C.EN_TTS == "local":
-            try:
-                await asyncio.to_thread(providers._get_kokoro)
-            except Exception:
-                pass
-
-    asyncio.create_task(warm())
+    asyncio.create_task(providers.warm("en"))
 
 
 @app.get("/")
