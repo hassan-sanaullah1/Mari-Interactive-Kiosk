@@ -9,6 +9,26 @@
  * lighting values come from the working implementation
  * (THREEJS_A2F_INTEGRATION.md §3); the framing logic is this app's own, because
  * the avatar lives in a sized container here rather than a full viewport.
+ *
+ * Three pieces of the source rig are deliberately NOT ported, because they
+ * depend on that scene owning the whole viewport and this one owning a
+ * transparent box over artwork:
+ *
+ *  - `<color attach="background">` (#0a0a14) would paint an opaque near-black
+ *    rectangle over the artwork inside the stage box, since the canvas is only
+ *    as large as .stage (see AvatarStage.module.css) rather than full-screen.
+ *  - `<fog>` (#0a0a14, near 4, far 10) is a no-op at this framing regardless:
+ *    the camera sits 2.5m out and the rig spans roughly 2.2–2.8m from it, so
+ *    nothing ever reaches the fog's 4m near plane.
+ *  - `<ContactShadows>` at y=0 is below the frame. This scene frames her head
+ *    (y 0.61–1.76 at the default 1.685m rig), and the shadow plane's nearest
+ *    corner at z=-2 still sits 0.15m under the bottom of the frustum, so it
+ *    would cost a depth + blur pass every frame and never be seen.
+ *
+ * The light rig's positions and intensities are ported verbatim, but its
+ * colours are not: the source scene retinted every light per conversation
+ * state, and here the palette is fixed (see LIGHTING below), so only intensity
+ * still lerps.
  */
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
@@ -76,34 +96,187 @@ function Framing({ modelHeight }: { modelHeight: number }) {
   return null;
 }
 
-/** Static port of the source scene's lighting rig (its per-state colour
- *  animation is dropped — the kiosk artwork sets the mood here). */
-function Lighting() {
-  const faceLight = useRef<THREE.SpotLight>(null);
+// ---------------------------------------------------------------------------
+// LIGHTING
+//
+// A studio rig: warm key, cool fill, a rim from behind and a tight spot on the
+// face. The colours are FIXED — every light holds the same hue in every
+// conversation state, so the room never changes temperature. Only intensity
+// still varies per state (and with her voice), which reads as her being lit
+// more or less brightly rather than as the light changing colour.
+// ---------------------------------------------------------------------------
 
-  useEffect(() => {
-    if (faceLight.current) {
-      faceLight.current.target.position.set(0, 1.45, 0); // head
-      faceLight.current.target.updateMatrixWorld();
+/**
+ * The one palette, used in every state. Set as JSX props on the lights below
+ * and never touched afterwards, so no per-frame colour work happens at all.
+ */
+const KEY_COLOR = "#ffe4c9";
+const FILL_COLOR = "#c9d6ff";
+const RIM_COLOR = "#8b9cf7";
+const TOP_COLOR = "#e8daf5";
+const FACE_COLOR = "#fff2e0";
+
+interface LightConfig {
+  keyIntensity: number;
+  fillIntensity: number;
+  rimIntensity: number;
+  topIntensity: number;
+}
+
+/**
+ * Per-state intensities. Colours are deliberately absent: the rig keeps one
+ * palette throughout (see the constants above), so a state change only moves
+ * how bright the lights are.
+ *
+ * This repo's AvatarState happens to use the same four names as the source
+ * scene's conversationState, so the presets map across 1:1.
+ */
+const LIGHT_CONFIGS: Record<AvatarState, LightConfig> = {
+  idle: {
+    keyIntensity: 1.4,
+    fillIntensity: 0.4,
+    rimIntensity: 0.5,
+    topIntensity: 0.9,
+  },
+  listening: {
+    keyIntensity: 1.8,
+    fillIntensity: 0.5,
+    rimIntensity: 0.7,
+    topIntensity: 1.1,
+  },
+  thinking: {
+    keyIntensity: 1.2,
+    fillIntensity: 0.5,
+    rimIntensity: 0.8,
+    topIntensity: 0.8,
+  },
+  speaking: {
+    keyIntensity: 1.8,
+    fillIntensity: 0.5,
+    rimIntensity: 0.9,
+    topIntensity: 1.2,
+  },
+};
+
+/** Per-frame approach rate toward the active preset — slow enough that a state
+ *  change takes about a second to land. */
+const LERP_SPEED = 0.04;
+/** Where the face spot aims. Retune if the rig's proportions change; girl11's
+ *  head sits around here. */
+const HEAD_TARGET_Y = 1.45;
+
+/**
+ * `levelRef` carries this app's smoothed 0..1 amplitude (useVoiceSession's
+ * levelRef — driven by the TTS analyser while she speaks and by the mic while
+ * she listens). The source scene passed an `audioAnalysisRef` holding
+ * `{ volume }`; the signal is the same, only the shape differs. Omit it and the
+ * two volume boosts below simply become no-ops.
+ */
+interface DynamicLightingProps {
+  state?: AvatarState;
+  levelRef?: { current: number };
+}
+
+function DynamicLighting({ state = "idle", levelRef }: DynamicLightingProps) {
+  const keyLightRef = useRef<THREE.DirectionalLight>(null);
+  const fillLightRef = useRef<THREE.DirectionalLight>(null);
+  const rimLightRef = useRef<THREE.SpotLight>(null);
+  const topLightRef = useRef<THREE.SpotLight>(null);
+  const faceLightRef = useRef<THREE.SpotLight>(null);
+  const smoothedVolume = useRef(0);
+
+  useFrame(() => {
+    const vol = levelRef?.current ?? 0;
+    smoothedVolume.current += (vol - smoothedVolume.current) * 0.1;
+    const sv = smoothedVolume.current;
+    const config = LIGHT_CONFIGS[state];
+
+    if (keyLightRef.current) {
+      keyLightRef.current.intensity = THREE.MathUtils.lerp(
+        keyLightRef.current.intensity,
+        config.keyIntensity + sv * 0.4,
+        LERP_SPEED,
+      );
     }
-  }, []);
+    if (fillLightRef.current) {
+      fillLightRef.current.intensity = THREE.MathUtils.lerp(
+        fillLightRef.current.intensity,
+        config.fillIntensity,
+        LERP_SPEED,
+      );
+    }
+    if (rimLightRef.current) {
+      rimLightRef.current.intensity = THREE.MathUtils.lerp(
+        rimLightRef.current.intensity,
+        config.rimIntensity + sv * 0.5,
+        LERP_SPEED,
+      );
+    }
+    if (topLightRef.current) {
+      topLightRef.current.intensity = THREE.MathUtils.lerp(
+        topLightRef.current.intensity,
+        config.topIntensity,
+        LERP_SPEED,
+      );
+    }
+    if (faceLightRef.current) {
+      // A spotLight's default target is a bare Object3D outside the scene
+      // graph, so its world matrix has to be refreshed by hand.
+      faceLightRef.current.target.position.set(0, HEAD_TARGET_Y, 0);
+      faceLightRef.current.target.updateMatrixWorld();
+    }
+  });
 
   return (
     <>
-      <ambientLight intensity={0.65} />
-      <directionalLight position={[2, 3, 2]} intensity={2.24} color="#ffe4c9" />
-      <directionalLight position={[-2, 2, -1]} intensity={0.64} color="#c9d6ff" />
-      <spotLight position={[0, 3, 1.5]} angle={0.4} penumbra={1} intensity={1.44} color="#e8daf5" />
-      <spotLight position={[0, 2, -1.5]} angle={0.6} penumbra={0.8} intensity={0.8} color="#8b9cf7" />
+      <ambientLight intensity={0.3} />
+      {/* Warm key, front-right and high. `castShadow` is inert until <Canvas>
+          is given `shadows` — kept as the source scene had it. */}
+      <directionalLight
+        ref={keyLightRef}
+        position={[2, 3, 2]}
+        intensity={1.4}
+        castShadow
+        color={KEY_COLOR}
+      />
+      {/* Cool fill, opposite the key and behind. */}
+      <directionalLight
+        ref={fillLightRef}
+        position={[-2, 2, -1]}
+        intensity={0.4}
+        color={FILL_COLOR}
+      />
+      {/* Top wash from just in front of her. */}
       <spotLight
-        ref={faceLight}
+        ref={topLightRef}
+        position={[0, 3, 1.5]}
+        angle={0.4}
+        penumbra={1}
+        intensity={0.9}
+        color={TOP_COLOR}
+        castShadow={false}
+      />
+      {/* Rim from behind — the coloured edge that separates her silhouette. */}
+      <spotLight
+        ref={rimLightRef}
+        position={[0, 2, -1.5]}
+        angle={0.6}
+        penumbra={0.8}
+        intensity={0.5}
+        color={RIM_COLOR}
+        castShadow={false}
+      />
+      {/* Tight face spot, aimed at HEAD_TARGET_Y by the frame loop above. */}
+      <spotLight
+        ref={faceLightRef}
         position={[0, 2.2, 1]}
         angle={0.18}
         penumbra={0.6}
-        intensity={2.4}
+        intensity={1.6}
         distance={1.6}
         decay={2}
-        color="#fff2e0"
+        color={FACE_COLOR}
+        castShadow={false}
       />
     </>
   );
@@ -112,9 +285,16 @@ function Lighting() {
 export interface AvatarSceneProps {
   state?: AvatarState;
   url?: string;
+  /** Smoothed 0..1 amplitude, from useVoiceSession. Optional: without it the
+   *  key and rim lights simply hold their per-state intensities. */
+  levelRef?: { current: number };
 }
 
-export default function AvatarScene({ state = "idle", url = AVATAR_MODEL_URL }: AvatarSceneProps) {
+export default function AvatarScene({
+  state = "idle",
+  url = AVATAR_MODEL_URL,
+  levelRef,
+}: AvatarSceneProps) {
   const [modelHeight, setModelHeight] = useState(FALLBACK_HEIGHT);
   const onMeasure = useCallback((h: number) => {
     if (Number.isFinite(h) && h > 0.2) setModelHeight(h);
@@ -131,14 +311,14 @@ export default function AvatarScene({ state = "idle", url = AVATAR_MODEL_URL }: 
       resize={{ scroll: false }}
     >
       <Framing modelHeight={modelHeight} />
-      <Lighting />
+      <DynamicLighting state={state} levelRef={levelRef} />
 
       {/* Reflections only — an <Environment> with no `background` prop does not
           draw anything, so the artwork behind the canvas stays visible. */}
       <Environment resolution={256}>
-        <Lightformer intensity={3.2} position={[0, 2, 3]} scale={[4, 1, 1]} color="#ffe0cc" />
-        <Lightformer intensity={1.8} position={[-3, 1, -1]} scale={[3, 2, 1]} color="#c9d6ff" />
-        <Lightformer intensity={0.9} position={[3, 0, -2]} scale={[2, 3, 1]} color="#ffd6e0" />
+        <Lightformer intensity={2} position={[0, 2, 3]} scale={[4, 1, 1]} color="#ffe0cc" />
+        <Lightformer intensity={1} position={[-3, 1, -1]} scale={[3, 2, 1]} color="#c9d6ff" />
+        <Lightformer intensity={0.5} position={[3, 0, -2]} scale={[2, 3, 1]} color="#ffd6e0" />
       </Environment>
 
       <Suspense fallback={null}>
