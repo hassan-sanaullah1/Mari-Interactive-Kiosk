@@ -7,6 +7,9 @@ __pycache__/
 venv/
 *.egg-info/
 models/
+!frontend/public/models/
+frontend/public/models/*
+!frontend/public/models/girl13.glb
 *.bin
 .DS_Store
 Thumbs.db
