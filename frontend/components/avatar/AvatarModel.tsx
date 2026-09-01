@@ -34,7 +34,7 @@
  * keeps watching for it.
  */
 
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useAnimations, useGLTF } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
@@ -332,6 +332,38 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
 
   const { actions, mixer } = useAnimations(animations, groupRef);
 
+  /**
+   * Signal readiness only once frames carrying the REAL pose have actually been
+   * rendered by R3F.
+   *
+   * `mixer.update(0)` writes correct bone matrices immediately, but it does not
+   * itself draw anything, and R3F renders on its own internal loop rather than
+   * on a plain requestAnimationFrame we could schedule against. Signalling from
+   * a rAF is therefore a race: both rAF callbacks can resolve before R3F's next
+   * gl.render(), so the canvas un-hides while the glTF's bind pose (a T-pose for
+   * this rig) is still what's on screen.
+   *
+   * Instead, arm a counter here and let the per-frame callback below decrement
+   * it — every tick of that callback IS an R3F frame, so once it has counted
+   * down, the posed rig has provably been drawn.
+   */
+  const readySignalledRef = useRef(false);
+  /** >0 once armed; counts down one per rendered R3F frame, fires at 0. */
+  const readyFramesLeftRef = useRef(-1);
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
+
+  /** Frames to let pass before revealing her. Two: the first carries the pose
+   *  written by mixer.update(0), the second gives the compositor a frame to put
+   *  it on screen before the opacity transition starts. */
+  const READY_FRAME_DELAY = 2;
+
+  const signalReadyAfterPosedFrame = useCallback(() => {
+    if (readySignalledRef.current) return;
+    readySignalledRef.current = true;
+    readyFramesLeftRef.current = READY_FRAME_DELAY;
+  }, []);
+
   // ── BODY-ANIMATION STATE ────────────────────────────────────
   const layersRef = useRef<Layer[]>(Array.from({ length: LAYER_COUNT }, makeLayer));
   /** Index of the layer carrying the segment the avatar is meant to be in. */
@@ -363,6 +395,12 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
   useEffect(() => {
     const base = actions[CLIP_NAME];
     if (!base) {
+      // `useAnimations` populates `actions` asynchronously, so this effect can
+      // legitimately run once with it still empty — that is NOT a broken
+      // export, and signalling ready here would reveal the bind pose. Only
+      // give up (and reveal her anyway, static) once the clips themselves have
+      // arrived and genuinely lack the expected one.
+      if (animations.length === 0) return;
       console.warn(
         `[Avatar] Clip "${CLIP_NAME}" not found — body animation disabled, ` +
           `lipsync unaffected. Available:`,
@@ -370,7 +408,7 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
       );
       // No body clip to pose her with, but she's still a usable (static) rig —
       // don't leave the loading screen spinning forever over a broken export.
-      onReady?.();
+      signalReadyAfterPosedFrame();
       return;
     }
 
@@ -428,7 +466,7 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
     // action's current weight/time and writes bone + morph values right now,
     // at zero cost to playback (delta 0 does not advance anything).
     mixer.update(0);
-    onReady?.();
+    signalReadyAfterPosedFrame();
     // Intentionally excludes `state`: this sets the *initial* pose only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actions, animations, mixer]);
@@ -613,7 +651,28 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
         // was animated for; otherwise cut straight to the loop and let the
         // crossfade carry the pose change.
         const useIntro = segment.intro !== null && segment.after === active.state;
-        beginSegment(layers, activeLayerRef, target, useIntro, SWITCH_XFADE_SECS);
+        // An intro is authored to pick up from its `after` segment's loop end,
+        // not from wherever that loop happens to be mid-cycle (or, worse,
+        // from partway through that segment's own intro). Firing early
+        // crossfades two genuinely different poses (e.g. listening's hands
+        // held together against talking's intro starting arms-apart), which
+        // reads as a snap. Hold until the active layer has settled into its
+        // loop and reached the seam — same wait the self loop-seam crossfade
+        // below already uses — and only then hand off into the intro.
+        if (useIntro && active.inIntro) {
+          // Still playing the active segment's own lead-in: its pose hasn't
+          // reached that segment's loop yet, so there is nothing valid to
+          // seam into. Keep waiting.
+        } else if (useIntro) {
+          const activeLoopEnd = SEGMENTS[active.state].loop[1];
+          if (active.time < activeLoopEnd - SWITCH_XFADE_SECS) {
+            // Not yet at the seam: keep looping in place.
+          } else {
+            beginSegment(layers, activeLayerRef, target, useIntro, SWITCH_XFADE_SECS);
+          }
+        } else {
+          beginSegment(layers, activeLayerRef, target, useIntro, SWITCH_XFADE_SECS);
+        }
       } else if (active.weight >= 0.999 && !active.inIntro) {
         // Settled on a segment: start the seam crossfade one fade-length before
         // the loop end, so the incoming copy is up to speed by the time the
@@ -674,6 +733,16 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
       const influences = mesh.morphTargetInfluences!;
       if (left !== undefined) influences[left] = blinkValue;
       if (right !== undefined) influences[right] = blinkValue;
+    }
+
+    // ── REVEAL GATE ────────────────────────────────────────────
+    // Reaching here means this frame's real pose has been written. Counting
+    // down inside the render loop (rather than from a rAF) is what guarantees
+    // the rig has actually been drawn posed before the canvas un-hides — see
+    // signalReadyAfterPosedFrame above.
+    if (readyFramesLeftRef.current > 0) {
+      readyFramesLeftRef.current -= 1;
+      if (readyFramesLeftRef.current === 0) onReadyRef.current?.();
     }
   }, -1);
 

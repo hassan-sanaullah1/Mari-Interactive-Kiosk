@@ -25,14 +25,18 @@ export interface AvatarStageProps {
    *  key and rim lights breathe with her voice. */
   levelRef?: { current: number };
   /** Fires once the rig has loaded and is posed — see AvatarModel's onReady.
-   *  The page uses it to gate its full-screen loading overlay; this stage
-   *  itself stays a plain passthrough so it has no loading UI of its own. */
+   *  The page uses it to gate its loading overlay. */
   onReady?: () => void;
+  /** Mirrors onReady's state. Before it flips, the canvas is kept invisible
+   *  (opacity, not unmounted) so the glTF's bind-pose T-pose — which paints
+   *  for however long the asset takes to parse, before onReady's mixer.update(0)
+   *  applies a real pose — is never shown on screen. */
+  ready?: boolean;
 }
 
-export default function AvatarStage({ mode, levelRef, onReady }: AvatarStageProps) {
+export default function AvatarStage({ mode, levelRef, onReady, ready = false }: AvatarStageProps) {
   return (
-    <div className={styles.stage} aria-hidden="true">
+    <div className={styles.stage} data-ready={ready} aria-hidden="true">
       <AvatarScene state={avatarStateFor(mode)} levelRef={levelRef} onReady={onReady} />
     </div>
   );

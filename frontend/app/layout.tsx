@@ -24,6 +24,13 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={inter.variable}>
+      <head>
+        {/* Kick off the avatar model fetch as early as possible — before React
+            mounts and before the dynamically-imported three.js scene chunk
+            loads — so the network transfer of the (large) .glb overlaps with
+            JS bootstrap instead of starting after it. */}
+        <link rel="preload" href="/models/girl13.glb" as="fetch" crossOrigin="anonymous" fetchPriority="high" />
+      </head>
       <body>
         {/* Apply the stored theme before first paint so there's no flash. */}
         <script

@@ -56,7 +56,7 @@ export default function Page() {
       {/* The 3D presenter. `mode` drives her body animation (idle → listening →
           talking); her mouth is driven separately by the Audio2Face frames that
           arrive alongside the reply audio. */}
-      <AvatarStage mode={voice.mode} levelRef={voice.levelRef} onReady={onAvatarReady} />
+      <AvatarStage mode={voice.mode} levelRef={voice.levelRef} onReady={onAvatarReady} ready={avatarReady} />
 
       <LanguageBar
         className={styles.langBar}

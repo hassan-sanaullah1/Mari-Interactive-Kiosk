@@ -18,6 +18,18 @@ const nextConfig: NextConfig = {
       { source: "/api/healthz", destination: `${API_ORIGIN}/healthz` },
     ];
   },
+  async headers() {
+    return [
+      {
+        // The avatar .glb: large, versioned by filename (girl13.glb), and never
+        // mutated in place — a rename accompanies any actual model change. Safe
+        // to cache immutably so returning visitors skip the ~56MB re-download
+        // entirely instead of even doing a revalidation round trip.
+        source: "/models/:file*.glb",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

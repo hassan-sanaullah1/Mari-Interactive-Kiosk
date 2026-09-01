@@ -1,9 +1,9 @@
-/* Covers the ENTIRE viewport — background art, dock, language bar, chat
-   launcher, all of it — until the avatar reports ready (see page.tsx's
-   avatarReady / AvatarModel's onReady). Solid, not a soft vignette: unlike a
-   loading state scoped to the avatar's own box, this one's job is that
-   nothing else on the page is visible either, so a partial/gradient fill
-   would defeat the point. */
+/* A small indicator over the avatar's own area only, until the avatar
+   reports ready (see page.tsx's avatarReady / AvatarModel's onReady). The
+   background art and the rest of the UI (dock, language bar, chat launcher)
+   render and are visible immediately underneath — only the presenter's spot
+   is covered while her model streams in, so the kiosk never shows a blank
+   full-screen gate. */
 
 .screen {
   position: fixed;
@@ -14,9 +14,21 @@
   align-items: center;
   justify-content: center;
   gap: calc(18 * var(--s));
-  background: var(--surface);
+  background: transparent;
+  pointer-events: none;
   opacity: 1;
   transition: opacity 320ms ease;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(14 * var(--s));
+  padding: calc(24 * var(--s)) calc(28 * var(--s));
+  border-radius: calc(16 * var(--s));
+  background: var(--surface);
+  box-shadow: 0 calc(8 * var(--s)) calc(32 * var(--s)) rgba(0, 0, 0, 0.25);
 }
 
 .done {
