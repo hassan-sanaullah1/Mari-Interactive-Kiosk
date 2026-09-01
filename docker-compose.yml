@@ -1,0 +1,70 @@
+# MARI kiosk — backend + frontend, for Coolify (or any Docker Compose host).
+#
+# The Audio2Face-3D NIM (avatar lipsync) is intentionally NOT part of this stack —
+# it needs a GPU host with the NVIDIA container runtime, which most Coolify targets
+# don't have. Deploy it separately (deploy/a2f/docker-compose.yml, its own README
+# comment) on a GPU-capable host/server in Coolify, then point this stack's backend
+# at it via APP_A2F_URL (e.g. grpcs://a2f.your-domain:443 through a TLS proxy that
+# checks APP_A2F_API_KEY — see deploy/a2f/docker-compose.yml's security note).
+# Leave APP_A2F_URL unset and the kiosk runs fine without lipsync.
+#
+# Coolify notes:
+#   - Coolify injects its own reverse-proxy/Traefik labels and a shared network at
+#     deploy time; no `ports:` publishing or labels are required here for routing,
+#     but `ports:` is kept so `docker compose up` also works standalone off-platform.
+#   - Set FQDNs for each service in the Coolify UI (one for backend, one for
+#     frontend) and put the backend's public URL into MARI_API_ORIGIN /
+#     NEXT_PUBLIC_MARI_WS below so the frontend can reach it (see frontend/lib/endpoints.ts —
+#     the WebSocket bypasses the Next proxy and needs an explicit wss:// URL
+#     whenever frontend and backend are on different domains).
+#   - Populate secrets via Coolify's environment variables UI (or its .env editor for
+#     this compose file) rather than committing a real .env.
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    # Local/off-platform convenience only — Coolify injects env vars it manages
+    # directly into the container and does not need this file to exist; the
+    # `required: false` keeps `docker compose up` from failing if it's absent.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      MARI_HOST: 0.0.0.0
+      MARI_PORT: 8010
+    ports:
+      - "8010:8010"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/healthz')"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Server-side rewrite target for /api/* (see frontend/next.config.ts). Baked
+        # into the Next.js build's routes manifest at BUILD time — Next resolves
+        # rewrite destinations once from next.config.ts when `next build` runs, so
+        # this must be a build ARG, not a container runtime env var (which would
+        # silently have no effect). Inside the compose network the backend is
+        # reachable by service name.
+        MARI_API_ORIGIN: http://backend:8010
+        # Public wss:// URL of the backend's /ws endpoint, as reached from the
+        # visitor's browser (NOT the internal service name above). Baked into the
+        # client bundle at BUILD time (Next.js NEXT_PUBLIC_* rule) — required
+        # whenever frontend and backend are on different domains/ports, which is
+        # the normal case on Coolify (each service gets its own FQDN). Example:
+        #   NEXT_PUBLIC_MARI_WS=wss://mari-backend.your-domain.com/ws
+        NEXT_PUBLIC_MARI_WS: ${NEXT_PUBLIC_MARI_WS:-}
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend

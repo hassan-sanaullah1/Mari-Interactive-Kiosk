@@ -4,6 +4,9 @@ import type { NextConfig } from "next";
 const API_ORIGIN = process.env.MARI_API_ORIGIN ?? "http://127.0.0.1:8010";
 
 const nextConfig: NextConfig = {
+  // Standalone build for Docker: outputs a minimal server (node server.js) with only
+  // the traced production deps, instead of requiring the full node_modules at runtime.
+  output: "standalone",
   // REST calls are made same-origin as /api/* and proxied to FastAPI, so the browser
   // never needs CORS and the backend stays untouched. The WebSocket (/ws) is opened
   // directly against FastAPI instead — Next's dev proxy does not forward WS upgrades,
