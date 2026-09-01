@@ -14,3 +14,36 @@ Thumbs.db
 # A2F deploy secrets (NGC key)
 deploy/a2f/.env
 .run/
+
+# Local-only scripts/docs, not for version control
+mari.sh
+ARCHITECTURE.md
+
+# Node / frontend
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+.env.local
+.env.*.local
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Credentials / keys
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+credentials.json
+secrets.json
