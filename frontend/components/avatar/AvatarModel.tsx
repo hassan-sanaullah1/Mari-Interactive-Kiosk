@@ -163,6 +163,34 @@ const A2F_SHAPE_GAINS: Record<string, number> = { jawopen: 0.375 };
 const AVATAR_POSITION_X = 0;
 
 /**
+ * Skin-only brightening.
+ *
+ * The scene's light rig is shared by everything in frame, so raising it lifts
+ * the kameez and the hair along with her. These three materials are the only
+ * ones textured with skin (checked against the glTF: lambert11 carries
+ * Head_Diffuse, lambert13 Arm_Diffuse, lambert12 Leg_Diffuse), so lifting them
+ * here leaves the garment materials (Kameez:lambert2/3, lambert10), the hair
+ * (pasted__lambert2) and every eye/teeth/lash card exactly as authored.
+ *
+ * Legs are included for consistency of skin tone even though this framing
+ * usually crops them — a visible forearm and an invisible shin should not be
+ * different colours if the shot ever widens.
+ */
+const SKIN_MATERIALS = new Set(["lambert11", "lambert13", "lambert12"]);
+
+/**
+ * How much to lift skin, as an emissive term.
+ *
+ * Emissive rather than a brighter light because it is per-material: a light
+ * bright enough to do this to the face would also blow out the white kameez
+ * right next to it. The emissive map is the base colour texture itself, so the
+ * lift follows the skin's own tone and shading detail instead of washing it to
+ * a flat colour — pores, lips and nail beds keep their relative values, the
+ * whole surface just sits higher.
+ */
+const SKIN_EMISSIVE_INTENSITY = 0.25;
+
+/**
  * One layer of the crossfade pool.
  *
  * Three layers, not two. Two is enough for a plain A→B fade but not for a fade
@@ -483,6 +511,15 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
         if (std.map) {
           std.map.anisotropy = maxAnisotropy;
           std.map.needsUpdate = true;
+        }
+
+        // Face and hands only — see SKIN_MATERIALS. Driving the emissive from
+        // the diffuse map keeps the skin's own shading; a flat emissive colour
+        // would fill the shadow side of the face and flatten it.
+        if (SKIN_MATERIALS.has(std.name)) {
+          std.emissiveMap = std.map;
+          std.emissive.setRGB(1, 1, 1);
+          std.emissiveIntensity = SKIN_EMISSIVE_INTENSITY;
         }
 
         if (std.transparent) {

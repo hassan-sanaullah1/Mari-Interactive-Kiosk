@@ -112,7 +112,15 @@ function Framing({ modelHeight }: { modelHeight: number }) {
  */
 const KEY_COLOR = "#ffe4c9";
 const FILL_COLOR = "#c9d6ff";
-const RIM_COLOR = "#8b9cf7";
+/**
+ * The two backdrop halves, thrown back onto her silhouette edges: cyan down the
+ * camera-left shoulder and sleeve, a weaker green on the camera-right edge.
+ * These are the only colours changed from the original rig — the key, fill, top
+ * and face lights keep their authored values, so the kameez and hair are lit
+ * exactly as before and only her outline picks these up.
+ */
+const RIM_COLOR = "#4fd8e8";
+const KICK_COLOR = "#3fd39a";
 const TOP_COLOR = "#e8daf5";
 const FACE_COLOR = "#fff2e0";
 
@@ -120,6 +128,7 @@ interface LightConfig {
   keyIntensity: number;
   fillIntensity: number;
   rimIntensity: number;
+  kickIntensity: number;
   topIntensity: number;
 }
 
@@ -135,25 +144,29 @@ const LIGHT_CONFIGS: Record<AvatarState, LightConfig> = {
   idle: {
     keyIntensity: 1.4,
     fillIntensity: 0.4,
-    rimIntensity: 0.5,
+    rimIntensity: 2,
+    kickIntensity: 5,
     topIntensity: 0.9,
   },
   listening: {
     keyIntensity: 1.8,
     fillIntensity: 0.5,
-    rimIntensity: 0.7,
+    rimIntensity: 2,
+    kickIntensity: 5,
     topIntensity: 1.1,
   },
   thinking: {
     keyIntensity: 1.2,
     fillIntensity: 0.5,
-    rimIntensity: 0.8,
+    rimIntensity: 2,
+    kickIntensity: 5,
     topIntensity: 0.8,
   },
   speaking: {
     keyIntensity: 1.8,
     fillIntensity: 0.5,
-    rimIntensity: 0.9,
+    rimIntensity: 2,
+    kickIntensity: 5,
     topIntensity: 1.2,
   },
 };
@@ -181,6 +194,7 @@ function DynamicLighting({ state = "idle", levelRef }: DynamicLightingProps) {
   const keyLightRef = useRef<THREE.DirectionalLight>(null);
   const fillLightRef = useRef<THREE.DirectionalLight>(null);
   const rimLightRef = useRef<THREE.SpotLight>(null);
+  const kickLightRef = useRef<THREE.SpotLight>(null);
   const topLightRef = useRef<THREE.SpotLight>(null);
   const faceLightRef = useRef<THREE.SpotLight>(null);
   const smoothedVolume = useRef(0);
@@ -209,6 +223,13 @@ function DynamicLighting({ state = "idle", levelRef }: DynamicLightingProps) {
       rimLightRef.current.intensity = THREE.MathUtils.lerp(
         rimLightRef.current.intensity,
         config.rimIntensity + sv * 0.5,
+        LERP_SPEED,
+      );
+    }
+    if (kickLightRef.current) {
+      kickLightRef.current.intensity = THREE.MathUtils.lerp(
+        kickLightRef.current.intensity,
+        config.kickIntensity + sv * 0.3,
         LERP_SPEED,
       );
     }
@@ -256,14 +277,27 @@ function DynamicLighting({ state = "idle", levelRef }: DynamicLightingProps) {
         color={TOP_COLOR}
         castShadow={false}
       />
-      {/* Rim from behind — the coloured edge that separates her silhouette. */}
+      {/* CYAN RIM, behind and camera-left — the bright blue edge running down
+          the shoulder and sleeve. Behind her, so it catches the silhouette
+          only and never reaches the front of the kameez. */}
       <spotLight
         ref={rimLightRef}
-        position={[0, 2, -1.5]}
-        angle={0.6}
-        penumbra={0.8}
-        intensity={0.5}
+        position={[-2.2, 2.2, -1.8]}
+        angle={0.7}
+        penumbra={0.9}
+        intensity={1.4}
         color={RIM_COLOR}
+        castShadow={false}
+      />
+      {/* GREEN KICK, behind and camera-right — the weaker counterpart from the
+          green half of the backdrop, on the dupatta side. */}
+      <spotLight
+        ref={kickLightRef}
+        position={[2.4, 2.0, -1.6]}
+        angle={0.7}
+        penumbra={0.9}
+        intensity={0.8}
+        color={KICK_COLOR}
         castShadow={false}
       />
       {/* Tight face spot, aimed at HEAD_TARGET_Y by the frame loop above. */}
