@@ -1,0 +1,74 @@
+/* Bottom-left cluster: language pill (265x58, r29) + theme switch (d59),
+   separated by a 22-unit gap. Reference geometry, 2000x1125 space.
+   Both follow the active theme; only the dock's ✕/pause stay permanently dark. */
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--pill-gap);
+}
+
+.pill {
+  display: flex;
+  align-items: center;
+  padding: var(--pill-pad);
+  border-radius: calc(var(--pill-h) / 2);
+  background: var(--surface);
+  box-shadow: 0 calc(2 * var(--s)) calc(14 * var(--s)) rgba(0, 0, 0, 0.34);
+  transition: background 180ms ease;
+}
+
+.seg {
+  min-width: var(--pill-seg);
+  height: calc(var(--pill-h) - 2 * var(--pill-pad));
+  padding: 0 calc(0.32 * var(--pill-h));
+  border-radius: 999px;
+  font-size: var(--pill-font);
+  font-weight: 500;
+  line-height: 1;
+  color: var(--text);
+  background: transparent;
+  transition: background 160ms ease, color 160ms ease;
+  white-space: nowrap;
+}
+
+.seg:hover:not(.active) {
+  background: var(--surface-hover);
+}
+
+/* The selected language keeps the reference blue in both themes. */
+.active {
+  background: var(--blue);
+  color: #fff;
+}
+
+.urdu {
+  font-size: calc(var(--pill-font) * 1.05);
+}
+
+/* --- dark ⇄ light switch --- */
+
+.theme {
+  width: var(--theme-btn);
+  height: var(--theme-btn);
+  border-radius: 50%;
+  background: var(--surface);
+  display: grid;
+  place-items: center;
+  color: var(--text);
+  box-shadow: 0 calc(2 * var(--s)) calc(14 * var(--s)) rgba(0, 0, 0, 0.34);
+  transition: background 140ms ease, color 180ms ease;
+}
+
+.theme:hover {
+  background: var(--surface-hover);
+}
+
+.theme:active {
+  transform: scale(0.94);
+}
+
+.themeIcon {
+  width: 44%;
+  height: 44%;
+}

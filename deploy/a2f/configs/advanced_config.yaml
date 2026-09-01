@@ -1,0 +1,135 @@
+input_sanitization:
+  # max size of UUID
+  max_len_uuid: 50
+  # Maximum samplerate
+  max_sample_rate: 144000
+  # Minimum samplerate
+  min_sample_rate: 16000
+  # Maximum amount in second for the processing time
+  # After this timeout the connection to A2F will be cut
+  max_processing_duration_second: 300
+  # Maximum size of 1 audio buffer sent over the grpc stream
+  max_audio_buffer_size_second: 10
+  # Maximum size of the audio clip to process
+  max_audio_clip_size_second: 300
+  # Maximum amount of time that A2F Controller will wait when not
+  # receiving data from A2F, before cutting the connection
+  max_wait_time_idle_ms: 30000
+  # Will stop serving a user if their fps a lower than low_fps
+  # for more than low_fps_max_duration_second seconds
+  # For real time application less than 30 FPS means slower than realtime
+  # So if users provide audio to the service at less than 30 FPS then
+  # the interactive experience will stutter.
+  low_fps: 29
+  low_fps_max_duration_second: 7
+
+# WARN: Deprecated
+garbage_collector:
+  # enable or disable the garbage collector
+  # This is only used with bidirectional connection where the service is holding data
+  # waiting for the client to pick them up.
+  enabled: false
+  # how often the garbage collector should run
+  interval_run_second: 10
+  # If the garbage collector finds streams holding
+  # more than N seconds of data, it will delete data
+  # until the amount falls below this threshold.
+  # Clients are expected to retrieve data promptly so that
+  # the service doesn't retain the data excessively.
+  max_size_stored_data_second: 60
+
+
+pipeline_parameters:
+  # Queues between pipeline components
+  # Can be tweaked:
+  # Higher values can lead to higher throughput but leads to higher latencies
+  # Lower values leads to lower latencies; and potentially lower overall throughput
+  # Leave these values to default in case of doubt
+  queue_size_after_a2e: 1
+  queue_size_after_a2f: 300
+  queue_size_after_streammux: 1
+  
+  # ===== Blendshape Streaming Control =====
+  # Controls how blendshapes are sent to the client
+  
+  # Burst Mode: Send all frames as fast as possible (~20-30ms total)
+  # WARNING: May cause AnimGraph buffer overflow and lip sync issues in Tokkio
+  # Values:
+  #   false = Rate-limited streaming (RECOMMENDED for production)
+  #   true  = Burst mode
+  burst_mode: false
+  
+  # Streaming Frame Rate (only used when burst_mode = false)
+  # Controls the rate at which blendshapes are sent to the client
+  # Delay per frame = 1000 / blendshape_streaming_fps milliseconds
+  # 
+  # Common values:
+  #   30      = 33ms delay (good for bandwidth-constrained networks)
+  #   60      = 16ms delay (standard frame rate)
+  #   90      = 11ms delay - DEFAULT (Tokkio compatibility, matches A2F 1.3)
+  #   120     = 8ms delay (low latency)
+  #   240     = 4ms delay (very low latency)
+  #   500     = 2ms delay (near-burst performance)
+  #   1000+   = 1ms or less delay (effectively burst-like)
+  #
+  # Recommended settings:
+  #   - Tokkio/Production: 90
+  #   - Low latency: 120-240
+  #   - Bandwidth-constrained: 30-60
+  blendshape_streaming_fps: 90
+
+  streammux:
+    # Do not change this config; this is internal
+    adaptive_batching: 0
+    # Minimum FPS for all streams
+    # Pipeline will not slow down under this value if:
+    # * compute allows it
+    # * upload speed of audio allows it
+    # Here 40 FPS
+    # Numerator for that config:
+    overall_min_fps_n: 40
+    # Denominator for that config:
+    overall_min_fps_d: 1
+
+a2f:  
+  # Remove temporal smoothing
+  # used for debugging individual frames generated
+  temporal_smoothing: true 
+  device_id: 0 # Which gpu id to use 
+  use_gpu_solver: true
+
+a2e:
+  inference_interval: 10
+  device_id: 0 # Which gpu id to use 
+
+
+trt_model_generation:
+  a2e:
+    #Audio2Emotion engine currently does not support precision other than FP32
+    precision: "fp32"
+    min_shape: 1
+    # Batch shapes drive the size of the TensorRT execution context, and since
+    # A2E is FP32-only its context is by far the largest thing the NIM
+    # allocates: at batch 10 it asks for ~3GB, which a 6GB laptop GPU cannot
+    # give it on top of the model weights, and the container then crash-loops
+    # with "Unable to create TensorRT Execution Context". At batch 2 the same
+    # context is a few hundred MB. Raise these back toward 10 on a large GPU if
+    # you also raise `stream_number` — throughput, not correctness, is what
+    # changes. Editing these has no effect until the cached engine is removed:
+    #   docker run --rm -v mari_a2f_cache:/c alpine rm -f /c/a2e.trt
+    optimal_shape: 1
+    maximum_shape: 2
+  a2f:
+    precision: "fp16"
+    min_shape: 1
+    optimal_shape: 10
+    maximum_shape: 10
+
+resampling:
+  # Size of chunks used during resampling process
+  chunk_size: 6400
+  # Resampling quality parameter
+  # - Range: 1.0 to 10.0
+  # - Higher values yield superior audio quality
+  # - Lower values prioritize computational performance
+  quality: 1.0

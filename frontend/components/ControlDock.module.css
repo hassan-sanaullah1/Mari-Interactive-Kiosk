@@ -1,0 +1,182 @@
+/* Centre dock: end · mic · pause.
+   All sizes come from tokens in globals.css so the desktop (UI.png) and phone
+   (mobile_UI.png) reference geometries can differ without forking the markup.
+   Desktop: disc 144, halo 176, buttons 59, centres 176 apart.
+   Phone:   disc 64, halos 76 + 90, buttons 32, centres 83 apart. */
+
+.dock {
+  display: flex;
+  align-items: center;
+  gap: var(--dock-gap);
+  --lvl: 0; /* live mic/output amplitude, written by rAF */
+}
+
+/* The ✕ / pause discs are the same chrome surface as the language pill and the
+   theme switch — UI.png draws all four in one colour — so they follow the theme
+   together with them. Fully opaque: they sit over the artwork and the avatar,
+   so no backdrop-filter, no alpha, no disabled dimming. */
+.small {
+  width: var(--dock-btn);
+  height: var(--dock-btn);
+  border-radius: 50%;
+  background: var(--surface);
+  display: grid;
+  place-items: center;
+  color: var(--text);
+  box-shadow: 0 calc(2 * var(--s)) calc(14 * var(--s)) rgba(0, 0, 0, 0.34);
+  transition: background 140ms ease, transform 140ms ease;
+}
+
+.small:hover {
+  background: var(--surface-hover);
+}
+
+.small:active {
+  transform: scale(0.94);
+}
+
+/* Icons are sized as a share of their button, so one rule covers both layouts. */
+.smallIcon {
+  width: 37%;
+  height: 37%;
+}
+
+/* --- mic --- */
+
+.micWrap {
+  position: relative;
+  /* the box is the OUTER halo, so the flex gap measures from the glow edge */
+  width: calc(var(--mic) * var(--mic-ring2));
+  height: calc(var(--mic) * var(--mic-ring2));
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+}
+
+/* Two concentric translucent halos. Desktop sets ring2's alpha to 0, leaving the
+   single ring UI.png shows; mobile_UI.png has both (0.45 inner, 0.21 outer). */
+.ring1,
+.ring2 {
+  position: absolute;
+  border-radius: 50%;
+  transition: transform 90ms ease-out;
+  pointer-events: none;
+}
+
+.ring2 {
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 119, 220, var(--mic-ring2-a));
+  transform: scale(calc(1 + var(--lvl) * 0.09));
+}
+
+.ring1 {
+  width: calc(var(--mic) * var(--mic-ring1));
+  height: calc(var(--mic) * var(--mic-ring1));
+  background: rgba(0, 119, 220, var(--mic-ring1-a));
+  transform: scale(calc(1 + var(--lvl) * 0.06));
+}
+
+/* --- travelling waves ---
+   Three rings start at the disc edge and expand outward, staggered by a third of
+   the cycle each so one is always mid-flight. 1.9x is the widest they can grow
+   without touching the ✕/pause buttons in EITHER layout: their near edge sits at
+   146.5 desktop units (2.03x) and 67 mobile units (2.09x) from the disc centre. */
+.ripples {
+  position: absolute;
+  width: var(--mic);
+  height: var(--mic);
+  pointer-events: none;
+  /* louder audio → stronger waves */
+  opacity: calc(0.4 + var(--lvl) * 0.6);
+  transition: opacity 120ms ease-out;
+}
+
+.ripple {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: max(1px, calc(0.02 * var(--mic))) solid var(--blue);
+  opacity: 0;
+}
+
+.micWrap[data-live="1"] .ripple {
+  animation: ripple 2.1s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
+}
+
+.micWrap[data-live="1"] .ripple:nth-child(2) {
+  animation-delay: 0.7s;
+}
+
+.micWrap[data-live="1"] .ripple:nth-child(3) {
+  animation-delay: 1.4s;
+}
+
+@keyframes ripple {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  70% {
+    opacity: 0.14;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .micWrap[data-live="1"] .ripple {
+    animation: none;
+  }
+}
+
+.disc {
+  position: relative;
+  width: var(--mic);
+  height: var(--mic);
+  border-radius: 50%;
+  background: var(--blue);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  box-shadow: 0 calc(4 * var(--s)) calc(24 * var(--s)) rgba(0, 40, 80, 0.35);
+  transition: background 140ms ease, transform 140ms ease;
+}
+
+.micWrap:hover .disc {
+  background: var(--blue-hover);
+}
+
+.micWrap:active .disc {
+  transform: scale(0.96);
+}
+
+/* 65x72 viewBox; 45%/50% of the disc matches both references exactly. */
+.wave {
+  width: 45%;
+  height: 50%;
+}
+
+/* Each bar leans into the live amplitude while listening/speaking. */
+.micWrap[data-live="1"] .wave rect {
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scaleY(calc(0.72 + var(--lvl) * 0.75));
+  transition: transform 70ms ease-out;
+}
+
+.micWrap[data-live="1"] .wave rect:nth-child(2n) {
+  transform: scaleY(calc(0.8 + var(--lvl) * 0.55));
+}
+
+/* Screen-reader-only live status; the visual design carries no status text. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

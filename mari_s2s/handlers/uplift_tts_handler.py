@@ -9,14 +9,15 @@ Contract (confirmed against the repo, mirrors TTS/facebookmms_handler.py):
 
 Uplift returns mp3 for the whole segment; we decode to PCM (PyAV), resample to
 16 kHz mono, and yield fixed-size chunks so downstream streaming/interruption
-works like the built-in handlers. Logic mirrors the tested
-`voicecore.providers.tts.uplift` adapter from the kiosk repo.
+works like the built-in handlers. The REST call itself is delegated to
+``server.providers.tts.UpliftTTS`` — the same adapter server/app.py uses — so the
+Uplift protocol logic lives in one place instead of being duplicated per entrypoint.
 """
 
 from __future__ import annotations
 
+import asyncio
 import io
-import re
 from threading import Event
 from typing import Iterator
 
@@ -26,8 +27,9 @@ from speech_to_speech.baseHandler import BaseHandler
 from speech_to_speech.pipeline.handler_types import TTSIn, TTSOut
 from speech_to_speech.pipeline.messages import EndOfResponse, TTSInput
 
+from server.providers.tts import UpliftTTS
+
 _TARGET_SR = 16000
-_SR_RE = re.compile(r"_(\d{4,6})_")
 
 
 def _decode_mp3_to_int16_16k(data: bytes) -> np.ndarray:
@@ -59,12 +61,15 @@ class UpliftTTSHandler(BaseHandler[TTSIn, TTSOut]):
         if not api_key:
             raise ValueError("UpliftTTSHandler requires api_key (APP_UPLIFT_API_KEY)")
         self.should_listen = should_listen
-        self.api_key = api_key
-        self.url = f"{api_base.rstrip('/')}/{api_path.lstrip('/')}"
-        self.voice_id = voice_id
-        self.output_format = output_format
-        self.speed = speed
         self.blocksize = blocksize
+        self._provider = UpliftTTS(
+            api_key=api_key,
+            base=api_base,
+            path=api_path,
+            voice=voice_id,
+            output_format=output_format,
+            speed=speed,
+        )
 
     def process(self, tts_input: TTSIn) -> Iterator[np.ndarray]:
         if isinstance(tts_input, EndOfResponse) or not isinstance(tts_input, TTSInput):
@@ -73,7 +78,7 @@ class UpliftTTSHandler(BaseHandler[TTSIn, TTSOut]):
         if not text:
             return
 
-        mp3 = self._synthesize(text)
+        mp3, _mime = asyncio.run(self._provider.synthesize(text))
         pcm = _decode_mp3_to_int16_16k(mp3)
 
         # Yield fixed-size chunks; pad the final one (matches facebookmms_handler).
@@ -84,21 +89,3 @@ class UpliftTTSHandler(BaseHandler[TTSIn, TTSOut]):
             yield chunk
             if self.should_listen.is_set():  # user interrupted — stop speaking
                 break
-
-    def _synthesize(self, text: str) -> bytes:
-        import httpx
-
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "voiceId": self.voice_id,
-            "text": text,
-            "speed": self.speed,
-            "outputFormat": self.output_format,
-        }
-        with httpx.Client(timeout=30.0) as client:
-            resp = client.post(self.url, json=payload, headers=headers)
-            resp.raise_for_status()
-            return resp.content

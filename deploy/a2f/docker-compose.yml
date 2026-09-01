@@ -1,0 +1,80 @@
+# Audio2Face-3D — the lipsync inference service.
+#
+# This is the one external process the avatar's mouth depends on: the FastAPI
+# server streams each reply sentence's TTS audio into it over gRPC and gets
+# back timestamped ARKit blendshape frames (see server/avatar/a2f_client.py).
+# Without it, everything else in the kiosk works and the avatar simply doesn't
+# move its mouth — there is no fallback lipsync by design.
+#
+#   docker login nvcr.io -u '$oauthtoken' -p "$NGC_API_KEY"
+#   cd deploy/a2f && cp .env.example .env    # then put your NGC key in it
+#   docker compose --profile init up nim-init    # first boot only (~10GB model pull)
+#   docker compose up -d
+#
+# Then point the app at it (repo-root .env):
+#   APP_A2F_URL=127.0.0.1:52000
+#   APP_A2F_API_KEY=          # leave empty — see the security note below
+#
+# SECURITY: this NIM has no authentication of its own. The bearer-token check
+# in the production deployment lives in a TLS edge proxy in front of it, which
+# makes no sense on a dev box (no DNS, no certificate). So the port is published
+# on the LOOPBACK INTERFACE ONLY — 127.0.0.1:52000, not 0.0.0.0 — and is
+# reachable just by processes on this host. Do not change that to a bare
+# "52000:52000" on a shared or internet-facing machine: anything that can reach
+# the port can drive the inference service. For a real deployment, put it behind
+# a TLS proxy that checks a bearer token and use the grpcs:// form of
+# APP_A2F_URL with APP_A2F_API_KEY.
+
+# Explicit project name: the directory this file sits in is also called "a2f",
+# which would otherwise collide with any other a2f stack on the same host.
+name: mari-a2f
+
+services:
+  nim:
+    image: nvcr.io/nim/nvidia/audio2face-3d:2.0
+    container_name: mari-a2f-nim
+    restart: unless-stopped
+    gpus: all
+    environment:
+      NGC_API_KEY: ${NGC_API_KEY:?set NGC_API_KEY in deploy/a2f/.env — an NGC key with Audio2Face-3D NIM access}
+      # The configs below are only honored via a2f_pipeline.run; the image's
+      # default entrypoint silently ignores mounted config files.
+      NIM_SKIP_A2F_START: "true"
+      NIM_DISABLE_MODEL_DOWNLOAD: "true"
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - a2f_pipeline.run
+        --deployment-config /mnt/configs/deployment_config.yaml
+        --advanced-config /mnt/configs/advanced_config.yaml
+    volumes:
+      - ./configs:/mnt/configs:ro
+      - a2f_cache:/tmp/a2x
+    ports:
+      - "127.0.0.1:52000:52000"   # loopback only — see the security note above
+    healthcheck:
+      # The NIM speaks gRPC only, so "is the port accepting connections" is the
+      # cheapest honest readiness signal. Model load takes a few minutes.
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/127.0.0.1/52000' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 300s
+
+  # One-shot model download for a fresh host (~10GB into the cache volume).
+  # The image's default entrypoint populates the cache; the nim service above
+  # then runs with downloads disabled.
+  nim-init:
+    profiles: ["init"]
+    image: nvcr.io/nim/nvidia/audio2face-3d:2.0
+    gpus: all
+    environment:
+      NGC_API_KEY: ${NGC_API_KEY:?}
+    volumes:
+      - a2f_cache:/tmp/a2x
+
+volumes:
+  a2f_cache:
+    # Named explicitly so the ~10GB model survives `docker compose down -v` in
+    # other stacks, and so an existing cache can be reused by overriding this.
+    name: ${A2F_CACHE_VOLUME:-mari_a2f_cache}
+    external: ${A2F_CACHE_EXTERNAL:-false}

@@ -1,0 +1,251 @@
+/* Chat surface. Reference geometry (2000x1125 space): panel 393x831 at right:21,
+   top:261, r16; header 56 tall with a hairline under it; composer 353x152 inset 20
+   with 27 below it; user bubbles r24 on #323334; assistant replies are plain text. */
+
+.launcher {
+  position: absolute;
+  right: var(--edge-x);
+  bottom: var(--edge-y);
+  z-index: 20;
+  width: var(--launcher);
+  height: var(--launcher);
+  border-radius: 50%;
+  background: var(--blue);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  box-shadow: 0 calc(4 * var(--s)) calc(18 * var(--s)) rgba(0, 30, 60, 0.42);
+  transition: background 140ms ease, transform 140ms ease;
+}
+
+.launcher:hover {
+  background: var(--blue-hover);
+}
+
+.launcher:active {
+  transform: scale(0.94);
+}
+
+.launcherIcon {
+  width: 48%;
+  height: 48%;
+}
+
+.badge {
+  position: absolute;
+  top: calc(-2 * var(--s));
+  right: calc(-2 * var(--s));
+  min-width: calc(20 * var(--s));
+  height: calc(20 * var(--s));
+  padding: 0 calc(5 * var(--s));
+  border-radius: 999px;
+  background: #fff;
+  color: var(--blue);
+  font-size: calc(12 * var(--s));
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+
+/* --- panel --- */
+
+.panel {
+  position: absolute;
+  right: calc(21 * var(--s));
+  top: calc(261 * var(--s));
+  width: calc(393 * var(--s));
+  height: calc(831 * var(--s));
+  max-height: calc(100% - 40 * var(--s));
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  border-radius: calc(16 * var(--s));
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  box-shadow: 0 calc(16 * var(--s)) calc(48 * var(--s)) var(--shadow);
+  overflow: hidden;
+  animation: rise 180ms ease-out;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(calc(12 * var(--s)));
+  }
+}
+
+.header {
+  flex: 0 0 auto;
+  height: calc(56 * var(--s));
+  padding: 0 calc(23 * var(--s));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.title {
+  margin: 0;
+  font-size: calc(17 * var(--s));
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.close {
+  width: calc(28 * var(--s));
+  height: calc(28 * var(--s));
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--text);
+  transition: background 140ms ease;
+}
+
+.close:hover {
+  background: var(--surface-hover);
+}
+
+.closeIcon {
+  width: calc(17 * var(--s));
+  height: calc(17 * var(--s));
+}
+
+/* --- log --- */
+
+.log {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: calc(20 * var(--s)) calc(20 * var(--s)) calc(8 * var(--s));
+  display: flex;
+  flex-direction: column;
+  gap: calc(16 * var(--s));
+  scrollbar-width: thin;
+  scrollbar-color: var(--text-dim) transparent;
+}
+
+.log::-webkit-scrollbar {
+  width: calc(6 * var(--s));
+}
+
+.log::-webkit-scrollbar-thumb {
+  background: var(--text-dim);
+  border-radius: 999px;
+}
+
+.empty {
+  margin: auto 0;
+  text-align: center;
+  font-size: calc(14 * var(--s));
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+
+/* User turns are pills pinned right; MARI's replies are plain flowing text. */
+.user {
+  align-self: flex-end;
+  max-width: 84%;
+  padding: calc(12 * var(--s)) calc(18 * var(--s));
+  border-radius: calc(24 * var(--s));
+  background: var(--surface-raised);
+  color: var(--text);
+  font-size: calc(15 * var(--s));
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.pending {
+  opacity: 0.55;
+}
+
+.assistant {
+  align-self: stretch;
+  font-size: calc(15 * var(--s));
+  line-height: 1.62;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.rtl {
+  direction: rtl;
+  text-align: right;
+}
+
+/* --- composer --- */
+
+.composer {
+  flex: 0 0 auto;
+  position: relative;
+  margin: calc(12 * var(--s)) calc(20 * var(--s)) calc(27 * var(--s));
+  min-height: calc(152 * var(--s));
+  border-radius: calc(16 * var(--s));
+  background: var(--surface-sunken);
+  border: 1px solid var(--hairline);
+  display: flex;
+}
+
+.input {
+  flex: 1 1 auto;
+  resize: none;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: calc(15 * var(--s));
+  line-height: 1.5;
+  padding: calc(16 * var(--s)) calc(18 * var(--s)) calc(52 * var(--s));
+  border-radius: inherit;
+}
+
+.input::placeholder {
+  color: var(--placeholder);
+}
+
+.send {
+  position: absolute;
+  right: calc(12 * var(--s));
+  bottom: calc(12 * var(--s));
+  width: calc(40 * var(--s));
+  height: calc(40 * var(--s));
+  border-radius: 50%;
+  background: var(--blue);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  transition: background 140ms ease, opacity 140ms ease;
+}
+
+.send:hover:not(:disabled) {
+  background: var(--blue-hover);
+}
+
+.send:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.sendIcon {
+  width: calc(20 * var(--s));
+  height: calc(20 * var(--s));
+}
+
+/* Narrow screens: the panel takes the lower sheet instead of a fixed column. */
+@media (max-width: 760px) {
+  .panel {
+    right: calc(10 * var(--s));
+    left: calc(10 * var(--s));
+    top: auto;
+    bottom: calc(10 * var(--s));
+    width: auto;
+    height: 72vh;
+    max-height: 72vh;
+  }
+
+  .composer {
+    min-height: calc(110 * var(--s));
+  }
+}
