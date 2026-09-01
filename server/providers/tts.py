@@ -1,6 +1,6 @@
 """TTS adapters — each implements :class:`server.providers.base.TTSProvider`.
 
-  UpliftTTS        Urdu — UpliftAI REST (returns mp3)
+  UpliftTTS        Urdu, and English while APP_EN_TTS=uplift — UpliftAI REST (mp3)
   KokoroLocalTTS   English — local Kokoro (GPU if available)
   KokoroRemoteTTS  English — remote OpenAI-compatible /v1/audio/speech
 
@@ -11,6 +11,7 @@ Shared by both entrypoints: server/app.py (FastAPI) and mari_s2s/handlers/*.py
 from __future__ import annotations
 
 import asyncio
+import re
 
 import httpx
 
@@ -18,7 +19,25 @@ from .. import config as C
 from .base import TTSProvider
 
 
+# The brand name has to be forced into words for Uplift's Urdu-first voices, both ways:
+# in English text "Sky47" comes out as one mangled word ("SkySitalis"), and in Urdu text
+# the digits are read as the Urdu number — "اسکائی ۴۷" is spoken "sentaalees", not "forty
+# seven". Spelling it out fixes both, and "Sky Forty Seven" is pronounced identically in
+# an Urdu sentence, so one replacement covers every reply.
+_SKY = r"(?:Sky|\u0627\u0633\u06a9\u0627\u0626\u06cc|\u0633\u06a9\u0627\u0626\u06cc|\u0627\u0633\u06a9\u0627\u06cc|\u0633\u06a9\u0627\u06cc)"
+_47 = r"(?:47|\u06f4\u06f7|\u0664\u0667)"  # ASCII, Urdu (۴۷) and Arabic-Indic (٤٧) digits
+_SAY_AS = ((re.compile(rf"(?<!\w){_SKY}\s*-?\s*{_47}(?!\w)", re.I), "Sky Forty Seven"),)
+
+
+def _spoken(text: str) -> str:
+    for pattern, replacement in _SAY_AS:
+        text = pattern.sub(replacement, text)
+    return text
+
+
 class UpliftTTS(TTSProvider):
+    """UpliftAI REST synthesis. Handles Urdu and English with the same voice."""
+
     def __init__(
         self,
         api_key: str = "",
@@ -44,7 +63,7 @@ class UpliftTTS(TTSProvider):
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         payload = {
             "voiceId": self.voice,
-            "text": text,
+            "text": _spoken(text),
             "speed": self.speed,
             "outputFormat": self.output_format,
         }
@@ -135,6 +154,9 @@ def get_tts_provider(lang: str) -> TTSProvider:
     if key not in _tts_cache:
         if lang == "ur":
             _tts_cache[key] = UpliftTTS()
+        elif C.EN_TTS == "uplift":
+            # No Kokoro deployment right now — English goes out through Uplift too.
+            _tts_cache[key] = UpliftTTS(voice=C.UPLIFT_VOICE_EN)
         else:
             _tts_cache[key] = KokoroLocalTTS() if C.EN_TTS == "local" else KokoroRemoteTTS()
     return _tts_cache[key]

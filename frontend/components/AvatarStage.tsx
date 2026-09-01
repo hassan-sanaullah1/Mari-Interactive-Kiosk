@@ -19,10 +19,21 @@ const AvatarScene = dynamic(() => import("./avatar/AvatarScene"), {
   loading: () => null,
 });
 
-export default function AvatarStage({ mode }: { mode: Mode }) {
+export interface AvatarStageProps {
+  mode: Mode;
+  /** Smoothed 0..1 amplitude, passed straight through to the light rig so the
+   *  key and rim lights breathe with her voice. */
+  levelRef?: { current: number };
+  /** Fires once the rig has loaded and is posed — see AvatarModel's onReady.
+   *  The page uses it to gate its full-screen loading overlay; this stage
+   *  itself stays a plain passthrough so it has no loading UI of its own. */
+  onReady?: () => void;
+}
+
+export default function AvatarStage({ mode, levelRef, onReady }: AvatarStageProps) {
   return (
     <div className={styles.stage} aria-hidden="true">
-      <AvatarScene state={avatarStateFor(mode)} />
+      <AvatarScene state={avatarStateFor(mode)} levelRef={levelRef} onReady={onReady} />
     </div>
   );
 }

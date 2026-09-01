@@ -11,23 +11,24 @@
   --lvl: 0; /* live mic/output amplitude, written by rAF */
 }
 
-/* Always dark and fully opaque — in BOTH themes. These sit over the artwork and
-   the avatar, so they never take the themed surface colour and never go
-   translucent (no backdrop-filter, no alpha, no disabled dimming). */
+/* The ✕ / pause discs are the same chrome surface as the language pill and the
+   theme switch — UI.png draws all four in one colour — so they follow the theme
+   together with them. Fully opaque: they sit over the artwork and the avatar,
+   so no backdrop-filter, no alpha, no disabled dimming. */
 .small {
   width: var(--dock-btn);
   height: var(--dock-btn);
   border-radius: 50%;
-  background: var(--dock-surface);
+  background: var(--surface);
   display: grid;
   place-items: center;
-  color: var(--dock-icon);
+  color: var(--text);
   box-shadow: 0 calc(2 * var(--s)) calc(14 * var(--s)) rgba(0, 0, 0, 0.34);
   transition: background 140ms ease, transform 140ms ease;
 }
 
 .small:hover {
-  background: var(--dock-surface-hover);
+  background: var(--surface-hover);
 }
 
 .small:active {

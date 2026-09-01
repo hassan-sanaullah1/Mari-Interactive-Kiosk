@@ -12,6 +12,10 @@
  *
  * The browser does capture + VAD endpointing; the server does STT → LLM → TTS.
  *
+ * A typed message from the chat composer takes the same road with the capture half
+ * cut off — {"type":"text",text,lang} instead of frames + {"end"} — so it comes back
+ * as spoken, lip-synced audio rather than silent text.
+ *
  * Audio2Face lipsync rides along on the same socket, additively: each sentence's
  * {"tts"} header now carries a `clip` id, and {"type":"lipsync",uid,names?,frames}
  * messages deliver that clip's ARKit blendshape keyframes. The audio path is
@@ -20,7 +24,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { REST, wsUrl } from "@/lib/endpoints";
+import { wsUrl } from "@/lib/endpoints";
 import {
   beginClip,
   endClip,
@@ -70,6 +74,15 @@ function frameToPCM16(f: Float32Array, srcRate: number): ArrayBuffer {
   return out.buffer;
 }
 
+/** One turn's worth of reply audio, played sentence by sentence as it streams in. */
+type ReplyQueue = {
+  push: (b: ArrayBuffer, mime: string, clip: string | null) => void;
+  finish: () => void;
+  busy: () => boolean;
+  stop: () => void;
+  resume: () => void;
+};
+
 let uid = 0;
 const nextId = () => `m${++uid}`;
 
@@ -104,13 +117,18 @@ export function useVoiceSession(lang: Lang) {
   }, [lang]);
 
   /** Queue of streamed reply sentences, played back-to-back. */
-  const queueRef = useRef<{
-    push: (b: ArrayBuffer, mime: string, clip: string | null) => void;
-    finish: () => void;
-    busy: () => boolean;
-    stop: () => void;
-    resume: () => void;
-  } | null>(null);
+  const queueRef = useRef<ReplyQueue | null>(null);
+
+  /** The one AudioContext, created (and un-suspended) on a user gesture. */
+  const ensureAudioContext = useCallback(async () => {
+    const AC =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    acRef.current = acRef.current ?? new AC();
+    const ac = acRef.current;
+    if (ac.state === "suspended") await ac.resume();
+    return ac;
+  }, []);
 
   const teardownMic = useCallback(() => {
     try {
@@ -177,6 +195,7 @@ export function useVoiceSession(lang: Lang) {
     const items: { url: string; clip: string | null }[] = [];
     let playing = false;
     let finished = false;
+    let stopped = false;
 
     const playNext = () => {
       if (cancelledRef.current) return;
@@ -221,91 +240,39 @@ export function useVoiceSession(lang: Lang) {
       else start();
     };
 
-    return {
+    const queue: ReplyQueue = {
       push(b: ArrayBuffer, mime: string, clip: string | null) {
+        if (stopped) return;
         items.push({ url: URL.createObjectURL(new Blob([b], { type: mime })), clip });
         if (!playing) playNext();
       },
       finish() {
+        if (stopped) return;
         finished = true;
         if (!playing && !items.length) endOfTurn();
       },
       busy: () => playing || items.length > 0,
       stop() {
+        stopped = true;
         finished = true;
         items.splice(0).forEach((i) => URL.revokeObjectURL(i.url));
         playing = false;
         stopLipsync();
       },
       resume() {
-        if (!playing) playNext();
+        if (!stopped && !playing) playNext();
       },
     };
+    return queue;
   }, [attachAnalyser, endOfTurn]);
 
-  const finishTurn = useCallback(() => {
-    teardownMic();
-    setMode("thinking");
-    const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      try {
-        ws.send(JSON.stringify({ type: "end" }));
-      } catch {}
-    } else {
-      endPendingRef.current = true; // socket not open yet — send as soon as it is
-    }
-  }, [teardownMic]);
-
-  const startTurn = useCallback(async () => {
-    setError(null);
-    try {
-      mediaRef.current = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
-      });
-    } catch {
-      setError("mic-denied");
-      activeRef.current = false;
-      setActive(false);
-      setMode("idle");
-      return;
-    }
-
-    const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    acRef.current = acRef.current ?? new AC();
-    const ac = acRef.current;
-    if (ac.state === "suspended") await ac.resume();
-
-    cancelledRef.current = false;
-    endPendingRef.current = false;
-    const vad = { started: false, silence: 0, elapsed: 0 };
-    queueRef.current = createQueue();
-
-    // ---- socket ----
-    const ws = new WebSocket(wsUrl());
-    ws.binaryType = "arraybuffer";
-    wsRef.current = ws;
-    const pending: ArrayBuffer[] = [];
-    let wsOpen = false;
-
-    ws.onopen = () => {
-      wsOpen = true;
-      try {
-        ws.send(JSON.stringify({ type: "start", lang: langRef.current }));
-      } catch {}
-      for (const b of pending) {
-        try {
-          ws.send(b);
-        } catch {}
-      }
-      pending.length = 0;
-      if (endPendingRef.current) {
-        try {
-          ws.send(JSON.stringify({ type: "end" }));
-        } catch {}
-        endPendingRef.current = false;
-      }
-    };
-
+  /**
+   * Wire a socket's reply side: transcript/text events, and the per-sentence
+   * audio + Audio2Face clips that the queue plays. Shared by both kinds of turn —
+   * a spoken one (mic → STT) and a typed one — so a message from the chat
+   * composer is spoken and lip-synced exactly like a spoken question.
+   */
+  const bindReplyStream = useCallback((ws: WebSocket, queue: ReplyQueue) => {
     let pendingMime = "audio/mpeg";
     /** Clip id from the pending {"tts"} header, applied to the next audio blob. */
     let pendingClip: string | null = null;
@@ -315,7 +282,7 @@ export function useVoiceSession(lang: Lang) {
       if (cancelledRef.current) return;
 
       if (typeof ev.data !== "string") {
-        queueRef.current?.push(ev.data as ArrayBuffer, pendingMime, pendingClip);
+        queue.push(ev.data as ArrayBuffer, pendingMime, pendingClip);
         pendingClip = null; // one clip id per audio blob
         return;
       }
@@ -360,7 +327,7 @@ export function useVoiceSession(lang: Lang) {
         done = true;
         // finish() owns the hand-off: it ends the turn now if nothing is queued,
         // otherwise the queue ends it once the last sentence has played out.
-        queueRef.current?.finish();
+        queue.finish();
       } else if (m.type === "error") {
         setError("no-speech");
         setMode(activeRef.current ? "paused" : "idle");
@@ -375,8 +342,72 @@ export function useVoiceSession(lang: Lang) {
       if (cancelledRef.current || done) return;
       // Server hung up without {done} — close the turn out the same way, so a
       // half-delivered reply still finishes playing instead of stalling the loop.
-      queueRef.current?.finish();
+      queue.finish();
     };
+  }, []);
+
+  const finishTurn = useCallback(() => {
+    teardownMic();
+    setMode("thinking");
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify({ type: "end" }));
+      } catch {}
+    } else {
+      endPendingRef.current = true; // socket not open yet — send as soon as it is
+    }
+  }, [teardownMic]);
+
+  const startTurn = useCallback(async () => {
+    setError(null);
+    try {
+      mediaRef.current = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
+      });
+    } catch {
+      setError("mic-denied");
+      activeRef.current = false;
+      setActive(false);
+      setMode("idle");
+      return;
+    }
+
+    const ac = await ensureAudioContext();
+
+    cancelledRef.current = false;
+    endPendingRef.current = false;
+    const vad = { started: false, silence: 0, elapsed: 0 };
+    const queue = createQueue();
+    queueRef.current = queue;
+
+    // ---- socket ----
+    const ws = new WebSocket(wsUrl());
+    ws.binaryType = "arraybuffer";
+    wsRef.current = ws;
+    const pending: ArrayBuffer[] = [];
+    let wsOpen = false;
+
+    ws.onopen = () => {
+      wsOpen = true;
+      try {
+        ws.send(JSON.stringify({ type: "start", lang: langRef.current }));
+      } catch {}
+      for (const b of pending) {
+        try {
+          ws.send(b);
+        } catch {}
+      }
+      pending.length = 0;
+      if (endPendingRef.current) {
+        try {
+          ws.send(JSON.stringify({ type: "end" }));
+        } catch {}
+        endPendingRef.current = false;
+      }
+    };
+
+    bindReplyStream(ws, queue);
 
     // ---- mic graph: level meter + VAD endpointing + live PCM upload ----
     const srcRate = ac.sampleRate;
@@ -426,7 +457,7 @@ export function useVoiceSession(lang: Lang) {
     mute.connect(ac.destination);
 
     setMode("listening");
-  }, [createQueue, endOfTurn, finishTurn]);
+  }, [bindReplyStream, createQueue, endOfTurn, ensureAudioContext, finishTurn]);
 
   startTurnRef.current = () => void startTurn();
 
@@ -500,30 +531,64 @@ export function useVoiceSession(lang: Lang) {
   }, [mode, startTurn, teardownMic]);
 
   /**
-   * Typed message → the existing POST /chat endpoint (text-only reply).
-   * The voice path is untouched; this is the same endpoint web/app.js used as a fallback.
+   * Typed message → the SAME streaming turn the mic drives, minus the capture:
+   * {"type":"text"} on the socket runs LLM → TTS → Audio2Face server-side, so a
+   * question from the chat composer is spoken aloud and lip-synced just like a
+   * spoken one. (POST /chat stays as the text-only endpoint it always was.)
    */
-  const sendText = useCallback(async (text: string) => {
-    const body = text.trim();
-    if (!body) return;
-    setMessages((prev) => [...prev, { id: nextId(), role: "user", text: body }]);
-    setMode((m) => (m === "idle" ? "thinking" : m));
-    try {
-      const r = await fetch(REST.chat, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: body, lang: langRef.current }),
-      });
-      const data = (await r.json()) as { reply?: string };
-      if (data.reply) {
-        setMessages((prev) => [...prev, { id: nextId(), role: "assistant", text: data.reply as string }]);
+  const sendText = useCallback(
+    async (text: string) => {
+      const body = text.trim();
+      if (!body) return;
+
+      setError(null);
+      // The user typed it, so it goes up immediately — the server does not echo
+      // a typed turn's transcript back (see run_reply's echo_transcript).
+      setMessages((prev) => [...prev, { id: nextId(), role: "user", text: body }]);
+      setPartial("");
+      assistantIdRef.current = null;
+
+      // A typed turn interrupts whatever is playing, the way a new question should.
+      queueRef.current?.stop();
+      try {
+        audioElRef.current?.pause();
+      } catch {}
+      audioElRef.current = null;
+      teardownMic();
+      try {
+        wsRef.current?.close();
+      } catch {}
+
+      // Typing is an instruction to go, so it also lifts a hold.
+      cancelledRef.current = false;
+      pausedRef.current = false;
+      setMode("thinking");
+
+      // Sending is a user gesture — the right moment to unlock audio playback,
+      // so the reply can start speaking without a click of its own.
+      try {
+        await ensureAudioContext();
+      } catch {
+        /* no analyser — the reply still plays, the level meter just stays flat */
       }
-    } catch {
-      setError("chat-failed");
-    } finally {
-      setMode((m) => (m === "thinking" ? (activeRef.current ? "paused" : "idle") : m));
-    }
-  }, []);
+
+      const queue = createQueue();
+      queueRef.current = queue;
+      const ws = new WebSocket(wsUrl());
+      ws.binaryType = "arraybuffer";
+      wsRef.current = ws;
+      bindReplyStream(ws, queue);
+      ws.onopen = () => {
+        try {
+          ws.send(JSON.stringify({ type: "text", text: body, lang: langRef.current }));
+        } catch {
+          setError("chat-failed");
+        }
+      };
+      ws.onerror = () => setError("chat-failed");
+    },
+    [bindReplyStream, createQueue, ensureAudioContext, teardownMic],
+  );
 
   useEffect(() => () => stop(), [stop]);
 

@@ -1,0 +1,46 @@
+/* Covers the ENTIRE viewport — background art, dock, language bar, chat
+   launcher, all of it — until the avatar reports ready (see page.tsx's
+   avatarReady / AvatarModel's onReady). Solid, not a soft vignette: unlike a
+   loading state scoped to the avatar's own box, this one's job is that
+   nothing else on the page is visible either, so a partial/gradient fill
+   would defeat the point. */
+
+.screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100; /* above the chat panel (30) and the error toast (40) */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(18 * var(--s));
+  background: var(--surface);
+  opacity: 1;
+  transition: opacity 320ms ease;
+}
+
+.done {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.spinner {
+  width: calc(72 * var(--s));
+  height: calc(72 * var(--s));
+  border-radius: 50%;
+  border: calc(5 * var(--s)) solid var(--hairline);
+  border-top-color: var(--blue);
+  animation: spin 0.85s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.text {
+  font-size: calc(15 * var(--s));
+  color: var(--text-dim);
+  letter-spacing: 0.01em;
+}

@@ -4,6 +4,7 @@ export const COPY = {
   en: {
     dir: "ltr",
     idle: "Tap to speak",
+    loading: "Loading MARI…",
     listening: "Listening…",
     thinking: "Thinking…",
     speaking: "Speaking",
@@ -18,6 +19,7 @@ export const COPY = {
   ur: {
     dir: "rtl",
     idle: "بولنے کے لیے دبائیں",
+    loading: "ماری لوڈ ہو رہی ہے…",
     listening: "سن رہا ہے…",
     thinking: "سوچ رہا ہے…",
     speaking: "بول رہا ہے",

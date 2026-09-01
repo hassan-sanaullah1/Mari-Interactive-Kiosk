@@ -56,7 +56,7 @@ const FRAME_HEIGHT_M = 1.15;
 const HEAD_ROOM = 0.045;
 /** Distance from the model. Together with the frame size this sets the fov. */
 const CAMERA_Z = 2.5;
-/** Fallback until the rig reports its real height (girl11.glb is ~1.68m). */
+/** Fallback until the rig reports its real height (girl13.glb is ~1.68m). */
 const FALLBACK_HEIGHT = 1.68;
 
 /**
@@ -161,8 +161,8 @@ const LIGHT_CONFIGS: Record<AvatarState, LightConfig> = {
 /** Per-frame approach rate toward the active preset — slow enough that a state
  *  change takes about a second to land. */
 const LERP_SPEED = 0.04;
-/** Where the face spot aims. Retune if the rig's proportions change; girl11's
- *  head sits around here. */
+/** Where the face spot aims. Retune if the rig's proportions change; girl13's
+ *  head sits around here (its rig is the same 1.68m figure as girl11's). */
 const HEAD_TARGET_Y = 1.45;
 
 /**
@@ -288,12 +288,15 @@ export interface AvatarSceneProps {
   /** Smoothed 0..1 amplitude, from useVoiceSession. Optional: without it the
    *  key and rim lights simply hold their per-state intensities. */
   levelRef?: { current: number };
+  /** Fires once the rig has loaded and is posed — see AvatarModel's onReady. */
+  onReady?: () => void;
 }
 
 export default function AvatarScene({
   state = "idle",
   url = AVATAR_MODEL_URL,
   levelRef,
+  onReady,
 }: AvatarSceneProps) {
   const [modelHeight, setModelHeight] = useState(FALLBACK_HEIGHT);
   const onMeasure = useCallback((h: number) => {
@@ -322,7 +325,7 @@ export default function AvatarScene({
       </Environment>
 
       <Suspense fallback={null}>
-        <AvatarModel url={url} state={state} onMeasure={onMeasure} />
+        <AvatarModel url={url} state={state} onMeasure={onMeasure} onReady={onReady} />
       </Suspense>
     </Canvas>
   );

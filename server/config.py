@@ -67,12 +67,17 @@ UPLIFT_KEY = env("APP_UPLIFT_API_KEY")
 UPLIFT_BASE = env("APP_UPLIFT_TTS_BASE_URL", "https://ap-southeast-1.api.upliftai.org").rstrip("/")
 UPLIFT_PATH = env("APP_UPLIFT_TTS_API_PATH", "/v1/synthesis/text-to-speech")
 UPLIFT_VOICE = env("APP_UPLIFT_VOICE_ID", "v_8eelc901v6")
+# Uplift also handles English (see APP_EN_TTS=uplift below). Same voice by default so
+# the kiosk keeps one persona across both languages; override for a separate English one.
+UPLIFT_VOICE_EN = env("APP_UPLIFT_VOICE_ID_EN", UPLIFT_VOICE)
 UPLIFT_FORMAT = env("APP_UPLIFT_OUTPUT_FORMAT", "MP3_22050_32")
 
-# ── English STT/TTS run LOCALLY (the s2s built-ins: faster-whisper + Kokoro),
-#    not the remote APIs. Urdu stays on Soniox/Uplift; the LLM stays vLLM Qwen. ──
-EN_STT = env("APP_EN_STT", "local")   # "local" (faster-whisper) | "remote"
-EN_TTS = env("APP_EN_TTS", "local")   # "local" (kokoro)         | "remote"
+# ── English STT/TTS. STT runs LOCALLY by default (the s2s built-in faster-whisper).
+#    English TTS defaults to Uplift — the same provider (and voice) as Urdu, reading
+#    English text — because no Kokoro instance is deployed right now. Point APP_EN_TTS
+#    back at "local"/"remote" once one is. Urdu always stays on Soniox/Uplift. ──
+EN_STT = env("APP_EN_STT", "local")     # "local" (faster-whisper) | "remote"
+EN_TTS = env("APP_EN_TTS", "uplift")    # "uplift" | "local" (kokoro) | "remote"
 
 # local faster-whisper
 WHISPER_LOCAL_MODEL = env("APP_ASR_MODEL_SIZE", "base.en")
@@ -101,8 +106,9 @@ A2F_TLS_CA = env("APP_A2F_TLS_CA")
 A2F_MAX_CLIPS = max(1, int(env("APP_A2F_MAX_CLIPS", "1")))
 
 # ── Voices ──────────────────────────────────────────────────────────
-# English TTS = Kokoro voice name; Urdu TTS = Uplift (uses UPLIFT_VOICE above,
-# not a Kokoro name), so VOICE_UR only applies if Urdu is ever routed to Kokoro.
+# Kokoro voice names. Urdu always uses Uplift (UPLIFT_VOICE) and English uses Uplift
+# too while APP_EN_TTS=uplift (UPLIFT_VOICE_EN), so these only apply when either
+# language is routed to Kokoro.
 VOICE_EN = env("APP_TTS_VOICE_ENGLISH", "af_heart")
 VOICE_UR = env("APP_TTS_VOICE_URDU", "af_heart")
 
@@ -118,7 +124,7 @@ def stt_ready(lang: str) -> bool:
 
 
 def tts_ready(lang: str) -> bool:
-    if lang == "ur":
+    if lang == "ur" or EN_TTS == "uplift":
         return bool(UPLIFT_KEY)
     return True if EN_TTS == "local" else bool(KOKORO_BASE)
 
@@ -126,7 +132,7 @@ def tts_ready(lang: str) -> bool:
 def status() -> dict:
     """Compact config snapshot for /healthz (no secrets)."""
     en_stt = f"whisper-local:{WHISPER_LOCAL_MODEL}" if EN_STT == "local" else "whisper-remote"
-    en_tts = "kokoro-local" if EN_TTS == "local" else "kokoro-remote"
+    en_tts = {"uplift": "uplift", "local": "kokoro-local"}.get(EN_TTS, "kokoro-remote")
     return {
         "llm": {"ready": llm_ready(), "provider": LLM_PROVIDER, "model": LLM_MODEL, "base": LLM_BASE or None},
         "stt": {
@@ -135,7 +141,11 @@ def status() -> dict:
         },
         "tts": {
             "ur": {"provider": "uplift", "ready": tts_ready("ur"), "voice": UPLIFT_VOICE},
-            "en": {"provider": en_tts, "ready": tts_ready("en"), "voice": VOICE_EN},
+            "en": {
+                "provider": en_tts,
+                "ready": tts_ready("en"),
+                "voice": UPLIFT_VOICE_EN if EN_TTS == "uplift" else VOICE_EN,
+            },
         },
         "avatar": _avatar_status(),
     }

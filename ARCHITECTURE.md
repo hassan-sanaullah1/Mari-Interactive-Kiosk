@@ -109,6 +109,36 @@ so it was lower priority. If extracted, it should become `server/providers/llm.p
 with an `LLMProvider` Protocol (`chat(...)` / `chat_stream(...)`), mirroring the
 STT/TTS pattern.
 
+## Grounding: the Sky47 knowledge base (`server/knowledge.py`)
+
+The avatar answers *as Sky47*, so the LLM is not allowed to reply from its own
+memory. `sky47_knowledge_base.md` (~90 KB) is the authoritative source — far too
+large to prepend to every turn on a latency-sensitive voice pipeline — so
+`server/knowledge.py` grounds each turn with two pieces:
+
+* **`CORE_BRIEF`** — a short hand-written summary (ownership, campuses, the five
+  service pillars, leadership, contact), always in the system prompt so the avatar
+  can introduce itself and handle the common questions even if retrieval misses.
+* **Retrieved sections** — the knowledge base is split into ~90 chunks at its `##`/`###`
+  headings (oversized sections are sub-split), and `search()` ranks them with BM25 over
+  a plain term-frequency index. The top few, capped at `MAX_CONTEXT_CHARS`, are appended
+  under a "sections relevant to this question" header. Stdlib only: no embeddings, no
+  vector store, no extra service to deploy — the whole index builds at import.
+
+`system_prompt(lang, query)` assembles persona + rules + brief + retrieval, and both
+`run_llm()` and `llm_stream_sentences()` call it with the visitor's own text, so the
+mic path, the typed path and `/chat` are all grounded identically.
+
+**Urdu.** The knowledge base is English but visitors ask in Urdu, so queries are expanded
+through `PHRASES` and `GLOSSARY` before scoring — multi-word entries first, because Urdu
+spells several terms out letter by letter (`سی ای او` = C-E-O) and the bare letters would
+otherwise collide with unrelated words. The Urdu rules then tell the model to read English
+and answer in fluent Urdu, leaving names and technical terms in Latin script so the Uplift
+TTS voice pronounces them correctly.
+
+Point `APP_KNOWLEDGE_FILE` at a different markdown file to re-ground the avatar;
+`/healthz` reports `knowledge.ready` and the section count.
+
 ## How provider selection works
 
 `get_stt_provider(lang)` / `get_tts_provider(lang)` in `stt.py`/`tts.py` are the

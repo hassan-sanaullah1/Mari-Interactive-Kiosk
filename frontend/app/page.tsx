@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import styles from "./page.module.css";
 import AvatarStage from "@/components/AvatarStage";
 import ChatPanel from "@/components/ChatPanel";
 import ControlDock from "@/components/ControlDock";
 import LanguageBar from "@/components/LanguageBar";
+import LoadingScreen from "@/components/LoadingScreen";
 import { useVoiceSession } from "@/hooks/useVoiceSession";
 import { applyTheme, readTheme, type Theme } from "@/lib/theme";
 import { COPY, type Lang } from "@/lib/i18n";
@@ -14,6 +15,13 @@ export default function Page() {
   const [lang, setLang] = useState<Lang>("en");
   const [theme, setTheme] = useState<Theme>("dark");
   const [chatOpen, setChatOpen] = useState(false);
+  // False until the avatar reports it has loaded AND is posed — see
+  // AvatarModel's onReady. The rest of the page mounts and loads underneath
+  // regardless (the background art, the voice session, the avatar's own glTF
+  // fetch all proceed in parallel); LoadingScreen just sits on top of all of
+  // it at the highest z-index until this flips.
+  const [avatarReady, setAvatarReady] = useState(false);
+  const onAvatarReady = useCallback(() => setAvatarReady(true), []);
 
   const voice = useVoiceSession(lang);
   const t = COPY[lang];
@@ -48,7 +56,7 @@ export default function Page() {
       {/* The 3D presenter. `mode` drives her body animation (idle → listening →
           talking); her mouth is driven separately by the Audio2Face frames that
           arrive alongside the reply audio. */}
-      <AvatarStage mode={voice.mode} />
+      <AvatarStage mode={voice.mode} levelRef={voice.levelRef} onReady={onAvatarReady} />
 
       <LanguageBar
         className={styles.langBar}
@@ -85,6 +93,8 @@ export default function Page() {
           {errorText}
         </div>
       )}
+
+      <LoadingScreen lang={lang} ready={avatarReady} />
     </main>
   );
 }

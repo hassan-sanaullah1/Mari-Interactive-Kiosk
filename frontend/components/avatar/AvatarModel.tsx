@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * girl11.glb — the MARI presenter.
+ * girl13.glb — the MARI presenter.
  *
  * Ported from the working implementation (THREEJS_A2F_INTEGRATION.md §4/§5/§9).
  *
@@ -12,11 +12,26 @@
  * sends nothing the mouth returns to rest; there is no fallback mouth animation
  * by design.
  *
- * The morphs live on a single glTF mesh ("base") with 12 primitives — head,
- * brows, eyes, upper/lower teeth, tongue, eyelashes, skin, nails — and every
- * primitive carries all 51 targets. three.js splits that into 12 SkinnedMeshes,
- * so the traverse below picks up all of them and the teeth/tongue move with the
- * lips instead of staying frozen inside an open mouth.
+ * The morphs live on a single glTF mesh ("Mesh.001") with 11 primitives — head,
+ * brows, eyes, upper/lower teeth, tongue, eyelashes, arms, legs, nails — and
+ * every primitive carries all 51 targets. three.js splits that into 11
+ * SkinnedMeshes, so the traverse below picks up all of them and the teeth and
+ * tongue move with the lips instead of staying frozen inside an open mouth.
+ *
+ * This rig succeeded girl11.glb and girl12.glb. Its face is literally theirs —
+ * all 561 shared morph target accessors are byte-identical to girl11's, under
+ * identical names — so everything the mouth does ports across untouched. What
+ * is new is a baked cloth simulation (975 `a_cloth_parent_vtx_*_JNT` joints on
+ * a second skin, ~10x the animated nodes of the earlier rigs), which the loop
+ * windows below have to account for; and the body clip is longer again, so
+ * those windows were re-derived rather than carried over.
+ *
+ * girl12.glb shipped with its morph NAMES shifted one place against that same
+ * geometry, which drove every named morph onto its neighbour's shape — one eye
+ * blinking, and jawOpen quietly driving mouthClose. girl13 is correct (checked:
+ * the list matches girl11's, and the eyeBlink pair is mirror-symmetric), but
+ * nothing about that failure points at the name list, so assertRigNames below
+ * keeps watching for it.
  */
 
 import { useEffect, useMemo, useRef } from "react";
@@ -28,13 +43,36 @@ import { setRigCalibration } from "@/lib/blendshapePlayer";
 import type { AvatarState } from "./state";
 
 // ---------------------------------------------------------------------------
-// Body animation — clip "CINEMA_4D_Main", 801 frames @ 30 fps (26.7s), holding
+// Body animation — clip "CINEMA_4D_Main", 902 frames @ 30 fps (30.0s), holding
 // three hand-authored segments concatenated on one timeline:
-//   0–240   breathing  (at-rest idle)
-//   240–420 listening  (hands rise at 240–300, then a settled listening pose)
-//   420–800 talking    (gesturing)
+//   0–30    a dead hold at the head of the clip, skipped entirely
+//   30–245  breathing  (at-rest idle, a clean 60-frame cycle)
+//   245–393 listening  (hands rise at ~245–300, then a settled listening pose)
+//   393–893 talking    (gesturing; the last ~10 frames run past the loop)
 // The loop windows are trimmed inside those segments to land on frames whose
-// full-skeleton pose actually matches, so the loop seam has nothing to hide.
+// pose actually matches at both ends, so the loop seam has nothing to hide.
+//
+// The boundaries were measured off this clip's own curves. Per-frame motion
+// locates the segment breaks; the loop ends are then the frame pair with the
+// smallest pose distance inside each segment. Two distances, because this rig
+// animates two things that loop differently:
+//
+//   BODY — 109 skeleton joints, compared by summed quaternion angle. Rotations
+//   only: the skeleton is authored in centimetres under a 0.01-scaled root, so
+//   including translations would just weight this rig's units against it. Body
+//   motion averages 0.061 per frame and peaks at 0.554.
+//
+//   CLOTH — the 975 baked simulation joints, as mean per-joint displacement.
+//   A baked sim does not repeat, so unlike the body it never matches exactly at
+//   any seam; the useful question is how many frames of ordinary cloth motion
+//   (0.038 units) the seam is worth, since the crossfade has to absorb that.
+//
+// Optimising body alone would have picked girl12's windows, which cost 4 and 51
+// frames of cloth drift; minimising cloth subject to a tight body match instead
+// costs 1 and 29. The talking seam is the one that cannot be made cheap — no
+// window in that segment does better than ~29 frames — so its cloth reconciles
+// at roughly 3x normal speed across the 0.35s crossfade. That reads as fabric
+// settling, not as a pop, and it is the best the authored clip offers.
 // ---------------------------------------------------------------------------
 const FPS = 30;
 const CLIP_NAME = "CINEMA_4D_Main";
@@ -50,11 +88,18 @@ interface Segment {
 }
 
 const SEGMENTS: Record<BodyState, Segment> = {
-  breathing: { intro: null, after: null, loop: [0 / FPS, 240 / FPS] },
-  // Frames 240–300 are the authored hands-rise out of the at-rest pose.
-  listening: { intro: [240 / FPS, 300 / FPS], after: "breathing", loop: [300 / FPS, 392 / FPS] },
-  // Frames 392–434 are the authored settle-into-gesturing.
-  talking: { intro: [392 / FPS, 434 / FPS], after: "listening", loop: [434 / FPS, 716 / FPS] },
+  // Starts at 119, not 0: the clip opens on ~30 frames of frozen pose, and of
+  // the breathing cycles that follow this is the pair whose cloth agrees as
+  // well as the body does (body 0.004, cloth 0.036 — one frame's worth).
+  breathing: { intro: null, after: null, loop: [119 / FPS, 241 / FPS] },
+  // Frames 241–300 are the authored hands-rise out of the at-rest pose: it
+  // leaves the breathing cycle where the loop ends and the arms are settled
+  // by 300. (body 0.070, cloth 0.245 at the loop seam.)
+  listening: { intro: [241 / FPS, 300 / FPS], after: "breathing", loop: [300 / FPS, 393 / FPS] },
+  // Frames 393–558 are the authored settle-into-gesturing — much longer than
+  // the other intro, but it is all gesturing, and starting the loop here rather
+  // than at 490 halves the cloth drift at the seam (body 0.035, cloth 1.10).
+  talking: { intro: [393 / FPS, 558 / FPS], after: "listening", loop: [558 / FPS, 780 / FPS] },
 };
 
 /** Crossfade (s) hiding a loop seam — both ends are near-identical poses. */
@@ -232,9 +277,19 @@ export interface AvatarModelProps {
   state?: AvatarState;
   /** Reports the rig's world-space height once, so the scene can frame it. */
   onMeasure?: (height: number) => void;
+  /**
+   * Fires once the rig is actually posed and safe to reveal. Before the pool
+   * effect below runs, the SkinnedMesh sits in the glTF's bind pose — a
+   * T-pose for this rig — which is otherwise visible for however long the
+   * asset takes to parse plus however many render frames pass before that
+   * effect's `mixer.update(0)` call applies a real pose. The loading screen
+   * that gates on this uses it to hide exactly that window, on top of the
+   * fetch/parse time Suspense already covers.
+   */
+  onReady?: () => void;
 }
 
-export default function AvatarModel({ url, state = "idle", onMeasure }: AvatarModelProps) {
+export default function AvatarModel({ url, state = "idle", onMeasure, onReady }: AvatarModelProps) {
   const { scene, animations } = useGLTF(url);
   const groupRef = useRef<THREE.Group>(null);
   const blinkRef = useRef({ nextBlink: 2, blinkProgress: 0 });
@@ -285,6 +340,9 @@ export default function AvatarModel({ url, state = "idle", onMeasure }: AvatarMo
           `lipsync unaffected. Available:`,
         Object.keys(actions),
       );
+      // No body clip to pose her with, but she's still a usable (static) rig —
+      // don't leave the loading screen spinning forever over a broken export.
+      onReady?.();
       return;
     }
 
@@ -333,6 +391,16 @@ export default function AvatarModel({ url, state = "idle", onMeasure }: AvatarMo
 
     activeLayerRef.current = 0;
     targetStateRef.current = initial;
+
+    // Apply that pose immediately rather than waiting for the next useFrame
+    // tick: without this, the SkinnedMesh is still sitting in the glTF's bind
+    // pose (a T-pose, for this rig) for however many frames pass between
+    // mount and the render loop's first pass through the code below, and
+    // that T-pose is what actually paints. mixer.update(0) evaluates every
+    // action's current weight/time and writes bone + morph values right now,
+    // at zero cost to playback (delta 0 does not advance anything).
+    mixer.update(0);
+    onReady?.();
     // Intentionally excludes `state`: this sets the *initial* pose only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actions, animations, mixer]);
@@ -453,6 +521,29 @@ export default function AvatarModel({ url, state = "idle", onMeasure }: AvatarMo
     });
     return meshes;
   }, [scene]);
+
+  // ── RIG NAME CHECK ──────────────────────────────────────────
+  // Everything below addresses the rig by morph name, so a name list that is
+  // internally consistent but shifted against its own geometry (see the header)
+  // produces a face that moves confidently and wrongly, with nothing in the
+  // console to suggest the names are at fault. Two cheap invariants catch the
+  // shift girl12 shipped with: it announced itself with a "weight_0_" entry,
+  // and it also cost the list its last real name.
+  useEffect(() => {
+    const dict = morphMeshes[0]?.morphTargetDictionary;
+    if (!dict) return;
+    const missing = ["eyeBlinkLeft", "eyeBlinkRight", "jawOpen", "browDownLeft"].filter(
+      (name) => dict[name] === undefined,
+    );
+    if ("weight_0_" in dict || missing.length) {
+      console.error(
+        `[Avatar] ${url}: morph target names look shifted against their geometry — ` +
+          `every named morph will drive its neighbour's shape. ` +
+          (missing.length ? `Missing: ${missing.join(", ")}. ` : "") +
+          `Re-export with the names aligned.`,
+      );
+    }
+  }, [morphMeshes, url]);
 
   // Blink indices, resolved once. This rig uses the ARKit names, and every
   // primitive (eyelashes included) carries them.
