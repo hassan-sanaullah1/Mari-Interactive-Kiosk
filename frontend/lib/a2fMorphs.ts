@@ -2,7 +2,7 @@
  * Applies Audio2Face blendshape weights to the avatar's morph targets.
  *
  * Ported from the working implementation (THREEJS_A2F_INTEGRATION.md §9/§11),
- * trimmed to the path girl13.glb actually takes.
+ * trimmed to the path girl14.glb actually takes.
  *
  * That rig carries the ARKit blendshape names verbatim (jawOpen, mouthFunnel,
  * mouthPucker, mouthRollLower, …) — exactly the vocabulary A2F-3D emits in

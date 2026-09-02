@@ -300,6 +300,23 @@ class A2FClient:
         except Exception as exc:
             logger.warning("A2F channel warmup failed: %s", exc)
 
+    async def is_connected(self, timeout: float = 3.0) -> bool:
+        """Best-effort liveness probe for /healthz — does NOT open a clip stream.
+
+        A ready channel (state READY, already dialed by warmup/a prior clip) is
+        reported connected immediately. Otherwise this actively dials with a
+        short timeout, so a down or still-loading NIM shows up as disconnected
+        instead of the stale "ready" a cached client object would otherwise imply.
+        """
+        try:
+            channel = self._get_channel()
+            if channel.get_state(try_to_connect=False) == grpc.ChannelConnectivity.READY:
+                return True
+            await asyncio.wait_for(channel.channel_ready(), timeout=timeout)
+            return True
+        except Exception:
+            return False
+
     async def open_stream(self, sample_rate: int, on_batch: OnBatch) -> A2FStreamSession:
         session = A2FStreamSession(sample_rate, on_batch, metadata=self._metadata)
         try:

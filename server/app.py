@@ -71,7 +71,7 @@ async def index() -> FileResponse:
 async def healthz() -> dict:
     return {
         "ok": True,
-        **C.status(),
+        **await C.status(),
         "knowledge": {"ready": knowledge.ready(), "sections": len(knowledge.CHUNKS)},
     }
 

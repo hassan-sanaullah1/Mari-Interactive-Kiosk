@@ -213,7 +213,28 @@ class LipsyncTurn:
             # its ~1.5s of appended trailing silence (§10).
             publisher.clip_secs = len(pcm) / 2 / A2F_SAMPLE_RATE
             await session.write(pcm)
-            frames = await asyncio.wait_for(session.finish(), timeout=_CLIP_TIMEOUT_S)
+            try:
+                frames = await asyncio.wait_for(session.finish(), timeout=_CLIP_TIMEOUT_S)
+            except RuntimeError as exc:
+                # "No available stream; retry later" — the NIM's own slot count
+                # (stream_number, deploy/a2f/configs/deployment_config.yaml) can
+                # lag behind our semaphore releasing the previous clip's slot: the
+                # new stream opens fine, but the NIM hasn't freed the prior one
+                # yet by the time real audio starts. One retry after a short
+                # settle covers that race without masking a genuinely down NIM.
+                if "No available stream" not in str(exc):
+                    raise
+                logger.warning("A2F clip %s: no stream slot yet, retrying once: %s", uid, exc)
+                await session.abort()
+                self._sessions.discard(session)
+                await asyncio.sleep(0.3)
+                session = await asyncio.wait_for(
+                    self._client.open_stream(sample_rate=A2F_SAMPLE_RATE, on_batch=publisher.publish),
+                    timeout=_OPEN_TIMEOUT_S,
+                )
+                self._sessions.add(session)
+                await session.write(pcm)
+                frames = await asyncio.wait_for(session.finish(), timeout=_CLIP_TIMEOUT_S)
             logger.info(
                 "A2F clip %s: %d frames for %.2fs of audio", uid, frames, publisher.clip_secs
             )

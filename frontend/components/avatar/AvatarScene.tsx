@@ -33,10 +33,18 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Environment, Lightformer } from "@react-three/drei";
+import { Environment, Lightformer, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import AvatarModel from "./AvatarModel";
 import { AVATAR_MODEL_URL, type AvatarState } from "./state";
+
+// Fires as soon as this (dynamically-imported) module evaluates — before
+// <AvatarModel>'s own useGLTF() call, which only runs once Suspense mounts it.
+// layout.tsx's <link rel="preload"> already gets the raw bytes moving in
+// parallel with JS bootstrap; this starts drei's GLTFLoader parse (and, once
+// parsed, the mesh/texture GPU upload) the moment this chunk itself loads,
+// instead of waiting for the component tree under Suspense to mount.
+useGLTF.preload(AVATAR_MODEL_URL);
 
 /**
  * Framing, expressed the way the reference composition actually behaves:
@@ -56,7 +64,7 @@ const FRAME_HEIGHT_M = 1.15;
 const HEAD_ROOM = 0.045;
 /** Distance from the model. Together with the frame size this sets the fov. */
 const CAMERA_Z = 2.5;
-/** Fallback until the rig reports its real height (girl13.glb is ~1.68m). */
+/** Fallback until the rig reports its real height (girl14.glb is ~1.68m). */
 const FALLBACK_HEIGHT = 1.68;
 
 /**
@@ -174,7 +182,7 @@ const LIGHT_CONFIGS: Record<AvatarState, LightConfig> = {
 /** Per-frame approach rate toward the active preset — slow enough that a state
  *  change takes about a second to land. */
 const LERP_SPEED = 0.04;
-/** Where the face spot aims. Retune if the rig's proportions change; girl13's
+/** Where the face spot aims. Retune if the rig's proportions change; girl14's
  *  head sits around here (its rig is the same 1.68m figure as girl11's). */
 const HEAD_TARGET_Y = 1.45;
 

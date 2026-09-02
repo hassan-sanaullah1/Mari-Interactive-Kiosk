@@ -129,7 +129,7 @@ def tts_ready(lang: str) -> bool:
     return True if EN_TTS == "local" else bool(KOKORO_BASE)
 
 
-def status() -> dict:
+async def status() -> dict:
     """Compact config snapshot for /healthz (no secrets)."""
     en_stt = f"whisper-local:{WHISPER_LOCAL_MODEL}" if EN_STT == "local" else "whisper-remote"
     en_tts = {"uplift": "uplift", "local": "kokoro-local"}.get(EN_TTS, "kokoro-remote")
@@ -147,12 +147,12 @@ def status() -> dict:
                 "voice": UPLIFT_VOICE_EN if EN_TTS == "uplift" else VOICE_EN,
             },
         },
-        "avatar": _avatar_status(),
+        "avatar": await _avatar_status(),
     }
 
 
-def _avatar_status() -> dict:
+async def _avatar_status() -> dict:
     """Lipsync readiness — imported lazily so config stays dependency-free."""
     from .avatar import a2f_status
 
-    return {"a2f": a2f_status()}
+    return {"a2f": await a2f_status()}

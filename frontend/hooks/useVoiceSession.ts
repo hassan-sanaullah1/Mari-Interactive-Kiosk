@@ -49,8 +49,11 @@ const TARGET_SR = 16000;
  * waitForFrames() in lib/blendshapePlayer.ts.
  */
 const CLIP_FRAME_WAIT_MS = 700;
-/** RMS thresholds for endpointing — same values the existing web/app.js used. */
-const VAD = { start: 0.025, stop: 0.015, silenceMs: 600, preSpeechMs: 8000, maxMs: 20000 };
+/** RMS thresholds for endpointing. silenceMs was 600 — short enough that an
+ * ordinary mid-sentence breath or thinking pause ended the turn early
+ * ("half sentence" cutoffs); 1200ms gives a real pause room without making
+ * genuine end-of-turn silence feel laggy. */
+const VAD = { start: 0.025, stop: 0.015, silenceMs: 1200, preSpeechMs: 8000, maxMs: 20000 };
 
 /** Downsample one Float32 frame to 16 kHz and pack as little-endian PCM s16. */
 function frameToPCM16(f: Float32Array, srcRate: number): ArrayBuffer {

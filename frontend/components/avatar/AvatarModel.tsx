@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * girl13.glb — the MARI presenter.
+ * girl14.glb — the MARI presenter.
  *
  * Ported from the working implementation (THREEJS_A2F_INTEGRATION.md §4/§5/§9).
  *
@@ -18,20 +18,26 @@
  * SkinnedMeshes, so the traverse below picks up all of them and the teeth and
  * tongue move with the lips instead of staying frozen inside an open mouth.
  *
- * This rig succeeded girl11.glb and girl12.glb. Its face is literally theirs —
- * all 561 shared morph target accessors are byte-identical to girl11's, under
- * identical names — so everything the mouth does ports across untouched. What
- * is new is a baked cloth simulation (975 `a_cloth_parent_vtx_*_JNT` joints on
- * a second skin, ~10x the animated nodes of the earlier rigs), which the loop
- * windows below have to account for; and the body clip is longer again, so
- * those windows were re-derived rather than carried over.
+ * This rig succeeded girl11 through girl13. Its face is literally theirs — all
+ * 561 morph target accessors are byte-identical to girl11's, under identical
+ * names — so everything the mouth does ports across untouched. It keeps
+ * girl13's baked cloth simulation (975 `a_cloth_parent_vtx_*_JNT` joints on a
+ * second skin, ~10x the animated nodes of the rigs before it), which is what
+ * the loop windows below have to account for.
+ *
+ * The body clip is girl13's re-authored, not merely re-exported: same length
+ * and same three segments, but a calmer idle (breathing moves ~0.004 per frame
+ * against girl13's 0.014–0.031) and a dead hold at the head that runs to ~38
+ * rather than ~30. The windows below were re-derived against it regardless, and
+ * landed on the same frames — so they are this clip's own optimum, not
+ * inherited numbers that happen to still parse.
  *
  * girl12.glb shipped with its morph NAMES shifted one place against that same
  * geometry, which drove every named morph onto its neighbour's shape — one eye
- * blinking, and jawOpen quietly driving mouthClose. girl13 is correct (checked:
+ * blinking, and jawOpen quietly driving mouthClose. girl14 is correct (checked:
  * the list matches girl11's, and the eyeBlink pair is mirror-symmetric), but
- * nothing about that failure points at the name list, so assertRigNames below
- * keeps watching for it.
+ * nothing about that failure points at the name list, so the check below keeps
+ * watching for it.
  */
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
@@ -45,8 +51,8 @@ import type { AvatarState } from "./state";
 // ---------------------------------------------------------------------------
 // Body animation — clip "CINEMA_4D_Main", 902 frames @ 30 fps (30.0s), holding
 // three hand-authored segments concatenated on one timeline:
-//   0–30    a dead hold at the head of the clip, skipped entirely
-//   30–245  breathing  (at-rest idle, a clean 60-frame cycle)
+//   0–38    a dead hold at the head of the clip, skipped entirely
+//   38–245  breathing  (at-rest idle, a clean 60-frame cycle)
 //   245–393 listening  (hands rise at ~245–300, then a settled listening pose)
 //   393–893 talking    (gesturing; the last ~10 frames run past the loop)
 // The loop windows are trimmed inside those segments to land on frames whose
@@ -57,7 +63,7 @@ import type { AvatarState } from "./state";
 // smallest pose distance inside each segment. Two distances, because this rig
 // animates two things that loop differently:
 //
-//   BODY — 109 skeleton joints, compared by summed quaternion angle. Rotations
+//   BODY — 110 skeleton joints, compared by summed quaternion angle. Rotations
 //   only: the skeleton is authored in centimetres under a 0.01-scaled root, so
 //   including translations would just weight this rig's units against it. Body
 //   motion averages 0.061 per frame and peaks at 0.554.
@@ -73,6 +79,11 @@ import type { AvatarState } from "./state";
 // window in that segment does better than ~29 frames — so its cloth reconciles
 // at roughly 3x normal speed across the 0.35s crossfade. That reads as fabric
 // settling, not as a pop, and it is the best the authored clip offers.
+//
+// The cloth also needs the first ~120 frames to settle out of its rest state
+// (per-frame motion 0.085 at frame 40, 0.027 by frame 119), which is the other
+// reason the breathing loop starts where it does rather than at the first
+// frame the body is willing to loop from.
 // ---------------------------------------------------------------------------
 const FPS = 30;
 const CLIP_NAME = "CINEMA_4D_Main";
@@ -88,9 +99,9 @@ interface Segment {
 }
 
 const SEGMENTS: Record<BodyState, Segment> = {
-  // Starts at 119, not 0: the clip opens on ~30 frames of frozen pose, and of
+  // Starts at 119, not 0: the clip opens on ~38 frames of frozen pose, and of
   // the breathing cycles that follow this is the pair whose cloth agrees as
-  // well as the body does (body 0.004, cloth 0.036 — one frame's worth).
+  // well as the body does (body 0.005, cloth 0.036 — one frame's worth).
   breathing: { intro: null, after: null, loop: [119 / FPS, 241 / FPS] },
   // Frames 241–300 are the authored hands-rise out of the at-rest pose: it
   // leaves the breathing cycle where the loop ends and the arms are settled
@@ -98,7 +109,7 @@ const SEGMENTS: Record<BodyState, Segment> = {
   listening: { intro: [241 / FPS, 300 / FPS], after: "breathing", loop: [300 / FPS, 393 / FPS] },
   // Frames 393–558 are the authored settle-into-gesturing — much longer than
   // the other intro, but it is all gesturing, and starting the loop here rather
-  // than at 490 halves the cloth drift at the seam (body 0.035, cloth 1.10).
+  // than at 490 halves the cloth drift at the seam (body 0.002, cloth 1.10).
   talking: { intro: [393 / FPS, 558 / FPS], after: "listening", loop: [558 / FPS, 780 / FPS] },
 };
 

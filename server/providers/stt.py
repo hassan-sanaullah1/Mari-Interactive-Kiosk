@@ -225,14 +225,15 @@ class WhisperLocalSTT(STTProvider):
     def _get_model(self):
         if WhisperLocalSTT._model is None:
             from faster_whisper import WhisperModel
-            import torch
 
-            if torch.cuda.is_available():
-                try:
-                    WhisperLocalSTT._model = WhisperModel(self.model_size, device="cuda", compute_type="float16")
-                except Exception:
-                    WhisperLocalSTT._model = WhisperModel(self.model_size, device="cpu", compute_type="int8")
-            else:
+            # device="auto": ctranslate2 (faster-whisper's backend) picks CUDA
+            # itself when available — no torch import needed just to ask.
+            # The backend container has no GPU passthrough (see server/Dockerfile),
+            # so this always resolves to CPU there; falls back to CPU explicitly
+            # if a GPU is visible but unusable (e.g. missing cuDNN).
+            try:
+                WhisperLocalSTT._model = WhisperModel(self.model_size, device="auto", compute_type="int8")
+            except Exception:
                 WhisperLocalSTT._model = WhisperModel(self.model_size, device="cpu", compute_type="int8")
         return WhisperLocalSTT._model
 

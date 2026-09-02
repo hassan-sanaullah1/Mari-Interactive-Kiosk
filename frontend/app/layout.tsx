@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { AVATAR_MODEL_URL } from "@/components/avatar/state";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -29,7 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             mounts and before the dynamically-imported three.js scene chunk
             loads — so the network transfer of the (large) .glb overlaps with
             JS bootstrap instead of starting after it. */}
-        <link rel="preload" href="/models/girl13.glb" as="fetch" crossOrigin="anonymous" fetchPriority="high" />
+        <link rel="preload" href={AVATAR_MODEL_URL} as="fetch" crossOrigin="anonymous" fetchPriority="high" />
       </head>
       <body>
         {/* Apply the stored theme before first paint so there's no flash. */}

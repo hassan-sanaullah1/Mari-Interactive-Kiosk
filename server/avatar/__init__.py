@@ -63,10 +63,24 @@ async def warm() -> None:
         await client.warmup()
 
 
-def a2f_status() -> dict:
+async def a2f_status() -> dict:
+    """Config snapshot for /healthz, plus a live channel-connectivity probe.
+
+    ``configured``/``client`` reflect static setup (URL set, wheel importable);
+    ``connected`` actually dials the shared channel so a NIM that's down, still
+    loading, or unreachable shows up here instead of a false "ready: true" —
+    that gap was why lipsync outages had no visible signal before.
+    """
+    configured = bool(C.A2F_URL)
+    connected = False
+    if configured and AVAILABLE:
+        client = get_a2f_client()
+        if client is not None:
+            connected = await client.is_connected()
     return {
-        "configured": bool(C.A2F_URL),
+        "configured": configured,
         "client": AVAILABLE,
-        "ready": bool(C.A2F_URL) and AVAILABLE,
+        "connected": connected,
+        "ready": configured and AVAILABLE and connected,
         "url": C.A2F_URL or None,
     }
