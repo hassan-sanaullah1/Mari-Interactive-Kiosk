@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * girl14.glb — the MARI presenter.
+ * girl15.glb — the MARI presenter.
  *
  * Ported from the working implementation (THREEJS_A2F_INTEGRATION.md §4/§5/§9).
  *
@@ -18,23 +18,25 @@
  * SkinnedMeshes, so the traverse below picks up all of them and the teeth and
  * tongue move with the lips instead of staying frozen inside an open mouth.
  *
- * This rig succeeded girl11 through girl13. Its face is literally theirs — all
+ * This rig succeeded girl11 through girl14. Its face is literally theirs — all
  * 561 morph target accessors are byte-identical to girl11's, under identical
  * names — so everything the mouth does ports across untouched. It keeps
- * girl13's baked cloth simulation (975 `a_cloth_parent_vtx_*_JNT` joints on a
+ * girl14's baked cloth simulation (975 `a_cloth_parent_vtx_*_JNT` joints on a
  * second skin, ~10x the animated nodes of the rigs before it), which is what
  * the loop windows below have to account for.
  *
- * The body clip is girl13's re-authored, not merely re-exported: same length
- * and same three segments, but a calmer idle (breathing moves ~0.004 per frame
- * against girl13's 0.014–0.031) and a dead hold at the head that runs to ~38
- * rather than ~30. The windows below were re-derived against it regardless, and
- * landed on the same frames — so they are this clip's own optimum, not
- * inherited numbers that happen to still parse.
+ * Against girl14 this is a re-skin and nothing more: the animation is identical
+ * to 4e-6 (float rounding) channel for channel, the rig scale and the cloth sim
+ * are unchanged, and only the material NAMES moved (eyelashes → lambert14,
+ * brows → lambert15, brow_base → lambert13). The material pass below keys off
+ * baseColorFactor and alphaMode rather than those names, so it is unaffected —
+ * but that is the thing to re-check first if the eyes ever haze over again.
+ * The windows below were still re-derived against this clip and came back
+ * unchanged, so they are its own optimum rather than inherited numbers.
  *
  * girl12.glb shipped with its morph NAMES shifted one place against that same
  * geometry, which drove every named morph onto its neighbour's shape — one eye
- * blinking, and jawOpen quietly driving mouthClose. girl14 is correct (checked:
+ * blinking, and jawOpen quietly driving mouthClose. girl15 is correct (checked:
  * the list matches girl11's, and the eyeBlink pair is mirror-symmetric), but
  * nothing about that failure points at the name list, so the check below keeps
  * watching for it.
@@ -90,11 +92,34 @@ const CLIP_NAME = "CINEMA_4D_Main";
 
 type BodyState = "breathing" | "listening" | "talking";
 
+/**
+ * A looping window of the clip, and nothing else.
+ *
+ * The wrist distances quoted below were measured on girl15's clip by driving
+ * the layer pool through every transition and reading Wrist_L/Wrist_R apart in
+ * world space. girl14 and girl15 are animation-identical (6.8e-7), so they
+ * hold for both.
+ *
+ * There used to be an `intro` here — an authored lead-in played once on entry
+ * when arriving from a particular other segment — and it was the glitch. The
+ * talking intro (frames 393–558, "settle into gesturing") is animated as an
+ * entrance from a pose with the arms already down and open, so playing it on
+ * the way out of listening, where the hands are held together, threw them out
+ * to the sides first and brought them back: measured on the wrists, they went
+ * from 0.119m apart to a peak of 0.481m before settling at 0.159m. Entering
+ * the talking loop directly at its closest-matching frame instead peaks at
+ * 0.389m against an endpoint of 0.353m — a 0.035m overshoot that is the
+ * gesture's own opening rather than an artefact, and a 9x reduction in the
+ * spread the intro was causing.
+ *
+ * An authored outro exists too (frames 870–892, the arms lowering back to
+ * rest, landing within 0.0013 of the listening loop's start pose) and is not
+ * used for the same reason in reverse: it can only be entered cleanly from
+ * loop frame 698, and either waiting up to a 7.3s lap to reach that frame or
+ * crossfading into it from elsewhere costs more than it saves. Crossfading in
+ * measured 0.0995m of wrist spread against 0.0062m for going direct.
+ */
 interface Segment {
-  /** Authored lead-in played once on entry, when arriving from `after`. */
-  intro: [number, number] | null;
-  /** Which previous state makes `intro` the natural path in. */
-  after: BodyState | null;
   loop: [number, number];
 }
 
@@ -102,21 +127,33 @@ const SEGMENTS: Record<BodyState, Segment> = {
   // Starts at 119, not 0: the clip opens on ~38 frames of frozen pose, and of
   // the breathing cycles that follow this is the pair whose cloth agrees as
   // well as the body does (body 0.005, cloth 0.036 — one frame's worth).
-  breathing: { intro: null, after: null, loop: [119 / FPS, 241 / FPS] },
-  // Frames 241–300 are the authored hands-rise out of the at-rest pose: it
-  // leaves the breathing cycle where the loop ends and the arms are settled
-  // by 300. (body 0.070, cloth 0.245 at the loop seam.)
-  listening: { intro: [241 / FPS, 300 / FPS], after: "breathing", loop: [300 / FPS, 393 / FPS] },
-  // Frames 393–558 are the authored settle-into-gesturing — much longer than
-  // the other intro, but it is all gesturing, and starting the loop here rather
-  // than at 490 halves the cloth drift at the seam (body 0.002, cloth 1.10).
-  talking: { intro: [393 / FPS, 558 / FPS], after: "listening", loop: [558 / FPS, 780 / FPS] },
+  breathing: { loop: [119 / FPS, 241 / FPS] },
+  // The arms are settled into the listening pose by 300, after the authored
+  // hands-rise at 241–300. (body 0.070, cloth 0.245 at the loop seam.)
+  listening: { loop: [300 / FPS, 393 / FPS] },
+  // Starting at 558 rather than 490 halves the cloth drift at the seam
+  // (body 0.002, cloth 1.10). Frames 393–558 ahead of it are the authored
+  // settle-into-gesturing, and 780–901 behind it the authored settle back
+  // down; both are left out of the loop deliberately, see Segment.
+  talking: { loop: [558 / FPS, 780 / FPS] },
 };
 
 /** Crossfade (s) hiding a loop seam — both ends are near-identical poses. */
 const LOOP_XFADE_SECS = 0.35;
-/** Crossfade (s) when switching segments — poses differ, so blend longer. */
-const SWITCH_XFADE_SECS = 0.55;
+/**
+ * Crossfade (s) when switching segments.
+ *
+ * The same length as a loop seam, not longer. Blending two poses moves every
+ * joint along its own shortest arc, all at once, and the arms are the joints
+ * with the furthest to travel — so a longer fade does not soften the change,
+ * it gives the hands more time to swing wide of both poses on the way. Measured
+ * on the wrists, entering talking: 0.35s peaks 0.001m INSIDE the endpoints
+ * (they close without ever parting), 0.55s overshoots by 0.006m, 0.8s by 0.027m
+ * and 1.1s by 0.051m. Since `bestLoopEntry` already picks the closest frame in
+ * the target loop, there is not much left to hide, and the shortest fade that
+ * still reads as a blend rather than a cut is the one that hides it best.
+ */
+const SWITCH_XFADE_SECS = 0.35;
 
 /**
  * How long the conversation must stay out of "speaking" before the body drops
@@ -216,8 +253,6 @@ const SKIN_EMISSIVE_INTENSITY = 0.25;
 interface Layer {
   action: THREE.AnimationAction | null;
   state: BodyState;
-  /** True while playing the segment's one-shot intro rather than its loop. */
-  inIntro: boolean;
   time: number;
   weight: number;
   /** 1 for the incoming/current segment, 0 for anything fading out. */
@@ -231,7 +266,6 @@ const LAYER_COUNT = 3;
 const makeLayer = (): Layer => ({
   action: null,
   state: "breathing",
-  inIntro: false,
   time: 0,
   weight: 0,
   targetWeight: 0,
@@ -239,16 +273,157 @@ const makeLayer = (): Layer => ({
 });
 
 /**
+ * Pose lookup built once from the clip's own rotation tracks.
+ *
+ * Entering a segment at a fixed frame only works when the clip has an authored
+ * path from where the body actually is to that frame — true for the two intros
+ * (breathing→listening, listening→talking) and false for every other pairing.
+ * Coming back out of talking, or dropping to breathing, the fixed `loop[0]`
+ * entry is an arbitrary pose against the one on screen, and the crossfade has
+ * to invent the difference: at best it reads as a drift, at worst it snaps.
+ *
+ * So instead of a fixed entry, sample the skeleton once per frame of the clip
+ * and, at transition time, enter the target loop at whichever frame is closest
+ * to the pose being left. The crossfade then only ever has to cover a distance
+ * we have already minimised, in every direction, including ones nobody
+ * hand-tuned.
+ *
+ * Rotations only, summed as quaternion angle over the body joints — the same
+ * measure the loop windows in SEGMENTS were derived with (see the header), and
+ * for the same reason: this rig is authored in centimetres under a 0.01-scaled
+ * root, so translations would weight the rig's units against it. The 975 baked
+ * cloth joints are skipped as well; a baked sim never repeats, so matching it is
+ * not on offer, and including it would drown out the body signal we can act on.
+ */
+interface PoseIndex {
+  /** Sample times, ascending, one per source frame. */
+  times: Float32Array;
+  /** Flat quaternions, 4 per joint per sample: [sample][joint][xyzw]. */
+  quats: Float32Array;
+  jointCount: number;
+}
+
+/** Body joints only — the baked cloth sim is excluded, see PoseIndex. */
+const isClothTrack = (trackName: string): boolean => trackName.includes("a_cloth_parent_vtx_");
+
+function buildPoseIndex(clip: THREE.AnimationClip): PoseIndex | null {
+  const quatTracks = clip.tracks.filter(
+    (track): track is THREE.QuaternionKeyframeTrack =>
+      track instanceof THREE.QuaternionKeyframeTrack && !isClothTrack(track.name),
+  );
+  if (!quatTracks.length) return null;
+
+  const sampleCount = Math.max(2, Math.round(clip.duration * FPS) + 1);
+  const times = new Float32Array(sampleCount);
+  for (let i = 0; i < sampleCount; i++) times[i] = Math.min(i / FPS, clip.duration);
+
+  const jointCount = quatTracks.length;
+  const quats = new Float32Array(sampleCount * jointCount * 4);
+
+  // Interpolants evaluate a track at an arbitrary time exactly as the mixer
+  // would, so these samples match what actually gets posed.
+  quatTracks.forEach((track, joint) => {
+    // Slerp for quaternions, matching how the mixer reads the same track.
+    const interpolant = track.InterpolantFactoryMethodLinear(new Float32Array(4));
+    for (let i = 0; i < sampleCount; i++) {
+      const value = interpolant.evaluate(times[i]) as unknown as ArrayLike<number>;
+      const base = (i * jointCount + joint) * 4;
+      quats[base] = value[0];
+      quats[base + 1] = value[1];
+      quats[base + 2] = value[2];
+      quats[base + 3] = value[3];
+    }
+  });
+
+  return { times, quats, jointCount };
+}
+
+/** Nearest sample index for a time, clamped to the index. */
+function sampleIndexFor(index: PoseIndex, time: number): number {
+  const i = Math.round(time * FPS);
+  return Math.min(Math.max(i, 0), index.times.length - 1);
+}
+
+/**
+ * Summed rotation difference between two samples, as |dot| per joint.
+ *
+ * Quaternion dot is ±1 for identical rotations (double cover: q and -q are the
+ * same orientation), so `1 - |dot|` is a cheap monotonic stand-in for the angle
+ * between them. Monotonic is all this needs — the result is only ever compared
+ * against other candidates, never read as an angle.
+ */
+function poseDistance(index: PoseIndex, sampleA: number, sampleB: number): number {
+  const { quats, jointCount } = index;
+  const baseA = sampleA * jointCount * 4;
+  const baseB = sampleB * jointCount * 4;
+  let total = 0;
+  for (let joint = 0; joint < jointCount; joint++) {
+    const a = baseA + joint * 4;
+    const b = baseB + joint * 4;
+    const dot = quats[a] * quats[b] + quats[a + 1] * quats[b + 1] + quats[a + 2] * quats[b + 2] + quats[a + 3] * quats[b + 3];
+    total += 1 - Math.abs(dot);
+  }
+  return total;
+}
+
+/**
+ * Where to enter `state`'s loop so the pose best matches `fromTime`.
+ *
+ * Searches the whole loop window rather than a neighbourhood of `loop[0]`: the
+ * point is to find the genuinely closest pose, and these windows are only a few
+ * hundred samples, once per transition.
+ */
+function bestLoopEntry(
+  index: PoseIndex | null,
+  state: BodyState,
+  fromTime: number,
+  /**
+   * Seconds of the loop's tail to rule out. A self-crossfade at the seam is
+   * looking for the pose it can *continue* from, and the closest match to the
+   * frame it is standing on is that frame — which would enter at the seam it
+   * is trying to leave and stall there. Rule out the tail and it lands at the
+   * head of the loop, where the window was cut to match.
+   */
+  excludeTailSecs = 0,
+): number {
+  const [loopStart, loopEnd] = SEGMENTS[state].loop;
+  if (!index) return loopStart;
+
+  const from = sampleIndexFor(index, fromTime);
+  const first = sampleIndexFor(index, loopStart);
+  // Exclude the last sample: entering exactly at the loop end leaves no frames
+  // to play before the seam crossfade fires.
+  const last = Math.max(
+    first,
+    sampleIndexFor(index, loopEnd - excludeTailSecs) - 1,
+  );
+
+  let bestSample = first;
+  let bestDistance = Infinity;
+  for (let sample = first; sample <= last; sample++) {
+    const distance = poseDistance(index, from, sample);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestSample = sample;
+    }
+  }
+  return index.times[bestSample];
+}
+
+/**
  * Hand the pool a new segment: it fades in on a free layer while every other
  * layer fades out. Picking a free layer (rather than reusing the one being
  * faded out of) is what keeps an interrupted fade from snapping.
+ *
+ * `entryTime` overrides the segment's default entry frame — that is how a
+ * pose-matched transition gets in at the frame it picked.
  */
 function beginSegment(
   layers: Layer[],
   activeIndexRef: { current: number },
   state: BodyState,
-  useIntro: boolean,
   fadeSecs: number,
+  entryTime?: number,
 ): void {
   const activeIndex = activeIndexRef.current;
   let index = layers.findIndex(
@@ -270,8 +445,7 @@ function beginSegment(
   const segment = SEGMENTS[state];
   const incoming = layers[index];
   incoming.state = state;
-  incoming.inIntro = useIntro;
-  incoming.time = useIntro ? segment.intro![0] : segment.loop[0];
+  incoming.time = entryTime ?? segment.loop[0];
   incoming.weight = 0;
   incoming.targetWeight = 1;
   incoming.fadeRate = 1 / fadeSecs;
@@ -287,26 +461,13 @@ function beginSegment(
 }
 
 /**
- * Advance one layer through its segment: run the one-shot intro if it is in
- * one, then hold inside the loop window. The loop end is clamped rather than
- * wrapped — a layer only reaches it while its replacement is already fading in,
- * and wrapping there would snap the pose behind the fade.
+ * Advance one layer through its loop window. The loop end is clamped rather
+ * than wrapped — a layer only reaches it while its replacement is already
+ * fading in, and wrapping there would snap the pose behind the fade.
  */
 function advanceLayer(layer: Layer, delta: number): void {
-  const segment = SEGMENTS[layer.state];
+  const [loopStart, loopEnd] = SEGMENTS[layer.state].loop;
   layer.time += delta;
-
-  if (layer.inIntro) {
-    const introEnd = segment.intro![1];
-    if (layer.time >= introEnd) {
-      layer.inIntro = false;
-      layer.time = segment.loop[0] + (layer.time - introEnd);
-    } else {
-      return;
-    }
-  }
-
-  const [loopStart, loopEnd] = segment.loop;
   if (layer.time < loopStart) layer.time = loopStart;
   if (layer.time > loopEnd) layer.time = loopEnd;
 }
@@ -380,6 +541,8 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
   /** Index of the layer carrying the segment the avatar is meant to be in. */
   const activeLayerRef = useRef(0);
   const clonedClipsRef = useRef<THREE.AnimationClip[]>([]);
+  /** Sampled skeleton, for choosing pose-matched entry points. */
+  const poseIndexRef = useRef<PoseIndex | null>(null);
 
   // Debounced target body state, written from the effect below.
   const targetStateRef = useRef<BodyState>(bodyStateFor(state));
@@ -427,6 +590,7 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
     // (clip, root) — so the extra layers run on clones that share the
     // original's tracks, costing no extra keyframe memory.
     const original = animations.find((c) => c.name === CLIP_NAME)!;
+    poseIndexRef.current = buildPoseIndex(original);
     const clones: THREE.AnimationClip[] = [];
     const pool: THREE.AnimationAction[] = [base];
     for (let i = 1; i < LAYER_COUNT; i++) {
@@ -459,7 +623,6 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
       const layer = layers[i];
       layer.action = action;
       layer.state = initial;
-      layer.inIntro = false;
       layer.time = loopStart;
       layer.weight = i === 0 ? 1 : 0;
       layer.targetWeight = i === 0 ? 1 : 0;
@@ -657,40 +820,44 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
       const target = targetStateRef.current;
 
       if (active.state !== target) {
-        const segment = SEGMENTS[target];
-        // Take the authored lead-in only when arriving along the path the clip
-        // was animated for; otherwise cut straight to the loop and let the
-        // crossfade carry the pose change.
-        const useIntro = segment.intro !== null && segment.after === active.state;
-        // An intro is authored to pick up from its `after` segment's loop end,
-        // not from wherever that loop happens to be mid-cycle (or, worse,
-        // from partway through that segment's own intro). Firing early
-        // crossfades two genuinely different poses (e.g. listening's hands
-        // held together against talking's intro starting arms-apart), which
-        // reads as a snap. Hold until the active layer has settled into its
-        // loop and reached the seam — same wait the self loop-seam crossfade
-        // below already uses — and only then hand off into the intro.
-        if (useIntro && active.inIntro) {
-          // Still playing the active segment's own lead-in: its pose hasn't
-          // reached that segment's loop yet, so there is nothing valid to
-          // seam into. Keep waiting.
-        } else if (useIntro) {
-          const activeLoopEnd = SEGMENTS[active.state].loop[1];
-          if (active.time < activeLoopEnd - SWITCH_XFADE_SECS) {
-            // Not yet at the seam: keep looping in place.
-          } else {
-            beginSegment(layers, activeLayerRef, target, useIntro, SWITCH_XFADE_SECS);
-          }
-        } else {
-          beginSegment(layers, activeLayerRef, target, useIntro, SWITCH_XFADE_SECS);
-        }
-      } else if (active.weight >= 0.999 && !active.inIntro) {
+        // Straight into the target's loop, entered at whichever of its frames
+        // is closest to the pose on screen. No authored lead-in: see the note
+        // on Segment for why playing one is what threw the arms out.
+        beginSegment(
+          layers,
+          activeLayerRef,
+          target,
+          SWITCH_XFADE_SECS,
+          bestLoopEntry(
+            poseIndexRef.current,
+            target,
+            active.time,
+            SWITCH_XFADE_SECS + LOOP_XFADE_SECS,
+          ),
+        );
+      } else if (active.weight >= 0.999) {
         // Settled on a segment: start the seam crossfade one fade-length before
         // the loop end, so the incoming copy is up to speed by the time the
         // outgoing one runs out of frames.
         const loopEnd = SEGMENTS[active.state].loop[1];
         if (active.time >= loopEnd - LOOP_XFADE_SECS) {
-          beginSegment(layers, activeLayerRef, active.state, false, LOOP_XFADE_SECS);
+          // The windows in SEGMENTS were chosen so that loop[1] already matches
+          // loop[0]; re-deriving the entry here costs one search and keeps the
+          // seam honest if those windows are ever re-cut for a new rig.
+          beginSegment(
+            layers,
+            activeLayerRef,
+            active.state,
+            LOOP_XFADE_SECS,
+            // Rule out the whole crossfade tail, so the layer coming in has
+            // frames left to play before its own seam comes round.
+            bestLoopEntry(
+              poseIndexRef.current,
+              active.state,
+              active.time,
+              LOOP_XFADE_SECS * 2,
+            ),
+          );
         }
       }
 
