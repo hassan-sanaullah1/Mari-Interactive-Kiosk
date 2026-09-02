@@ -19,8 +19,8 @@ RUN pip install --no-cache-dir -r requirements-web.txt \
     && pip install --no-cache-dir --no-deps /app/vendor/nvidia_ace-1.2.0-py3-none-any.whl
 
 COPY server /app/server
+# the knowledge base ships inside server/data/, so `COPY server` above already has it
 COPY web /app/web
-COPY sky47_knowledge_base.md /app/sky47_knowledge_base.md
 
 ENV MARI_HOST=0.0.0.0
 ENV MARI_PORT=8010

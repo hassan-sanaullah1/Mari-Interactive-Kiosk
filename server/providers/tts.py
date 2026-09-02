@@ -26,7 +26,35 @@ from .base import TTSProvider
 # an Urdu sentence, so one replacement covers every reply.
 _SKY = r"(?:Sky|\u0627\u0633\u06a9\u0627\u0626\u06cc|\u0633\u06a9\u0627\u0626\u06cc|\u0627\u0633\u06a9\u0627\u06cc|\u0633\u06a9\u0627\u06cc)"
 _47 = r"(?:47|\u06f4\u06f7|\u0664\u0667)"  # ASCII, Urdu (۴۷) and Arabic-Indic (٤٧) digits
-_SAY_AS = ((re.compile(rf"(?<!\w){_SKY}\s*-?\s*{_47}(?!\w)", re.I), "Sky Forty Seven"),)
+# Mari Energies' own reports are full of initialisms and industry units that the voices
+# either spell out wrongly or run together into a non-word, so they are written out too.
+# ``\b``-anchored and applied to both languages, since an Urdu reply keeps these in Latin script.
+_ACRONYMS = {
+    "MPCL": "M P C L",
+    "PSX": "P S X",
+    "OGDCL": "O G D C L",
+    "MMBOE": "million barrels of oil equivalent",
+    "KBOEPD": "thousand barrels of oil equivalent per day",
+    "MMSCFD": "million standard cubic feet per day",
+    "MMSCF": "million standard cubic feet",
+    "BBLs": "barrels",
+    "BBL": "barrel",
+    "REE": "rare earth elements",
+    "TCF": "trillion cubic feet",
+    "E&P": "exploration and production",
+    "ESG": "E S G",
+    "EPS": "earnings per share",
+}
+
+_SAY_AS = (
+    (re.compile(rf"(?<!\w){_SKY}\s*-?\s*{_47}(?!\w)", re.I), "Sky Forty Seven"),
+    # currency reads after the amount in both languages: "PKR 65 billion" -> "65 billion rupees"
+    (re.compile(r"\b(?:PKR|Rs\.?)\s*([\d,.]+)\s*(billion|million|trillion|bn|mn)?\b", re.I),
+     lambda m: f"{m.group(1)} {m.group(2) + ' ' if m.group(2) else ''}rupees"),
+    (re.compile(r"\bUSD\s*([\d,.]+)\s*(billion|million|trillion)?\b", re.I),
+     lambda m: f"{m.group(1)} {m.group(2) + ' ' if m.group(2) else ''}US dollars"),
+    *((re.compile(rf"\b{re.escape(k)}\b"), v) for k, v in _ACRONYMS.items()),
+)
 
 
 def _spoken(text: str) -> str:

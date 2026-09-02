@@ -1,9 +1,9 @@
 """MARI · Voice — grounding knowledge for the LLM.
 
-The avatar is a Sky47 kiosk assistant, so every reply has to come from
-``sky47_knowledge_base.md`` rather than the model's own memory. That file is ~90 KB —
-far too large to prepend to each turn on a latency-sensitive voice pipeline — so this
-module does two things:
+The avatar is a Mari Energies kiosk assistant, so every reply has to come from
+``server/data/mari_energies_knowledge_base.md`` rather than the model's own memory. That
+file is ~58 KB — far too large to prepend to each turn on a latency-sensitive voice
+pipeline — so this module does two things:
 
   * keeps a short hand-written CORE brief that is *always* in the system prompt, and
   * retrieves the few knowledge-base sections that match what the visitor just asked
@@ -23,7 +23,9 @@ from pathlib import Path
 
 from . import config as C
 
-KB_PATH = Path(C.env("APP_KNOWLEDGE_FILE", str(C.ROOT / "sky47_knowledge_base.md")))
+KB_PATH = Path(
+    C.env("APP_KNOWLEDGE_FILE", str(C.ROOT / "server" / "data" / "mari_energies_knowledge_base.md"))
+)
 
 # How much retrieved material a single turn may carry. Roughly 1.5k tokens — enough
 # for two or three sections, small enough that time-to-first-token stays kiosk-fast.
@@ -37,7 +39,7 @@ MAX_CHUNK_CHARS = 2200
 
 @dataclass
 class Chunk:
-    title: str      # "2. Data Center Facilities › 2.1 Overview of Facilities"
+    title: str      # "1. Overview of Mari Energies Limited › 1.5 Ownership and Shareholding Structure"
     text: str
     tf: dict[str, int]
     length: int
@@ -92,7 +94,7 @@ _STOP = {
     "the", "and", "for", "with", "that", "this", "are", "was", "will", "from", "has",
     "have", "its", "not", "you", "your", "our", "who", "what", "when", "where", "how",
     "can", "does", "did", "any", "all", "also", "more", "than", "about", "into", "over",
-    "sky47", "pakistan", "company", "limited",
+    "mari", "marienergies", "energies", "pakistan", "company", "limited",
 }
 
 
@@ -133,84 +135,118 @@ def ready() -> bool:
 # ("سی ای او" = C-E-O), so matching the phrase avoids the single letters colliding
 # with unrelated words.
 PHRASES: dict[str, str] = {
-    "سی ای او": "ceo chief executive leadership",
-    "اے آئی": "artificial intelligence gpu",
-    "مصنوعی ذہانت": "artificial intelligence gpu",
-    "جی پی یو": "gpu compute",
-    "ای میل": "contact email",
-    "ڈیٹا سینٹر": "data center facility campus",
-    "اسلام آباد": "islamabad campus",
-    "نیٹ ورک": "connectivity network carrier",
-    "اپ ٹائم": "uptime availability sla",
+    "سی ای او": "ceo managing director chief executive leadership",
+    "ایم ڈی": "managing director ceo leadership",
+    "بورڈ آف ڈائریکٹرز": "board directors governance",
+    "ای میل": "contact email investor relations",
+    "ڈیٹا سینٹر": "data center technologies sky47 subsidiary",
+    "اسلام آباد": "islamabad head office contact",
+    "اے آئی": "artificial intelligence digital transformation technology",
+    "مصنوعی ذہانت": "artificial intelligence digital transformation technology",
+    "تیل اور گیس": "oil gas upstream exploration production",
+    "قدرتی گیس": "gas production reserves field",
+    "اسٹاک ایکسچینج": "psx listed shares market capitalization",
+    "منافع": "profit financial performance earnings",
+    "ماری گیس فیلڈ": "mari gas field daharki discovery",
+    "ری نیو ایبل": "renewable solar energy transition",
+    "ہیڈ آفس": "head office contact address islamabad",
 }
 
 GLOSSARY: dict[str, str] = {
-    "ڈیٹا": "data center",
-    "سینٹر": "data center facility",
-    "کلاؤڈ": "cloud hosting",
-    "سرور": "server infrastructure",
-    "کمپنی": "company overview",
+    # company, identity, ownership
+    "کمپنی": "company overview legal entity",
     "ادارہ": "company overview",
     "کیا": "overview",
-    "ملکیت": "ownership shareholding stake",
+    "تعارف": "overview about",
+    "ملکیت": "ownership shareholding shareholders",
     "مالک": "ownership shareholding parent",
-    "حصص": "shareholding stake shareholders",
-    "شیئر": "shareholding stake",
-    "ماری": "mari energies technologies parent",
-    "فوجی": "fauji foundation",
-    "بانی": "establishment founded",
-    "سربراہ": "ceo chief executive leadership",
-    "چیئرمین": "chairman board",
-    "قیادت": "leadership executive team",
-    "انتظامیہ": "leadership management team",
-    "ٹیم": "leadership team members",
-    "رابطہ": "contact address email website",
-    "پتہ": "contact address location",
-    "فون": "contact phone",
+    "حصص": "shareholding shares shareholders free float",
+    "شیئر": "shareholding shares stock price psx",
+    "شیئرہولڈر": "shareholders shareholding structure",
+    "فوجی": "fauji foundation shareholding",
+    "حکومت": "government pakistan shareholding ogdcl",
+    "ذیلی": "subsidiaries group structure equity",
+    "کمپنیاں": "subsidiaries associated companies group",
+    "ماری": "marienergies mari petroleum mpcl",
+    "نام": "rebranding name mari petroleum",
+    "ری برانڈنگ": "rebranding identity logo mari petroleum",
+    "تاریخ": "history timeline milestones",
+    "بانی": "history establishment discovery",
+    # leadership and governance
+    "سربراہ": "ceo managing director leadership",
+    "چیئرمین": "chairman board directors",
+    "قیادت": "leadership management team executives",
+    "انتظامیہ": "senior management team leadership",
+    "ٹیم": "management team board members",
+    "بورڈ": "board directors governance committees",
+    "کمیٹی": "board committees audit governance",
+    "گورننس": "governance board committees compliance",
+    # business, operations, exploration
+    "کاروبار": "principal business activities verticals",
+    "خدمات": "services mari services drilling seismic",
+    "سروس": "services mari services drilling seismic",
+    "شعبے": "verticals business segments diversification",
+    "تیل": "oil liquids production upstream",
+    "گیس": "gas production reserves field",
+    "کنواں": "well drilling discovery",
+    "کھدائی": "drilling program wells",
+    "دریافت": "discoveries exploration hydrocarbon",
+    "تلاش": "exploration portfolio blocks",
+    "بلاک": "exploration blocks acreage",
+    "پیداوار": "production sales capacity",
+    "ذخائر": "reserves resources mmboe",
+    "فیلڈ": "field development mari gas field daharki",
+    "معدنیات": "minerals copper gold rare earth",
+    "کان": "minerals mining copper gold",
+    "ٹیکنالوجی": "technology digital transformation data center",
+    "ڈیٹا": "data center technologies digital",
+    "سینٹر": "data center technologies sky47",
+    "کلاؤڈ": "cloud high performance computing infrastructure",
+    "ڈیجیٹل": "digital transformation technology automation",
+    # financials
+    "منافع": "profit earnings financial performance",
+    "آمدنی": "net sales revenue financial performance",
+    "مالی": "financial performance results reports",
+    "سرمایہ": "market capitalization investment",
+    "ڈیویڈنڈ": "dividend per share payout",
+    "منافع منقسمہ": "dividend per share payout",
+    "ٹیکس": "taxation national exchequer contribution",
+    "سرمایہ کاری": "investor relations investment",
+    "قیمت": "stock price share price psx",
+    # sustainability, people, community
+    "ماحول": "environment sustainability esg emissions",
+    "پائیداری": "sustainability esg environment",
+    "توانائی": "energy transition renewable power",
+    "شمسی": "solar renewable energy project",
+    "ملازمت": "careers jobs recruitment hiring",
+    "نوکری": "careers jobs recruitment hiring",
+    "بھرتی": "recruitment process careers",
+    "تربیت": "training talent development learning",
+    "ملازمین": "workforce employees headcount",
+    "خواتین": "diversity inclusion women workforce",
+    "فلاح": "csr community welfare initiatives",
+    "تعلیم": "education csr schools scholarships",
+    "صحت": "healthcare csr medical camps",
+    "کھیل": "sports sponsorship csr",
+    # contact
+    "رابطہ": "contact address email website phone",
+    "پتہ": "contact address head office location",
+    "فون": "contact phone number",
     "ویب": "website contact",
-    "خدمات": "services portfolio pillars",
-    "سروس": "services portfolio pillars",
-    "قیمت": "pricing billing cost",
-    "بلنگ": "billing pricing models",
-    "سیکیورٹی": "security cybersecurity secure",
-    "حفاظت": "security safety compliance",
-    "تحفظ": "data sovereignty security privacy",
-    "کراچی": "karachi campus",
-    "لاہور": "lahore campus",
-    "شہر": "campus locations facilities",
-    "شراکت": "partnership partners collaboration",
-    "پارٹنر": "partnership partners collaboration",
-    "سرٹیفکیٹ": "certification compliant standards",
-    "سرٹیفیکیشن": "certification compliant standards",
-    "معیار": "certification tier standards",
-    "بجلی": "power infrastructure energy",
-    "پاور": "power infrastructure energy",
-    "توانائی": "power energy sector",
-    "کولنگ": "cooling systems",
-    "ٹھنڈا": "cooling systems",
-    "انٹرنیٹ": "connectivity network bandwidth",
-    "ملازمت": "careers jobs hiring team",
-    "نوکری": "careers jobs hiring team",
-    "افتتاح": "inauguration launch milestone",
-    "لانچ": "launch inauguration milestone",
-    "تاریخ": "timeline milestones date",
-    "کب": "timeline milestones date launch",
-    "منصوبہ": "project campus milestones",
-    "صلاحیت": "capacity racks megawatt scale",
-    "ریک": "racks capacity colocation",
+    "دفتر": "office head office karachi quetta",
+    "کراچی": "karachi office contact",
+    "کوئٹہ": "quetta office contact",
+    # generic
     "وژن": "vision mission",
     "مشن": "vision mission",
-    "مقصد": "vision mission purpose",
-    "گاہک": "customers sectors use cases",
-    "صارف": "customers sectors use cases",
-    "شعبے": "target sectors use cases",
-    "بینک": "financial services banking",
-    "صحت": "healthcare sector",
-    "حکومت": "government public sector",
-    "حریف": "competitive positioning market",
-    "مقابلہ": "competitive positioning market",
-    "سپورٹ": "support noc 24/7",
-    "مدد": "support noc 24/7",
+    "مقصد": "vision mission values purpose",
+    "اقدار": "core values integrity unity excellence",
+    "گاہک": "customers fertilizer buyers",
+    "صارف": "customers fertilizer buyers",
+    "کھاد": "fertilizer feed gas customers",
+    "کب": "timeline history milestones date",
+    "کتنا": "figures quick reference capacity",
+    "سپلائر": "supplier hub vendors procurement",
 }
 
 
@@ -269,35 +305,43 @@ def context_for(query: str) -> str:
 # Always present, so the avatar can introduce itself and handle the common questions
 # even when retrieval finds nothing. Kept deliberately short.
 CORE_BRIEF = """\
-Sky47 Limited is Pakistan's leading sovereign digital infrastructure provider: Tier III/IV
-certified, purpose-built data centers for cloud hosting, colocation, AI infrastructure and
-cybersecurity. Tagline "Secure. Scalable. Sovereign."; mission "Powering Pakistan's Digital Future."
-Ownership: Mari Technologies Limited holds 60% and management control; Mari Technologies is
-wholly owned by Mari Energies Limited (PSX-listed, formerly Mari Petroleum / MPCL), so Mari
-Energies is the ultimate parent. Paramount Ventures holds 30%, Capital Smart Technologies 10%.
-CEO: Hassan Abbas. Chairman: Lt Gen (R) Anwar Ali Haider.
-Campuses: Islamabad (Capital Smart City — cloud and AI live since 15 January 2026, data center
-inauguration 21 July 2026), Karachi and Lahore (planned). 3,000+ racks and up to 50 MW combined.
-Five service pillars: Sky47 Space (colocation), Sky47 Cloud (sovereign cloud), Sky47 Manage
-(managed services), Sky47 Secure (cybersecurity), Sky47 AI (AI solutions and GPU-as-a-Service).
-Head office: Building 1-C, Kohistan Road, F-8 Markaz, Islamabad 44000 · sky47.com.pk · info@sky47.com.pk"""
+Mari Energies Limited (formerly Mari Petroleum Company Limited / MPCL, rebranded 2025) is an
+integrated Pakistani energy company and the largest company on the Pakistan Stock Exchange by
+market capitalisation (PSX symbol MARI, about 753 billion rupees as at 30 June 2025). Tagline
+"Where challenges inspire excellence." Its core business is upstream oil and gas exploration and
+production, and it supplies feed gas to all of Pakistan's major fertiliser plants — central to
+national food security.
+Shareholding: Fauji Foundation 40 percent (management control), Government of Pakistan 20 percent,
+OGDCL 20 percent, general public 20 percent.
+MD/CEO: Faheem Haider. Board Chairman: Lt Gen (R) Anwar Ali Hyder, HI(M).
+Four verticals: Mari Services (E&P services — seismic, drilling, mud logging), Mari Minerals
+(copper, gold and rare earth elements), Mari Technologies / Sky47 (data centres and AI cloud
+infrastructure), and GEM Energy (methane mitigation, LNG and food-grade CO2, with Ghani Chemical).
+FY2024-25: net sales 177.10 billion rupees, net profit 65.14 billion rupees, EPS 54.25 rupees.
+Production capacity 127 KBOEPD, reserves and resources 952 MMBOE, reserves-to-production ratio
+20 years, workforce 1,760. Credit rating AAA long term, A1 short term.
+The company's history begins with the Mari Gas Field at Daharki, Sindh, discovered in 1954.
+Head office: 21 Mauve Area, 3rd Road, G-10/4, Islamabad 44000 · marienergies.com.pk
+· (+92) 51-111 410 410"""
 
 _RULES_EN = """\
-You are MARI, the voice assistant on Sky47's interactive kiosk. You speak for Sky47 Limited and
-answer visitors' questions about the company.
+You are MARI, the voice assistant on Mari Energies' interactive kiosk. You speak for Mari Energies
+Limited and answer visitors' questions about the company.
 
-Ground every factual claim in the SKY47 KNOWLEDGE below — it is the authoritative source and
-overrides anything you think you know. Never invent figures, dates, names, prices or
+Ground every factual claim in the MARI ENERGIES KNOWLEDGE below — it is the authoritative source
+and overrides anything you think you know. Never invent figures, dates, names, prices or
 capabilities. If the knowledge does not cover the question, say so briefly and point the visitor
-to sky47.com.pk or info@sky47.com.pk. For general chit-chat or greetings, just be a good host.
+to marienergies.com.pk. Share prices and other market figures move daily, so present any quoted
+figure as of its stated date and suggest the website or the PSX for a live quote. For general
+chit-chat or greetings, just be a good host.
 
 Only at the very start of the conversation, when the visitor's first message is itself a greeting
 (e.g. "hello", "hi", "assalamualaikum", "salam") or an explicit request for an introduction (e.g.
 "who are you", "introduce yourself"), open with "Assalamualaikum" and give your introduction: you
-are MARI, the voice assistant for Sky47 Limited, Pakistan's leading sovereign digital
-infrastructure provider, and you are here to help with questions about Sky47's data centers,
-cloud, and services. Do NOT repeat this greeting or introduction in any other reply — for every
-other question, answer it directly without saying "Assalamualaikum" or reintroducing yourself.
+are MARI, the voice assistant for Mari Energies Limited, Pakistan's largest listed energy company,
+and you are here to help with questions about Mari Energies' operations, performance and people.
+Do NOT repeat this greeting or introduction in any other reply — for every other question, answer
+it directly without saying "Assalamualaikum" or reintroducing yourself.
 
 Always answer in English, whatever language the question arrives in — this is the kiosk's
 English mode, and your reply is sent straight to an English text-to-speech voice. Never use
@@ -305,26 +349,29 @@ Urdu script.
 
 Your reply is spoken aloud by an avatar, so keep it natural and brief — usually one to three
 sentences, no markdown, no bullet points, no emoji, and no reading out URLs character by
-character. Round large numbers the way a person would say them, and write out any number the
-voice should say in full ("Tier three", "fifty megawatts")."""
+character. Round large numbers the way a person would say them, and write out any number or
+abbreviation the voice should say in full ("one hundred and twenty-seven thousand barrels of oil
+equivalent per day", "sixty-five billion rupees")."""
 
 _RULES_UR = """\
-آپ ماری ہیں — Sky47 کے انٹرایکٹو کیوسک پر موجود صوتی معاون۔ آپ Sky47 Limited کی نمائندگی کرتی ہیں
-اور آنے والوں کے سوالات کا جواب دیتی ہیں۔
+آپ ماری ہیں — Mari Energies کے انٹرایکٹو کیوسک پر موجود صوتی معاون۔ آپ Mari Energies Limited کی
+نمائندگی کرتی ہیں اور آنے والوں کے سوالات کا جواب دیتی ہیں۔
 
-ہر حقیقت نیچے دیے گئے SKY47 KNOWLEDGE سے لیں — یہی مستند ماخذ ہے اور آپ کی اپنی معلومات پر مقدم ہے۔
-اعداد، تاریخیں، نام، قیمتیں یا خصوصیات خود سے مت گھڑیں۔ اگر جواب اس معلومات میں موجود نہ ہو تو مختصراً
-بتا دیں اور sky47.com.pk یا info@sky47.com.pk کا حوالہ دیں۔ عام سلام دعا میں بس اچھی میزبان بنیں۔
+ہر حقیقت نیچے دیے گئے MARI ENERGIES KNOWLEDGE سے لیں — یہی مستند ماخذ ہے اور آپ کی اپنی معلومات پر
+مقدم ہے۔ اعداد، تاریخیں، نام، قیمتیں یا خصوصیات خود سے مت گھڑیں۔ اگر جواب اس معلومات میں موجود نہ ہو
+تو مختصراً بتا دیں اور marienergies.com.pk کا حوالہ دیں۔ حصص کی قیمت اور منڈی کے اعداد روز بدلتے ہیں،
+اس لیے کوئی بھی عدد اس کی تاریخ کے ساتھ بتائیں اور تازہ قیمت کے لیے ویب سائٹ یا PSX کا حوالہ دیں۔
+عام سلام دعا میں بس اچھی میزبان بنیں۔
 
 صرف گفتگو کے آغاز پر، جب زائر کا پہلا پیغام خود ایک سلام ہو (جیسے "السلام علیکم"، "ہیلو") یا
 واضح طور پر تعارف مانگا جائے (جیسے "آپ کون ہیں")، تو جواب کا آغاز "السلام علیکم" سے کریں اور بتائیں
-کہ آپ ماری ہیں، Sky47 Limited کی صوتی معاون — پاکستان کا صف اول کا خودمختار ڈیجیٹل انفراسٹرکچر فراہم
-کنندہ — اور آپ Sky47 کے ڈیٹا سینٹرز، کلاؤڈ اور خدمات سے متعلق سوالات میں مدد کے لیے حاضر ہیں۔ کسی
-اور جواب میں یہ سلام یا تعارف دہرائیں نہیں — باقی تمام سوالات کا جواب براہ راست دیں۔
+کہ آپ ماری ہیں، Mari Energies Limited کی صوتی معاون — پاکستان کی سب سے بڑی لسٹڈ انرجی کمپنی — اور
+آپ کمپنی کے کاموں، کارکردگی اور ٹیم سے متعلق سوالات میں مدد کے لیے حاضر ہیں۔ کسی اور جواب میں یہ
+سلام یا تعارف دہرائیں نہیں — باقی تمام سوالات کا جواب براہ راست دیں۔
 
 معلومات انگریزی میں ہے مگر جواب ہمیشہ رواں اردو میں دیں۔ کمپنی کے نام، عہدے اور تکنیکی اصطلاحات
-(Sky47، Mari Energies، CEO، data center، cloud، AI) اپنی اصل انگریزی شکل میں ہی رہنے دیں — برانڈ کا نام
-ہمیشہ انگریزی حروف میں «Sky47» لکھیں، اردو رسم الخط یا اردو ہندسوں (اسکائی ۴۷) میں نہیں۔
+(Mari Energies، MPCL، PSX، CEO، data center، cloud، AI) اپنی اصل انگریزی شکل میں ہی رہنے دیں —
+برانڈ کا نام ہمیشہ انگریزی حروف میں «Mari Energies» لکھیں، اردو رسم الخط میں نہیں۔
 
 آپ کا جواب اوتار کی آواز میں بولا جائے گا، اس لیے فطری اور مختصر رکھیں — عموماً ایک سے تین جملے،
 بغیر مارک ڈاؤن، بغیر فہرست، بغیر ایموجی۔ بڑے اعداد ایسے بولیں جیسے کوئی شخص بولتا ہے۔"""
@@ -335,7 +382,7 @@ LANGS = tuple(RULES)
 
 def system_prompt(lang: str, query: str = "") -> str:
     """Persona + rules + core brief + whatever the knowledge base has on `query`."""
-    parts = [RULES.get(lang, _RULES_EN), "SKY47 KNOWLEDGE — core facts:", CORE_BRIEF]
+    parts = [RULES.get(lang, _RULES_EN), "MARI ENERGIES KNOWLEDGE — core facts:", CORE_BRIEF]
     if retrieved := context_for(query):
-        parts += ["SKY47 KNOWLEDGE — sections relevant to this question:", retrieved]
+        parts += ["MARI ENERGIES KNOWLEDGE — sections relevant to this question:", retrieved]
     return "\n\n".join(parts)

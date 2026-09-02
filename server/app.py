@@ -42,9 +42,10 @@ WEB_DIR = C.WEB_DIR
 
 DEMO_REPLY = {
     "en": "I heard you, but the language model isn't reachable from here, so I can't answer "
-    "from the Sky47 knowledge base right now. You'll find the same information at sky47.com.pk.",
-    "ur": "میں نے آپ کی بات سن لی، لیکن لینگویج ماڈل تک رسائی نہیں، اس لیے ابھی Sky47 کی معلومات "
-    "سے جواب نہیں دے سکتی۔ یہی تفصیل sky47.com.pk پر موجود ہے۔",
+    "from the Mari Energies knowledge base right now. You'll find the same information at "
+    "marienergies.com.pk.",
+    "ur": "میں نے آپ کی بات سن لی، لیکن لینگویج ماڈل تک رسائی نہیں، اس لیے ابھی Mari Energies کی "
+    "معلومات سے جواب نہیں دے سکتی۔ یہی تفصیل marienergies.com.pk پر موجود ہے۔",
 }
 
 app = FastAPI(title="MARI · Voice")
@@ -85,7 +86,7 @@ def _llm_extra() -> dict:
 
 
 async def run_llm(text: str, lang: str) -> str:
-    """Ask the LLM for a spoken-style reply, grounded in the Sky47 knowledge base.
+    """Ask the LLM for a spoken-style reply, grounded in the Mari Energies knowledge base.
     Raises on failure (caller handles)."""
     payload = {
         "model": C.LLM_MODEL,
@@ -193,7 +194,7 @@ def _split_sentences(text: str) -> list[str]:
 
 
 async def llm_stream_sentences(text: str, lang: str):
-    """Yield MARI's reply — grounded in the Sky47 knowledge base — one sentence at a
+    """Yield MARI's reply — grounded in the Mari Energies knowledge base — one sentence at a
     time as the LLM streams tokens.
     Falls back to the demo line (also sentence-split) if vLLM is unreachable."""
     if not C.llm_ready():
