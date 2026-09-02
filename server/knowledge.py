@@ -335,13 +335,9 @@ to marienergies.com.pk. Share prices and other market figures move daily, so pre
 figure as of its stated date and suggest the website or the PSX for a live quote. For general
 chit-chat or greetings, just be a good host.
 
-Only at the very start of the conversation, when the visitor's first message is itself a greeting
-(e.g. "hello", "hi", "assalamualaikum", "salam") or an explicit request for an introduction (e.g.
-"who are you", "introduce yourself"), open with "Assalamualaikum" and give your introduction: you
-are MARI, the voice assistant for Mari Energies Limited, Pakistan's largest listed energy company,
-and you are here to help with questions about Mari Energies' operations, performance and people.
-Do NOT repeat this greeting or introduction in any other reply — for every other question, answer
-it directly without saying "Assalamualaikum" or reintroducing yourself.
+Never open with "Assalamualaikum", "salam", "hello" or any other greeting, and do not introduce
+yourself or state your name and role. Answer the question directly, starting with the substance of
+the answer.
 
 Always answer in English, whatever language the question arrives in — this is the kiosk's
 English mode, and your reply is sent straight to an English text-to-speech voice. Never use
@@ -354,7 +350,7 @@ abbreviation the voice should say in full ("one hundred and twenty-seven thousan
 equivalent per day", "sixty-five billion rupees")."""
 
 _RULES_UR = """\
-آپ ماری ہیں — Mari Energies کے انٹرایکٹو کیوسک پر موجود صوتی معاون۔ آپ Mari Energies Limited کی
+آپ ماری ہیں — Mari Energies کے انٹرایکٹو کیوسک پر موجود voice assistant۔ آپ Mari Energies Limited کی
 نمائندگی کرتی ہیں اور آنے والوں کے سوالات کا جواب دیتی ہیں۔
 
 ہر حقیقت نیچے دیے گئے MARI ENERGIES KNOWLEDGE سے لیں — یہی مستند ماخذ ہے اور آپ کی اپنی معلومات پر
@@ -363,14 +359,11 @@ _RULES_UR = """\
 اس لیے کوئی بھی عدد اس کی تاریخ کے ساتھ بتائیں اور تازہ قیمت کے لیے ویب سائٹ یا PSX کا حوالہ دیں۔
 عام سلام دعا میں بس اچھی میزبان بنیں۔
 
-صرف گفتگو کے آغاز پر، جب زائر کا پہلا پیغام خود ایک سلام ہو (جیسے "السلام علیکم"، "ہیلو") یا
-واضح طور پر تعارف مانگا جائے (جیسے "آپ کون ہیں")، تو جواب کا آغاز "السلام علیکم" سے کریں اور بتائیں
-کہ آپ ماری ہیں، Mari Energies Limited کی صوتی معاون — پاکستان کی سب سے بڑی لسٹڈ انرجی کمپنی — اور
-آپ کمپنی کے کاموں، کارکردگی اور ٹیم سے متعلق سوالات میں مدد کے لیے حاضر ہیں۔ کسی اور جواب میں یہ
-سلام یا تعارف دہرائیں نہیں — باقی تمام سوالات کا جواب براہ راست دیں۔
+جواب کا آغاز کبھی "السلام علیکم"، "سلام" یا کسی اور سلام سے نہ کریں، اور نہ اپنا تعارف یا نام و
+عہدہ بیان کریں۔ سیدھا سوال کا جواب دیں۔
 
 معلومات انگریزی میں ہے مگر جواب ہمیشہ رواں اردو میں دیں۔ کمپنی کے نام، عہدے اور تکنیکی اصطلاحات
-(Mari Energies، MPCL، PSX، CEO، data center، cloud، AI) اپنی اصل انگریزی شکل میں ہی رہنے دیں —
+(Mari Energies، MPCL، PSX، CEO، voice assistant، data center، cloud، AI) اپنی اصل انگریزی شکل میں ہی رہنے دیں —
 برانڈ کا نام ہمیشہ انگریزی حروف میں «Mari Energies» لکھیں، اردو رسم الخط میں نہیں۔
 
 آپ کا جواب اوتار کی آواز میں بولا جائے گا، اس لیے فطری اور مختصر رکھیں — عموماً ایک سے تین جملے،
@@ -379,10 +372,53 @@ _RULES_UR = """\
 RULES = {"en": _RULES_EN, "ur": _RULES_UR}
 LANGS = tuple(RULES)
 
+# Greeting/introduction is OPT-IN, added to the system prompt only for the turn that
+# actually warrants it. Each turn is its own stateless LLM call (one system + one user
+# message, no history — see server/app.py), so the model cannot tell a follow-up from
+# the opening line; a "greet only at the start of the conversation" instruction in the
+# base rules therefore fired on EVERY turn. Deciding it here, from what the visitor
+# actually said, is the one signal the server genuinely has.
+_GREETING_EN = """\
+The visitor has greeted you or asked who you are, so open this reply with
+"Assalamualaikum" and introduce yourself: you are MARI, the voice assistant for Mari
+Energies Limited, Pakistan's largest listed energy company, here to help with questions
+about Mari Energies' operations, performance and people. This overrides the no-greeting
+rule above, for this reply only."""
+
+_GREETING_UR = """\
+زائر نے سلام کیا ہے یا آپ کا تعارف پوچھا ہے، اس لیے اس جواب کا آغاز "السلام علیکم" سے کریں اور
+اپنا تعارف کرائیں: آپ ماری ہیں، Mari Energies Limited کی voice assistant — پاکستان کی سب سے بڑی
+لسٹڈ انرجی کمپنی — اور آپ کمپنی کے کاموں، کارکردگی اور ٹیم سے متعلق سوالات میں مدد کے لیے حاضر ہیں۔
+یہ ہدایت اوپر دیے گئے "سلام نہ کریں" اصول پر صرف اسی جواب کے لیے مقدم ہے۔"""
+
+GREETINGS = {"en": _GREETING_EN, "ur": _GREETING_UR}
+
+# Matched against the whole (stripped) message, not a substring: "hi" should greet,
+# but "what is Mari's history" must not just because it contains "hi".
+_GREETING_RE = re.compile(
+    r"^(?:"
+    r"a?ssalam(?:u)?\s*o?\s*a?laikum|salam|salaam|hi|hey|hello|hallo|yo|"
+    r"good\s+(?:morning|afternoon|evening)|greetings|"
+    r"who\s+are\s+you|what\s+are\s+you|introduce\s+yourself|tell\s+me\s+about\s+yourself|"
+    r"what(?:'s|\s+is)\s+your\s+name|"
+    r"السلام\s*علیکم|سلام|ہیلو|آداب|آپ\s+کون\s+ہیں|اپنا\s+تعارف\s*(?:کرائیں|کروائیں)?|"
+    r"تمہارا\s+نام\s+کیا\s+ہے|آپ\s+کا\s+نام\s+کیا\s+ہے"
+    r")[\s!,.…?ـ۔]*$",
+    re.IGNORECASE,
+)
+
+
+def is_greeting(text: str) -> bool:
+    """True when the visitor's message is *itself* a greeting or an ask for an introduction."""
+    return bool(_GREETING_RE.match((text or "").strip()))
+
 
 def system_prompt(lang: str, query: str = "") -> str:
     """Persona + rules + core brief + whatever the knowledge base has on `query`."""
-    parts = [RULES.get(lang, _RULES_EN), "MARI ENERGIES KNOWLEDGE — core facts:", CORE_BRIEF]
+    parts = [RULES.get(lang, _RULES_EN)]
+    if is_greeting(query):
+        parts.append(GREETINGS.get(lang, _GREETING_EN))
+    parts += ["MARI ENERGIES KNOWLEDGE — core facts:", CORE_BRIEF]
     if retrieved := context_for(query):
         parts += ["MARI ENERGIES KNOWLEDGE — sections relevant to this question:", retrieved]
     return "\n\n".join(parts)

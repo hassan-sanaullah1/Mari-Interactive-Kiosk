@@ -64,7 +64,7 @@ const FRAME_HEIGHT_M = 1.15;
 const HEAD_ROOM = 0.045;
 /** Distance from the model. Together with the frame size this sets the fov. */
 const CAMERA_Z = 2.5;
-/** Fallback until the rig reports its real height (girl14.glb is ~1.68m). */
+/** Fallback until the rig reports its real height (girl15.glb is ~1.68m). */
 const FALLBACK_HEIGHT = 1.68;
 
 /**
@@ -182,7 +182,7 @@ const LIGHT_CONFIGS: Record<AvatarState, LightConfig> = {
 /** Per-frame approach rate toward the active preset — slow enough that a state
  *  change takes about a second to land. */
 const LERP_SPEED = 0.04;
-/** Where the face spot aims. Retune if the rig's proportions change; girl14's
+/** Where the face spot aims. Retune if the rig's proportions change; girl15's
  *  head sits around here (its rig is the same 1.68m figure as girl11's). */
 const HEAD_TARGET_Y = 1.45;
 

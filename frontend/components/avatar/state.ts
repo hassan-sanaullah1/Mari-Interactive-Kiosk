@@ -23,4 +23,4 @@ export function avatarStateFor(mode: Mode): AvatarState {
 }
 
 /** Where the .glb lives, served from frontend/public. */
-export const AVATAR_MODEL_URL = "/models/girl14.glb";
+export const AVATAR_MODEL_URL = "/models/girl15.glb";
