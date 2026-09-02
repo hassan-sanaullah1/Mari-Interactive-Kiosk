@@ -345,29 +345,88 @@ function sampleIndexFor(index: PoseIndex, time: number): number {
 }
 
 /**
- * Summed rotation difference between two samples, as |dot| per joint.
+ * Summed rotation difference between a pose sample and an arbitrary quaternion
+ * array of the same shape, as |dot| per joint.
  *
  * Quaternion dot is ±1 for identical rotations (double cover: q and -q are the
  * same orientation), so `1 - |dot|` is a cheap monotonic stand-in for the angle
  * between them. Monotonic is all this needs — the result is only ever compared
  * against other candidates, never read as an angle.
  */
-function poseDistance(index: PoseIndex, sampleA: number, sampleB: number): number {
+function poseDistance(index: PoseIndex, sample: number, pose: Float32Array): number {
   const { quats, jointCount } = index;
-  const baseA = sampleA * jointCount * 4;
-  const baseB = sampleB * jointCount * 4;
+  const base = sample * jointCount * 4;
   let total = 0;
   for (let joint = 0; joint < jointCount; joint++) {
-    const a = baseA + joint * 4;
-    const b = baseB + joint * 4;
-    const dot = quats[a] * quats[b] + quats[a + 1] * quats[b + 1] + quats[a + 2] * quats[b + 2] + quats[a + 3] * quats[b + 3];
+    const a = base + joint * 4;
+    const b = joint * 4;
+    const dot = quats[a] * pose[b] + quats[a + 1] * pose[b + 1] + quats[a + 2] * pose[b + 2] + quats[a + 3] * pose[b + 3];
     total += 1 - Math.abs(dot);
   }
   return total;
 }
 
 /**
- * Where to enter `state`'s loop so the pose best matches `fromTime`.
+ * The pool's current pose, as one quaternion per body joint — what is
+ * actually on screen, not any single layer's clock.
+ *
+ * A transition can itself be interrupted (talking→listening cancelled back to
+ * talking by another mic click before the first crossfade finishes), and at
+ * that moment the layer most recently handed to `beginSegment` may still be
+ * near-zero weight while the pose on screen is dominated by whatever it was
+ * fading out of. Matching against that layer's `time` alone picks an entry
+ * frame for a pose nobody is looking at, which reintroduces the exact
+ * hands-wide snap this whole mechanism exists to avoid — measured at up to
+ * 0.26m of wrist overshoot, on par with not pose-matching at all. Weighting
+ * every layer's sample by its actual on-screen contribution, the same way
+ * AnimationMixer composites them, is what keeps an interrupted transition as
+ * clean as an uninterrupted one.
+ *
+ * Weights need not sum to 1 (a layer's own fade may still be mid-flight); the
+ * blend is renormalised by whatever they do sum to, same as the mixer.
+ */
+function blendedPoseSample(index: PoseIndex, layers: Layer[]): Float32Array | null {
+  const { jointCount } = index;
+  const out = new Float32Array(jointCount * 4);
+  let weightSum = 0;
+  for (const layer of layers) {
+    if (layer.weight <= 0) continue;
+    const sample = sampleIndexFor(index, layer.time);
+    const base = sample * jointCount * 4;
+    weightSum += layer.weight;
+    for (let joint = 0; joint < jointCount; joint++) {
+      const s = base + joint * 4;
+      const o = joint * 4;
+      // Align sign to the accumulator before adding — quaternion double cover
+      // means a naive weighted sum can cancel two representations of the same
+      // rotation instead of reinforcing them.
+      const dot =
+        out[o] * index.quats[s] +
+        out[o + 1] * index.quats[s + 1] +
+        out[o + 2] * index.quats[s + 2] +
+        out[o + 3] * index.quats[s + 3];
+      const w = dot < 0 ? -layer.weight : layer.weight;
+      out[o] += index.quats[s] * w;
+      out[o + 1] += index.quats[s + 1] * w;
+      out[o + 2] += index.quats[s + 2] * w;
+      out[o + 3] += index.quats[s + 3] * w;
+    }
+  }
+  if (weightSum <= 0) return null;
+  for (let joint = 0; joint < jointCount; joint++) {
+    const o = joint * 4;
+    const len = Math.hypot(out[o], out[o + 1], out[o + 2], out[o + 3]) || 1;
+    out[o] /= len;
+    out[o + 1] /= len;
+    out[o + 2] /= len;
+    out[o + 3] /= len;
+  }
+  return out;
+}
+
+/**
+ * Where to enter `state`'s loop so the pose best matches `fromPose` — the
+ * pool's actual blended pose, see `blendedPoseSample`.
  *
  * Searches the whole loop window rather than a neighbourhood of `loop[0]`: the
  * point is to find the genuinely closest pose, and these windows are only a few
@@ -376,7 +435,7 @@ function poseDistance(index: PoseIndex, sampleA: number, sampleB: number): numbe
 function bestLoopEntry(
   index: PoseIndex | null,
   state: BodyState,
-  fromTime: number,
+  fromPose: Float32Array | null,
   /**
    * Seconds of the loop's tail to rule out. A self-crossfade at the seam is
    * looking for the pose it can *continue* from, and the closest match to the
@@ -387,9 +446,8 @@ function bestLoopEntry(
   excludeTailSecs = 0,
 ): number {
   const [loopStart, loopEnd] = SEGMENTS[state].loop;
-  if (!index) return loopStart;
+  if (!index || !fromPose) return loopStart;
 
-  const from = sampleIndexFor(index, fromTime);
   const first = sampleIndexFor(index, loopStart);
   // Exclude the last sample: entering exactly at the loop end leaves no frames
   // to play before the seam crossfade fires.
@@ -401,7 +459,7 @@ function bestLoopEntry(
   let bestSample = first;
   let bestDistance = Infinity;
   for (let sample = first; sample <= last; sample++) {
-    const distance = poseDistance(index, from, sample);
+    const distance = poseDistance(index, sample, fromPose);
     if (distance < bestDistance) {
       bestDistance = distance;
       bestSample = sample;
@@ -821,19 +879,21 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
 
       if (active.state !== target) {
         // Straight into the target's loop, entered at whichever of its frames
-        // is closest to the pose on screen. No authored lead-in: see the note
-        // on Segment for why playing one is what threw the arms out.
+        // is closest to the pose actually on screen right now — the pool's
+        // blend of every layer's contribution, not just this one's clock. See
+        // blendedPoseSample for why: this branch also fires when a transition
+        // interrupts one already in flight (two mic clicks in quick
+        // succession), and at that moment `active.time` alone is not what the
+        // viewer is looking at. No authored lead-in either: see the note on
+        // Segment for why playing one is what threw the arms out.
+        const poseIndex = poseIndexRef.current;
+        const fromPose = poseIndex ? blendedPoseSample(poseIndex, layers) : null;
         beginSegment(
           layers,
           activeLayerRef,
           target,
           SWITCH_XFADE_SECS,
-          bestLoopEntry(
-            poseIndexRef.current,
-            target,
-            active.time,
-            SWITCH_XFADE_SECS + LOOP_XFADE_SECS,
-          ),
+          bestLoopEntry(poseIndex, target, fromPose, SWITCH_XFADE_SECS + LOOP_XFADE_SECS),
         );
       } else if (active.weight >= 0.999) {
         // Settled on a segment: start the seam crossfade one fade-length before
@@ -843,7 +903,14 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
         if (active.time >= loopEnd - LOOP_XFADE_SECS) {
           // The windows in SEGMENTS were chosen so that loop[1] already matches
           // loop[0]; re-deriving the entry here costs one search and keeps the
-          // seam honest if those windows are ever re-cut for a new rig.
+          // seam honest if those windows are ever re-cut for a new rig. At
+          // weight >= 0.999 the pool is effectively just this layer, so its
+          // own time would do — blendedPoseSample is used anyway to keep this
+          // and the interrupted-transition branch above going through the
+          // same path rather than two subtly different notions of "current
+          // pose".
+          const poseIndex = poseIndexRef.current;
+          const fromPose = poseIndex ? blendedPoseSample(poseIndex, layers) : null;
           beginSegment(
             layers,
             activeLayerRef,
@@ -851,12 +918,7 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
             LOOP_XFADE_SECS,
             // Rule out the whole crossfade tail, so the layer coming in has
             // frames left to play before its own seam comes round.
-            bestLoopEntry(
-              poseIndexRef.current,
-              active.state,
-              active.time,
-              LOOP_XFADE_SECS * 2,
-            ),
+            bestLoopEntry(poseIndex, active.state, fromPose, LOOP_XFADE_SECS * 2),
           );
         }
       }
