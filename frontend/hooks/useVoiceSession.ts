@@ -114,10 +114,27 @@ export function useVoiceSession(lang: Lang) {
   const assistantIdRef = useRef<string | null>(null);
   /** Media elements can only be routed through an AnalyserNode once. */
   const analysedRef = useRef(new WeakSet<HTMLAudioElement>());
+  /**
+   * The conversation so far, mirrored out of React state so the socket callbacks
+   * (which close over their turn) always read the current transcript. This is the
+   * whole of MARI's memory: it lives in the tab, is sent up with each turn, and is
+   * gone on reload — a kiosk greets the next visitor with a clean slate.
+   */
+  const historyRef = useRef<Message[]>([]);
+
+  useEffect(() => {
+    historyRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     langRef.current = lang;
   }, [lang]);
+
+  /** Prior turns, in the shape the server's _history_messages() expects. */
+  const historyPayload = useCallback(
+    () => historyRef.current.map(({ role, text }) => ({ role, text })),
+    [],
+  );
 
   /** Queue of streamed reply sentences, played back-to-back. */
   const queueRef = useRef<ReplyQueue | null>(null);
@@ -394,7 +411,9 @@ export function useVoiceSession(lang: Lang) {
     ws.onopen = () => {
       wsOpen = true;
       try {
-        ws.send(JSON.stringify({ type: "start", lang: langRef.current }));
+        ws.send(
+          JSON.stringify({ type: "start", lang: langRef.current, history: historyPayload() }),
+        );
       } catch {}
       for (const b of pending) {
         try {
@@ -460,7 +479,7 @@ export function useVoiceSession(lang: Lang) {
     mute.connect(ac.destination);
 
     setMode("listening");
-  }, [bindReplyStream, createQueue, endOfTurn, ensureAudioContext, finishTurn]);
+  }, [bindReplyStream, createQueue, endOfTurn, ensureAudioContext, finishTurn, historyPayload]);
 
   startTurnRef.current = () => void startTurn();
 
@@ -488,6 +507,9 @@ export function useVoiceSession(lang: Lang) {
   /** End the turn and wipe the transcript — the dock's ✕ in every state. */
   const endAndClear = useCallback(() => {
     stop();
+    // Wiping the transcript wipes the memory with it — the ✕ is how a visitor
+    // hands the kiosk to the next person.
+    historyRef.current = [];
     setMessages([]);
     setPartial("");
     setError(null);
@@ -544,6 +566,10 @@ export function useVoiceSession(lang: Lang) {
       const body = text.trim();
       if (!body) return;
 
+      // Snapshot before the local echo below, so the typed message goes up once —
+      // as the turn's question, not also as the last line of its own history.
+      const history = historyPayload();
+
       setError(null);
       // The user typed it, so it goes up immediately — the server does not echo
       // a typed turn's transcript back (see run_reply's echo_transcript).
@@ -583,14 +609,14 @@ export function useVoiceSession(lang: Lang) {
       bindReplyStream(ws, queue);
       ws.onopen = () => {
         try {
-          ws.send(JSON.stringify({ type: "text", text: body, lang: langRef.current }));
+          ws.send(JSON.stringify({ type: "text", text: body, lang: langRef.current, history }));
         } catch {
           setError("chat-failed");
         }
       };
       ws.onerror = () => setError("chat-failed");
     },
-    [bindReplyStream, createQueue, ensureAudioContext, teardownMic],
+    [bindReplyStream, createQueue, ensureAudioContext, historyPayload, teardownMic],
   );
 
   useEffect(() => () => stop(), [stop]);

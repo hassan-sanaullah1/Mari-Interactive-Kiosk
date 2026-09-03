@@ -77,6 +77,45 @@ async def healthz() -> dict:
     }
 
 
+# How much of the conversation rides along with a turn. The kiosk is a walk-up
+# device on a latency budget, so this stays small: enough for "and what about
+# Urdu?" to resolve against the previous answer, not a full transcript.
+# Reaching the LLM. The hosted endpoint sits behind a CDN edge that, from some
+# networks, accepts the TCP connection and then never answers — so a turn can die
+# on the dial while the service itself is perfectly healthy. A retry on a fresh
+# connection almost always lands, and costs only the connect timeout, so a visitor
+# gets a real answer instead of the demo line.
+LLM_CONNECT_ATTEMPTS = 3
+LLM_RETRY_BACKOFF = 0.4  # seconds, multiplied by the attempt number
+LLM_STREAM_TIMEOUT = httpx.Timeout(connect=4, read=12, write=8, pool=4)
+
+MAX_HISTORY_TURNS = 8
+MAX_HISTORY_CHARS = 400
+
+
+def _history_messages(history) -> list[dict]:
+    """Normalise the client's conversation history into OpenAI chat messages.
+
+    History is whatever the browser is holding for this visitor — it lives in the
+    tab and dies with a reload, deliberately: a kiosk should greet the next person
+    fresh. So it is untrusted input; only user/assistant text survives, trimmed and
+    capped, and anything malformed is dropped rather than rejected."""
+    if not isinstance(history, list):
+        return []
+    out: list[dict] = []
+    for item in history[-MAX_HISTORY_TURNS:]:
+        if not isinstance(item, dict):
+            continue
+        role = item.get("role")
+        text = item.get("text") or item.get("content") or ""
+        if role not in ("user", "assistant") or not isinstance(text, str):
+            continue
+        text = text.strip()[:MAX_HISTORY_CHARS]
+        if text:
+            out.append({"role": role, "content": text})
+    return out
+
+
 def _llm_extra() -> dict:
     """Extra request params per provider. vLLM Qwen3.5 is a reasoning model, so we
     disable its chain-of-thought; DeepSeek would reject that param, so send nothing."""
@@ -85,13 +124,14 @@ def _llm_extra() -> dict:
     return {}
 
 
-async def run_llm(text: str, lang: str) -> str:
+async def run_llm(text: str, lang: str, history: list | None = None) -> str:
     """Ask the LLM for a spoken-style reply, grounded in the Mari Energies knowledge base.
     Raises on failure (caller handles)."""
     payload = {
         "model": C.LLM_MODEL,
         "messages": [
             {"role": "system", "content": knowledge.system_prompt(lang, text)},
+            *_history_messages(history),
             {"role": "user", "content": text},
         ],
         "temperature": 0.7,
@@ -102,15 +142,33 @@ async def run_llm(text: str, lang: str) -> str:
     headers = {"Content-Type": "application/json"}
     if C.LLM_KEY:
         headers["Authorization"] = f"Bearer {C.LLM_KEY}"
-    async with httpx.AsyncClient(timeout=httpx.Timeout(60, connect=5)) as client:
-        r = await client.post(f"{C.LLM_BASE}/chat/completions", headers=headers, json=payload)
-        r.raise_for_status()
-        return r.json()["choices"][0]["message"]["content"].strip()
+    last: Exception | None = None
+    for attempt in range(LLM_CONNECT_ATTEMPTS):
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(60, connect=5)) as client:
+                r = await client.post(
+                    f"{C.LLM_BASE}/chat/completions", headers=headers, json=payload
+                )
+                r.raise_for_status()
+                return r.json()["choices"][0]["message"]["content"].strip()
+        except (httpx.TransportError, httpx.HTTPStatusError) as exc:
+            # Retry a dropped/hung dial (see LLM_CONNECT_ATTEMPTS); a 4xx is the
+            # server's considered answer, so don't hammer it.
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            if status is not None and status < 500:
+                raise
+            last = exc
+            if attempt + 1 < LLM_CONNECT_ATTEMPTS:
+                await asyncio.sleep(LLM_RETRY_BACKOFF * (attempt + 1))
+    raise last  # type: ignore[misc]
 
 
 class ChatIn(BaseModel):
     text: str
     lang: str = "en"
+    # Prior turns of this visitor's conversation, oldest first, as
+    # [{"role":"user"|"assistant","text":...}]. Client-held and short-lived.
+    history: list[dict] | None = None
 
 
 @app.post("/chat")
@@ -122,7 +180,7 @@ async def chat(body: ChatIn) -> dict:
     if not C.llm_ready():
         return {"reply": DEMO_REPLY[lang], "demo": True}
     try:
-        return {"reply": await run_llm(text, lang), "demo": False}
+        return {"reply": await run_llm(text, lang, body.history), "demo": False}
     except Exception as exc:
         return {"reply": DEMO_REPLY[lang], "demo": True, "error": str(exc)}
 
@@ -147,7 +205,7 @@ async def voice(request: Request, lang: str = "en") -> dict:
     # 2) LLM reply (falls back to a spoken demo line if vLLM is unreachable)
     if C.llm_ready():
         try:
-            out["reply"] = await run_llm(out["transcript"], lang)
+            out["reply"] = await run_llm(out["transcript"], lang)  # single-shot: no history
         except Exception as exc:
             out["reply"] = DEMO_REPLY[lang]
             out["error"] = f"llm: {exc}"
@@ -193,7 +251,7 @@ def _split_sentences(text: str) -> list[str]:
     return out
 
 
-async def llm_stream_sentences(text: str, lang: str):
+async def llm_stream_sentences(text: str, lang: str, history: list | None = None):
     """Yield MARI's reply — grounded in the Mari Energies knowledge base — one sentence at a
     time as the LLM streams tokens.
     Falls back to the demo line (also sentence-split) if vLLM is unreachable."""
@@ -206,6 +264,7 @@ async def llm_stream_sentences(text: str, lang: str):
         "model": C.LLM_MODEL,
         "messages": [
             {"role": "system", "content": knowledge.system_prompt(lang, text)},
+            *_history_messages(history),
             {"role": "user", "content": text},
         ],
         "temperature": 0.7,
@@ -219,53 +278,68 @@ async def llm_stream_sentences(text: str, lang: str):
 
     buf = ""
     emitted = False
-    try:
-        # read timeout applies between streamed chunks, so a real reply is fine; a dead
-        # vLLM (half-open tunnel) fails at ~12s instead of hanging the whole turn.
-        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=4, read=12, write=8, pool=4)) as client:
-            async with client.stream(
-                "POST", f"{C.LLM_BASE}/chat/completions", headers=headers, json=payload
-            ) as r:
-                r.raise_for_status()
-                async for line in r.aiter_lines():
-                    if not line or not line.startswith("data:"):
-                        continue
-                    data = line[5:].strip()
-                    if data == "[DONE]":
-                        break
-                    try:
-                        delta = json.loads(data)["choices"][0]["delta"].get("content", "")
-                    except Exception:
-                        continue
-                    if not delta:
-                        continue
-                    buf += delta
-                    while True:
-                        m = _SENTENCE_END.search(buf)
-                        if not m:
+    for attempt in range(LLM_CONNECT_ATTEMPTS):
+        buf = ""
+        try:
+            # read timeout applies between streamed chunks, so a real reply is fine; a dead
+            # vLLM (half-open tunnel) fails at ~12s instead of hanging the whole turn.
+            async with httpx.AsyncClient(timeout=LLM_STREAM_TIMEOUT) as client:
+                async with client.stream(
+                    "POST", f"{C.LLM_BASE}/chat/completions", headers=headers, json=payload
+                ) as r:
+                    r.raise_for_status()
+                    async for line in r.aiter_lines():
+                        if not line or not line.startswith("data:"):
+                            continue
+                        data = line[5:].strip()
+                        if data == "[DONE]":
                             break
-                        cut = m.end()
-                        sent = buf[:cut].strip()
-                        buf = buf[cut:]
-                        if sent:
-                            emitted = True
-                            yield sent, False
-        if buf.strip():
-            yield buf.strip(), False
-    except Exception:
-        # LLM failed (unreachable / mid-stream) — speak what we have or the demo line
-        if buf.strip():
-            yield buf.strip(), False
-        elif not emitted:
-            for s in _split_sentences(DEMO_REPLY[lang]):
-                yield s, True
+                        try:
+                            delta = json.loads(data)["choices"][0]["delta"].get("content", "")
+                        except Exception:
+                            continue
+                        if not delta:
+                            continue
+                        buf += delta
+                        while True:
+                            m = _SENTENCE_END.search(buf)
+                            if not m:
+                                break
+                            cut = m.end()
+                            sent = buf[:cut].strip()
+                            buf = buf[cut:]
+                            if sent:
+                                emitted = True
+                                yield sent, False
+            if buf.strip():
+                yield buf.strip(), False
+            return
+        except Exception:
+            # Nothing spoken yet and the failure was in *reaching* the LLM: the
+            # upstream path drops a sizeable share of connections outright, and a
+            # fresh connection usually lands, so try again rather than sending the
+            # visitor to the demo line over one unlucky dial.
+            if not emitted and not buf.strip() and attempt + 1 < LLM_CONNECT_ATTEMPTS:
+                await asyncio.sleep(LLM_RETRY_BACKOFF * (attempt + 1))
+                continue
+            # Mid-stream failure (or out of attempts) — speak what we have, else demo.
+            if buf.strip():
+                yield buf.strip(), False
+            elif not emitted:
+                for s in _split_sentences(DEMO_REPLY[lang]):
+                    yield s, True
+            return
 
 
 _turn_seq = 0
 
 
 async def run_reply(
-    sock: WebSocket, transcript: str, lang: str, echo_transcript: bool = True
+    sock: WebSocket,
+    transcript: str,
+    lang: str,
+    echo_transcript: bool = True,
+    history: list | None = None,
 ) -> None:
     """From the final transcript: stream LLM sentences → TTS each → push audio.
 
@@ -309,7 +383,7 @@ async def run_reply(
             await send_json({"type": "done", "spoken": False})
             return
         spoken = False
-        async for sentence, is_demo in llm_stream_sentences(transcript, lang):
+        async for sentence, is_demo in llm_stream_sentences(transcript, lang, history):
             await send_json({"type": "reply", "text": sentence, "demo": is_demo})
             if C.tts_ready(lang):
                 # Open (and start priming) this sentence's A2F clip before
@@ -356,6 +430,9 @@ async def ws(sock: WebSocket) -> None:
     lang = "en"
     pcm = bytearray()
     stream: providers.SonioxStream | None = None
+    # Conversation so far, as the browser remembers it. The socket is per turn, so
+    # each turn brings its own copy; nothing about the visitor is kept server-side.
+    history: list = []
 
     async def on_partial(text: str) -> None:
         try:
@@ -381,6 +458,7 @@ async def ws(sock: WebSocket) -> None:
             if evt.get("type") == "start":
                 lang = evt.get("lang", "en")
                 lang = lang if lang in knowledge.LANGS else "en"
+                history = evt.get("history") or []
                 pcm.clear()
                 if lang == "ur" and C.SONIOX_KEY:
                     stream = providers.SonioxStream(lang, on_partial=on_partial)
@@ -396,10 +474,11 @@ async def ws(sock: WebSocket) -> None:
                 typed = (evt.get("text") or "").strip()
                 if (want := evt.get("lang")) in knowledge.LANGS:
                     lang = want
+                history = evt.get("history") or []
                 if stream is not None:
                     await stream.close()
                     stream = None
-                await run_reply(sock, typed, lang, echo_transcript=False)
+                await run_reply(sock, typed, lang, echo_transcript=False, history=history)
                 break
             elif evt.get("type") == "end":
                 try:
@@ -411,7 +490,7 @@ async def ws(sock: WebSocket) -> None:
                 except Exception as exc:
                     await sock.send_json({"type": "error", "message": f"stt: {exc}"})
                     break
-                await run_reply(sock, transcript, lang)
+                await run_reply(sock, transcript, lang, history=history)
                 break
     except WebSocketDisconnect:
         pass

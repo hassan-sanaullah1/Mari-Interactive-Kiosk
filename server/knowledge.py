@@ -137,7 +137,6 @@ def ready() -> bool:
 PHRASES: dict[str, str] = {
     "سی ای او": "ceo managing director chief executive leadership",
     "ایم ڈی": "managing director ceo leadership",
-    "بورڈ آف ڈائریکٹرز": "board directors governance",
     "ای میل": "contact email investor relations",
     "ڈیٹا سینٹر": "data center technologies sky47 subsidiary",
     "اسلام آباد": "islamabad head office contact",
@@ -150,13 +149,18 @@ PHRASES: dict[str, str] = {
     "ماری گیس فیلڈ": "mari gas field daharki discovery",
     "ری نیو ایبل": "renewable solar energy transition",
     "ہیڈ آفس": "head office contact address islamabad",
+    "بورڈ آف ڈائریکٹرز": "board directors governance",
+    "ری برانڈنگ": "rebranding identity logo mari petroleum",
+    "منافع منقسمہ": "dividend per share payout",
+    "سرمایہ کاری": "investor relations investment",
+    "ای ایس جی": "esg sustainability governance",
+    "سی ایس آر": "csr community initiatives welfare",
 }
 
 GLOSSARY: dict[str, str] = {
     # company, identity, ownership
     "کمپنی": "company overview legal entity",
     "ادارہ": "company overview",
-    "کیا": "overview",
     "تعارف": "overview about",
     "ملکیت": "ownership shareholding shareholders",
     "مالک": "ownership shareholding parent",
@@ -169,7 +173,6 @@ GLOSSARY: dict[str, str] = {
     "کمپنیاں": "subsidiaries associated companies group",
     "ماری": "marienergies mari petroleum mpcl",
     "نام": "rebranding name mari petroleum",
-    "ری برانڈنگ": "rebranding identity logo mari petroleum",
     "تاریخ": "history timeline milestones",
     "بانی": "history establishment discovery",
     # leadership and governance
@@ -209,9 +212,7 @@ GLOSSARY: dict[str, str] = {
     "مالی": "financial performance results reports",
     "سرمایہ": "market capitalization investment",
     "ڈیویڈنڈ": "dividend per share payout",
-    "منافع منقسمہ": "dividend per share payout",
     "ٹیکس": "taxation national exchequer contribution",
-    "سرمایہ کاری": "investor relations investment",
     "قیمت": "stock price share price psx",
     # sustainability, people, community
     "ماحول": "environment sustainability esg emissions",
@@ -236,6 +237,37 @@ GLOSSARY: dict[str, str] = {
     "دفتر": "office head office karachi quetta",
     "کراچی": "karachi office contact",
     "کوئٹہ": "quetta office contact",
+    # transliterated English — kiosk visitors mix English terms into Urdu speech far
+    # more often than they use the formal Urdu word, so both spellings must resolve.
+    "ریکروٹمنٹ": "recruitment process careers hiring",
+    "پروسیس": "process procedure steps",
+    "جاب": "careers jobs vacancies",
+    "جابز": "careers jobs vacancies",
+    "کیریئر": "careers jobs recruitment",
+    "انٹرویو": "interview recruitment process",
+    "اپلائی": "apply application recruitment careers",
+    "درخواست": "application apply recruitment",
+    "ٹریننگ": "training talent development",
+    "پروفٹ": "profit earnings financial performance",
+    "ریونیو": "net sales revenue financial performance",
+    "شیئرز": "shares shareholding psx",
+    "اسٹاک": "stock price psx shares",
+    "مارکیٹ": "market capitalization psx",
+    "ڈائریکٹر": "directors board governance",
+    "منیجمنٹ": "management team leadership",
+    "لیڈرشپ": "leadership management team",
+    "سبسڈری": "subsidiaries group structure",
+    "پروڈکشن": "production capacity output",
+    "ایکسپلوریشن": "exploration blocks portfolio",
+    "ڈرلنگ": "drilling wells program",
+    "ریزروز": "reserves resources",
+    "منرلز": "minerals copper gold rare earth",
+    "کاپر": "copper minerals mining",
+    "گولڈ": "gold minerals mining",
+    "سولر": "solar renewable energy",
+    "کنٹیکٹ": "contact address phone email",
+    "سپلائر": "supplier hub vendors procurement",
+    "ویکنسی": "vacancies careers jobs",
     # generic
     "وژن": "vision mission",
     "مشن": "vision mission",
@@ -250,6 +282,19 @@ GLOSSARY: dict[str, str] = {
 }
 
 
+# Urdu letters only. The wider \u0600-\u06ff block also holds the sentence punctuation
+# (۔ U+06D4, ؟ U+061F) and the Urdu digits, which would otherwise be glued onto the word
+# and stop "بتائیے۔" or "ہے؟" from ever matching a glossary key.
+_UR_WORD = re.compile(r"[\u0620-\u064a\u0670-\u06d3\u06fa-\u06ff]+")
+# Grammatical particles carry no topic signal; stripping them keeps a question like
+# "ریکروٹمنٹ کا کیا پروسیس ہے" from being expanded on "کیا" alone.
+_UR_STOP = {
+    "میں", "کا", "کی", "کے", "کو", "سے", "پر", "ہے", "ہیں", "ہو", "تھا", "تھی", "اور",
+    "یا", "بھی", "تو", "نے", "ایک", "یہ", "وہ", "کیا", "کون", "کیسے", "کیوں", "کہاں",
+    "براہ", "کرم", "مجھے", "ہمیں", "آپ", "بتائیے", "بتائیں", "بتاؤ", "سکتے", "سکتی",
+}
+
+
 def _expand(query: str) -> list[str]:
     """Query terms, plus English equivalents for any Urdu words we recognise."""
     terms = _tokens(query)
@@ -258,7 +303,9 @@ def _expand(query: str) -> list[str]:
         if phrase in rest:
             terms.extend(_tokens(mapped))
             rest = rest.replace(phrase, " ")
-    for word in re.findall(r"[\u0600-\u06ff]+", rest):
+    for word in _UR_WORD.findall(rest):
+        if word in _UR_STOP:
+            continue
         if mapped := GLOSSARY.get(word):
             terms.extend(_tokens(mapped))
     return terms
@@ -325,7 +372,7 @@ Head office: 21 Mauve Area, 3rd Road, G-10/4, Islamabad 44000 · marienergies.co
 · (+92) 51-111 410 410"""
 
 _RULES_EN = """\
-You are MARI, the voice assistant on Mari Energies' interactive kiosk. You speak for Mari Energies
+You are MARI, the AI Representative on Mari Energies' interactive kiosk. You speak for Mari Energies
 Limited and answer visitors' questions about the company.
 
 Ground every factual claim in the MARI ENERGIES KNOWLEDGE below — it is the authoritative source
@@ -350,7 +397,7 @@ abbreviation the voice should say in full ("one hundred and twenty-seven thousan
 equivalent per day", "sixty-five billion rupees")."""
 
 _RULES_UR = """\
-آپ ماری ہیں — Mari Energies کے انٹرایکٹو کیوسک پر موجود voice assistant۔ آپ Mari Energies Limited کی
+آپ ماری ہیں — Mari Energies کے انٹرایکٹو کیوسک پر موجود AI Representative۔ آپ Mari Energies Limited کی
 نمائندگی کرتی ہیں اور آنے والوں کے سوالات کا جواب دیتی ہیں۔
 
 ہر حقیقت نیچے دیے گئے MARI ENERGIES KNOWLEDGE سے لیں — یہی مستند ماخذ ہے اور آپ کی اپنی معلومات پر
@@ -363,8 +410,15 @@ _RULES_UR = """\
 عہدہ بیان کریں۔ سیدھا سوال کا جواب دیں۔
 
 معلومات انگریزی میں ہے مگر جواب ہمیشہ رواں اردو میں دیں۔ کمپنی کے نام، عہدے اور تکنیکی اصطلاحات
-(Mari Energies، MPCL، PSX، CEO، voice assistant، data center، cloud، AI) اپنی اصل انگریزی شکل میں ہی رہنے دیں —
+(Mari Energies، MPCL، PSX، CEO، AI Representative، data center، cloud، AI) اپنی اصل انگریزی شکل میں ہی رہنے دیں —
 برانڈ کا نام ہمیشہ انگریزی حروف میں «Mari Energies» لکھیں، اردو رسم الخط میں نہیں۔
+
+الفاظ کا انتخاب ویسا ہی رکھیں جیسے پاکستانی لوگ روزمرہ بولتے ہیں: جس تصور کے لیے پاکستانی اردو میں
+عام طور پر انگریزی لفظ ہی بولا جاتا ہے، وہیں انگریزی لفظ استعمال کریں (مثلاً AI Representative، meeting،
+report، dashboard، software، system، app، team، project، feedback، update) — اس کا ثقیل یا ادبی اردو
+ترجمہ (جیسے «صوتی معاون») نہ کریں۔ یہ صرف لفظوں کے انتخاب کی بات ہے: جہاں عام اردو لفظ پہلے ہی فطری
+اور مروج ہے وہ برقرار رکھیں، بلا ضرورت اردو الفاظ کی جگہ انگریزی نہ ڈالیں، اور اپنے لہجے، شائستگی
+اور طرزِ تخاطب میں کوئی تبدیلی نہ کریں۔
 
 آپ کا جواب اوتار کی آواز میں بولا جائے گا، اس لیے فطری اور مختصر رکھیں — عموماً ایک سے تین جملے،
 بغیر مارک ڈاؤن، بغیر فہرست، بغیر ایموجی۔ بڑے اعداد ایسے بولیں جیسے کوئی شخص بولتا ہے۔"""
@@ -380,14 +434,14 @@ LANGS = tuple(RULES)
 # actually said, is the one signal the server genuinely has.
 _GREETING_EN = """\
 The visitor has greeted you or asked who you are, so open this reply with
-"Assalamualaikum" and introduce yourself: you are MARI, the voice assistant for Mari
+"Assalamualaikum" and introduce yourself: you are MARI, the AI Representative for Mari
 Energies Limited, Pakistan's largest listed energy company, here to help with questions
 about Mari Energies' operations, performance and people. This overrides the no-greeting
 rule above, for this reply only."""
 
 _GREETING_UR = """\
 زائر نے سلام کیا ہے یا آپ کا تعارف پوچھا ہے، اس لیے اس جواب کا آغاز "السلام علیکم" سے کریں اور
-اپنا تعارف کرائیں: آپ ماری ہیں، Mari Energies Limited کی voice assistant — پاکستان کی سب سے بڑی
+اپنا تعارف کرائیں: آپ ماری ہیں، Mari Energies Limited کی AI Representative — پاکستان کی سب سے بڑی
 لسٹڈ انرجی کمپنی — اور آپ کمپنی کے کاموں، کارکردگی اور ٹیم سے متعلق سوالات میں مدد کے لیے حاضر ہیں۔
 یہ ہدایت اوپر دیے گئے "سلام نہ کریں" اصول پر صرف اسی جواب کے لیے مقدم ہے۔"""
 
