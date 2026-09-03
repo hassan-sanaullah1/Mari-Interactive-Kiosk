@@ -2,6 +2,8 @@
 
 ## 1. Overview of Mari Energies Limited
 
+### 1.1 Mari Energies Limited (formerly Mari Petroleum Company Limited /
+
 - **1.1** Mari Energies Limited (formerly Mari Petroleum Company Limited / MPCL) is an integrated Pakistani energy company and the largest company in Pakistan by market capitalization (PSX symbol: MARI). It is committed to ensuring Pakistan's food security by supplying feed gas to all major fertilizer plants in the country, while also expanding its role in national energy security through core business growth and diversification into critical minerals and technology.
 
 - **1.1.1** Website meta description (as published): "MariEnergies is a leading upstream petroleum company driving innovation, sustainability, and reliable energy to empower national growth and progress." This is a useful one-line chatbot self-description of the company.
@@ -62,6 +64,8 @@
 - **1.10.5** Quetta Office: 26, Survey-31, Defence Officers Housing Scheme, Airport Road, Quetta; Tel (+92) 81 2821052, 2864085, 2839790; Fax (+92) 81 2834465
 - **1.10.6** KP (Khyber Pakhtunkhwa) Office: Bannu Cantt; Tel (+92) 8621794-5
 - **1.10.7** Field Office: Daharki, District Ghotki, Sindh (Mari Gas Field / Head Office of field operations)
+
+### 1.11 Our Verticals
 
 - **1.11** Our Verticals (as branded on the official website) — MariEnergies presents four business verticals on its site, each with distinct identity and (where applicable) its own website
 
@@ -145,6 +149,8 @@
 - **4.3.5** ESG Committee — Chairperson: Seema Adil; Members: Hamed Yaqoob Sheikh, Abid Niaz Hasan, Muhammad Aamir Salim. Oversees ESG strategy, policy, and performance monitoring.
 - **4.4** Corporate Secretary — Brig Sumair Ashraf Sheikh (Retd), Company Secretary (per PSX disclosure filings, July 2026).
 - **4.5** Leadership Legacy — Former Managing Directors (in recognition of past leadership): Lt Gen Ishfaq Nadeem Ahmad (Late), 2017-2020; Lt Gen Nadeem Ahmed (Retd), 2014-2017; Lt Gen Raza Muhammad Khan (Retd), 2011-2014; Lt. Gen Mushtaq Hussain, 2008-2011; Lt Gen Imtiaz Shaheen, 2005-2008; Lt Gen Muhammad Afzal Janjua, 2002-2005; Lt Gen Khalid Nawaz Malik, 1999-2002; Lt Gen Ghulam Muhammad Malik, 1996-1998; Lt Gen Hamid Niaz (Late), 1992-1996; Maj Gen Mehmood Aslam Hayat (Late), 1986-1992.
+
+### 4.6 Senior Management Team
 
 - **4.6** Senior Management Team — The official "Management Team" page states: "Our leadership team is dedicated to shaping the future of Exploration and Production with a clear sense of purpose, vision, and integrity," guided by industry expertise and a commitment to sustainable growth. The page itself is dynamically rendered and did not expose a full executive roster to direct retrieval; the following names are corroborated via third-party business-intelligence sources (GlobalData, LeadIQ) rather than scraped verbatim from the site, so a chatbot should flag them as best-effort and defer to the live page/Annual Report for the current roster
 
@@ -449,6 +455,8 @@
 - **17.3** 22 May 2026 — Extraordinary General Meeting (EGM) held; execution report issued.
 - **17.4** 9 July 2026 — Launch of the Digital Marketplace for Women Farmers under the Mari Kissan Dost Program (MKDP), connecting women micro-enterprises in Daharki with customers across Pakistan.
 - **17.5** 27 March 2026 — Hamed Yaqoob Sheikh (Federal Secretary, Ministry of Energy) joined the MariEnergies Board as a Non-Executive Director representing the Government of Pakistan.
+
+### 17.6 12 June 2026
 
 - **17.6** 12 June 2026 — World Environment Day 2026 observed across MariEnergies sites and Head Office through tree plantation drives, environmental awareness sessions, clean-up campaigns, ESG activities, and Green Pledge commitments.
 

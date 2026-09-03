@@ -149,6 +149,8 @@ PHRASES: dict[str, str] = {
     "ماری گیس فیلڈ": "mari gas field daharki discovery",
     "ری نیو ایبل": "renewable solar energy transition",
     "ہیڈ آفس": "head office contact address islamabad",
+    "آف شور": "offshore exploration expansion",
+    "سرمایہ کار": "investor relations shareholders",
     "بورڈ آف ڈائریکٹرز": "board directors governance",
     "ری برانڈنگ": "rebranding identity logo mari petroleum",
     "منافع منقسمہ": "dividend per share payout",
@@ -268,6 +270,31 @@ GLOSSARY: dict[str, str] = {
     "کنٹیکٹ": "contact address phone email",
     "سپلائر": "supplier hub vendors procurement",
     "ویکنسی": "vacancies careers jobs",
+    # remaining gaps found by sweeping every KB section with realistic Urdu questions
+    "آڈیٹر": "auditors external ferguson",
+    "ریٹنگ": "credit rating",
+    "کریڈٹ": "credit rating",
+    "ورٹیکل": "verticals business segments",
+    "ورٹیکلز": "verticals business segments",
+    "سکائی": "sky47 technologies data center",
+    "آفشور": "offshore exploration expansion",
+    "سمندری": "offshore exploration",
+    "کنواں": "wells drilling program",
+    "کنویں": "wells drilling program",
+    "دریافت": "discoveries exploration hydrocarbon",
+    "دریافتیں": "discoveries hydrocarbon wells",
+    "سیلز": "net sales revenue",
+    "فروخت": "net sales revenue",
+    "درخت": "trees plantation environment",
+    "شجرکاری": "trees plantation environment",
+    "فائدے": "benefits employer join us careers",
+    "مراعات": "benefits compensation careers",
+    "میل": "meal program nourish flourish",
+    "کھانا": "meal program nutrition",
+    "اعلان": "announcements recent developments",
+    "اعلانات": "announcements recent developments",
+    "تعداد": "workforce total employees figures",
+    "انویسٹر": "investor relations queries",
     # generic
     "وژن": "vision mission",
     "مشن": "vision mission",
@@ -295,6 +322,35 @@ _UR_STOP = {
 }
 
 
+# Urdu spells acronyms out letter by letter ("پی ایس ایکس" = P-S-X), so the letters arrive
+# as separate tokens that individually mean nothing. Joining a run of them recovers the
+# acronym the knowledge base actually contains. Deterministic, and it needs no word list.
+_LETTER = {
+    "اے": "a", "بی": "b", "سی": "c", "ڈی": "d", "ای": "e", "ایف": "f", "جی": "g",
+    "ایچ": "h", "آئی": "i", "جے": "j", "کے": "k", "ایل": "l", "ایم": "m", "این": "n",
+    "او": "o", "پی": "p", "کیو": "q", "آر": "r", "ایس": "s", "ٹی": "t", "یو": "u",
+    "وی": "v", "ڈبلیو": "w", "ایکس": "x", "وائے": "y", "زیڈ": "z",
+}
+
+
+def _acronyms(words: list[str]) -> list[str]:
+    """Runs of two or more spelled-out letters, joined ("پی ایس ایکس" -> "psx")."""
+    out, run = [], []
+    for w in words + [""]:
+        if letter := _LETTER.get(w):
+            run.append(letter)
+            continue
+        if len(run) >= 2:
+            out.append("".join(run))
+        run = []
+    return out
+
+
+# GLOSSARY is looked up one word at a time, so a key containing a space could never
+# match; several did, and failed silently. Multi-word terms belong in PHRASES.
+assert not [k for k in GLOSSARY if " " in k], "multi-word GLOSSARY key: use PHRASES"
+
+
 def _expand(query: str) -> list[str]:
     """Query terms, plus English equivalents for any Urdu words we recognise."""
     terms = _tokens(query)
@@ -303,9 +359,9 @@ def _expand(query: str) -> list[str]:
         if phrase in rest:
             terms.extend(_tokens(mapped))
             rest = rest.replace(phrase, " ")
-    for word in _UR_WORD.findall(rest):
-        if word in _UR_STOP:
-            continue
+    words = [w for w in _UR_WORD.findall(rest) if w not in _UR_STOP]
+    terms += _acronyms(words)
+    for word in words:
         if mapped := GLOSSARY.get(word):
             terms.extend(_tokens(mapped))
     return terms
