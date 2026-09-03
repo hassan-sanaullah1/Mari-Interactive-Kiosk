@@ -923,12 +923,12 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
         }
       }
 
+      // Advance every layer's own fade first, then publish the weights in a
+      // second pass — they have to be normalised together, see below.
+      let weightSum = 0;
       for (const layer of layers) {
         if (!layer.action) continue;
-        if (layer.weight <= 0 && layer.targetWeight <= 0) {
-          layer.action.weight = 0;
-          continue;
-        }
+        if (layer.weight <= 0 && layer.targetWeight <= 0) continue;
         // Fading-out layers keep playing rather than freezing — a body that
         // stops mid-motion behind the fade is visible even at low weight.
         advanceLayer(layer, delta);
@@ -937,7 +937,42 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
           layer.targetWeight > layer.weight
             ? Math.min(layer.weight + step, layer.targetWeight)
             : Math.max(layer.weight - step, layer.targetWeight);
-        layer.action.weight = layer.weight;
+        weightSum += layer.weight;
+      }
+
+      /**
+       * Normalise, because AnimationMixer fills any shortfall with the BIND
+       * POSE — and this rig binds in a T-pose.
+       *
+       * PropertyMixer.apply does `if (weight < 1) accuN += original * (1 -
+       * weight)`, where `original` is the bone's value at bind time. So the
+       * pool's weights summing to less than 1 does not merely dim the
+       * animation, it mixes the T-pose in for the remainder: arms out to the
+       * sides.
+       *
+       * An uninterrupted fade never notices, because the incoming layer rises
+       * at exactly the rate the outgoing one falls and the two always total
+       * 1. An INTERRUPTED one does: beginSegment starts the new layer at
+       * weight 0 while the layer it just cancelled was only partway up, so
+       * the total sags. Measured against this pool's own fade logic, one
+       * interruption bottoms out at 0.52 (48% T-pose) and two in quick
+       * succession at 0.29 (71%). That is the hands-apart glitch, and it is
+       * why it fires on essentially every mic click: the loop-seam
+       * self-crossfade means there is nearly always a fade already in flight
+       * for a state change to interrupt.
+       *
+       * Dividing through keeps every layer's *relative* contribution — the
+       * crossfade still looks like a crossfade — while guaranteeing the mixer
+       * never reaches for the bind pose.
+       */
+      const norm = weightSum > 1e-6 ? 1 / weightSum : 0;
+      for (const layer of layers) {
+        if (!layer.action) continue;
+        if (layer.weight <= 0 && layer.targetWeight <= 0) {
+          layer.action.weight = 0;
+          continue;
+        }
+        layer.action.weight = layer.weight * norm;
         layer.action.time = layer.time;
       }
     }
