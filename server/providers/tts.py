@@ -56,10 +56,82 @@ _SAY_AS = (
     *((re.compile(rf"\b{re.escape(k)}\b"), v) for k, v in _ACRONYMS.items()),
 )
 
+# Uplift's voice is Urdu-first and reads bare digits in Urdu — "65" becomes "پینسٹھ" even
+# in an otherwise English sentence, which is wrong in the kiosk's English mode. The voice
+# takes its cue from the script, so the digits are written out as English words before an
+# English reply is sent. Urdu replies keep their digits: there the Urdu reading is correct.
+_ONES = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+         "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+         "seventeen", "eighteen", "nineteen")
+_TENS = ("", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety")
+_SCALES = ((1_000_000_000, "billion"), (1_000_000, "million"), (1_000, "thousand"))
 
-def _spoken(text: str) -> str:
+
+def _say_int(n: int) -> str:
+    if n < 20:
+        return _ONES[n]
+    if n < 100:
+        return _TENS[n // 10] + (f" {_ONES[n % 10]}" if n % 10 else "")
+    if n < 1000:
+        return f"{_ONES[n // 100]} hundred" + (f" and {_say_int(n % 100)}" if n % 100 else "")
+    for value, name in _SCALES:
+        if n >= value:
+            head = f"{_say_int(n // value)} {name}"
+            return head + (f" {_say_int(n % value)}" if n % value else "")
+    return str(n)
+
+
+def _say_number(match: re.Match[str]) -> str:
+    whole, frac = match.group(1).replace(",", ""), match.group(2)
+    try:
+        said = _say_int(int(whole))
+    except (ValueError, IndexError):
+        return match.group(0)
+    if frac:
+        # "54.25" is read "fifty four point two five", digit by digit after the point
+        said += " point " + " ".join(_ONES[int(d)] for d in frac)
+    return said
+
+
+# Digit runs that are identifiers rather than quantities — phone numbers, postcodes,
+# well names — are read digit by digit; saying "one hundred and eleven" for a dialling
+# code is worse than not touching it. Anything attached to a hyphen or another digit
+# group is treated as an identifier and left for the voice to read as characters.
+_PHONE = re.compile(r"(?:\+?\d[\d\s-]{6,}\d)")
+_DIGITS = {str(i): w for i, w in enumerate(_ONES[:10])}
+
+
+def _say_digits(match: re.Match[str]) -> str:
+    return " ".join(_DIGITS.get(ch, ch) for ch in match.group(0) if ch.isdigit() or ch == "+")
+
+
+# Years read naturally ("nineteen fifty four"), not as a count ("one thousand nine...").
+# Round centuries are excluded: "2000" is "two thousand", not "twenty hundred".
+_YEAR = re.compile(r"(?<![\d.])(1[89]|20)(\d{2})\b(?!\.\d)")
+# A number not glued to a hyphen or decimal point on either side is a real quantity.
+_NUMBER = re.compile(r"(?<![\d.])(\d[\d,]*)(?:\.(\d+))?\b(?!\.\d)")
+
+
+def _say_year(match: re.Match[str]) -> str:
+    century, rest = int(match.group(1)), int(match.group(2))
+    if rest == 0:
+        # 1900 / 2000 are said as counts, not as "nineteen hundred"-style year pairs
+        return _say_int(century * 100)
+    return f"{_say_int(century)} {'oh ' + _ONES[rest] if rest < 10 else _say_int(rest)}"
+
+
+def _spell_numbers(text: str) -> str:
+    text = _PHONE.sub(_say_digits, text)
+    text = _YEAR.sub(_say_year, text)
+    return _NUMBER.sub(_say_number, text)
+
+
+def _spoken(text: str, lang: str = "en") -> str:
+    """Rewrite a reply the way it should be *said* rather than read."""
     for pattern, replacement in _SAY_AS:
         text = pattern.sub(replacement, text)
+    if lang != "ur":
+        text = _spell_numbers(text)
     return text
 
 
@@ -74,6 +146,7 @@ class UpliftTTS(TTSProvider):
         voice: str = "",
         output_format: str = "",
         speed: float = 1.0,
+        lang: str = "ur",
     ):
         self.api_key = api_key or C.UPLIFT_KEY
         self.base = (base or C.UPLIFT_BASE).rstrip("/")
@@ -81,6 +154,7 @@ class UpliftTTS(TTSProvider):
         self.voice = voice or C.UPLIFT_VOICE
         self.output_format = output_format or C.UPLIFT_FORMAT
         self.speed = speed
+        self.lang = lang
 
     async def synthesize(self, text: str) -> tuple[bytes, str]:
         text = (text or "").strip()
@@ -91,7 +165,7 @@ class UpliftTTS(TTSProvider):
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         payload = {
             "voiceId": self.voice,
-            "text": _spoken(text),
+            "text": _spoken(text, self.lang),
             "speed": self.speed,
             "outputFormat": self.output_format,
         }
@@ -184,7 +258,7 @@ def get_tts_provider(lang: str) -> TTSProvider:
             _tts_cache[key] = UpliftTTS()
         elif C.EN_TTS == "uplift":
             # No Kokoro deployment right now — English goes out through Uplift too.
-            _tts_cache[key] = UpliftTTS(voice=C.UPLIFT_VOICE_EN)
+            _tts_cache[key] = UpliftTTS(voice=C.UPLIFT_VOICE_EN, lang="en")
         else:
             _tts_cache[key] = KokoroLocalTTS() if C.EN_TTS == "local" else KokoroRemoteTTS()
     return _tts_cache[key]
