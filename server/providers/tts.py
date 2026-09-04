@@ -26,6 +26,13 @@ from .base import TTSProvider
 # an Urdu sentence, so one replacement covers every reply.
 _SKY = r"(?:Sky|\u0627\u0633\u06a9\u0627\u0626\u06cc|\u0633\u06a9\u0627\u0626\u06cc|\u0627\u0633\u06a9\u0627\u06cc|\u0633\u06a9\u0627\u06cc)"
 _47 = r"(?:47|\u06f4\u06f7|\u0664\u0667)"  # ASCII, Urdu (۴۷) and Arabic-Indic (٤٧) digits
+
+# "Mari" is spelled with ر (tapped r) in both scripts (Latin "Mari" and Urdu
+# "ماری"), but the name is actually said with a retroflex flap — ڑ, as in
+# "ماڑی" — not a tapped ر. Uplift's voice reads whatever script it is given
+# literally, so both spellings are rewritten to ماڑی before synthesis, in either
+# language.
+_MARI = r"(?:Mari|ماری)"
 # Mari Energies' own reports are full of initialisms and industry units that the voices
 # either spell out wrongly or run together into a non-word, so they are written out too.
 # ``\b``-anchored and applied to both languages, since an Urdu reply keeps these in Latin script.
@@ -48,6 +55,7 @@ _ACRONYMS = {
 
 _SAY_AS = (
     (re.compile(rf"(?<!\w){_SKY}\s*-?\s*{_47}(?!\w)", re.I), "Sky Forty Seven"),
+    (re.compile(rf"(?<!\w){_MARI}(?!\w)"), "ماڑی"),
     # currency reads after the amount in both languages: "PKR 65 billion" -> "65 billion rupees"
     (re.compile(r"\b(?:PKR|Rs\.?)\s*([\d,.]+)\s*(billion|million|trillion|bn|mn)?\b", re.I),
      lambda m: f"{m.group(1)} {m.group(2) + ' ' if m.group(2) else ''}rupees"),

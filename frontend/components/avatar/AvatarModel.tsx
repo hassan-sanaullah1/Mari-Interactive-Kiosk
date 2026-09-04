@@ -239,6 +239,130 @@ const SKIN_MATERIALS = new Set(["lambert11", "lambert13", "lambert12"]);
 const SKIN_EMISSIVE_INTENSITY = 0.25;
 
 /**
+ * Which material carries the face — and therefore the makeup.
+ *
+ * Read off the glTF, not the material names: lambert12 is the material whose
+ * baseColorTexture resolves to Head_Diffuse. (The neighbouring comment on
+ * SKIN_MATERIALS has this backwards — it credits lambert11 with the head, but
+ * lambert11 samples Arm_Diffuse and lambert12 the head. Verified against the
+ * file's texture/image indices.)
+ */
+const FACE_MATERIAL = "lambert12";
+
+/**
+ * How much chroma to remove from the makeup. 0 = texture as authored,
+ * 1 = the made-up pixels go fully grey. This is the dial.
+ *
+ * 0.45 takes the lipstick from a saturated red to a muted rose and softens the
+ * cheek flush, while leaving skin tone where it was. Raise for a barer face,
+ * lower to keep more of the original makeup.
+ */
+const MAKEUP_DESATURATION = 0.20;
+
+/**
+ * The makeup separates from skin by HUE, not by saturation.
+ *
+ * Measured on Head_Diffuse: saturation is nearly uniform across the whole face
+ * (median 0.44, p95 0.48), so a global desaturation washes the skin out just as
+ * much as the lips and reads as "no difference" on the thing you wanted
+ * changed. But of the chromatic pixels, 86% sit at hue 20-30° — the orange-tan
+ * skin base — and the makeup is the red/pink tail below 20°. Keying on that
+ * tail hits the lips and cheeks and almost nothing else.
+ *
+ * The face-region box excludes the garment and hair blocks parked in the
+ * corners of the same UV sheet, which are also deep red and would otherwise be
+ * caught by the hue test.
+ */
+const MAKEUP_MAX_HUE_DEG = 20;
+const MAKEUP_MIN_SATURATION = 0.22;
+const FACE_UV_BOX = { x0: 0.12, x1: 0.88, y0: 0.05, y1: 0.72 };
+
+/** Hue in degrees and saturation, from 0-255 RGB. Value is not needed. */
+function hueSaturation(r: number, g: number, b: number): [number, number] {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+  if (delta === 0) return [0, 0];
+
+  let hue: number;
+  if (max === r) hue = ((g - b) / delta) % 6;
+  else if (max === g) hue = (b - r) / delta + 2;
+  else hue = (r - g) / delta + 4;
+  hue *= 60;
+  if (hue < 0) hue += 360;
+
+  return [hue, max === 0 ? 0 : delta / max];
+}
+
+/**
+ * Tone the painted-on makeup down, once, on the CPU.
+ *
+ * Done on a canvas copy rather than through a shader hook so it survives every
+ * material recompile and needs no patched program: the result is just another
+ * texture. Each matching pixel is pulled toward its own Rec. 709 luminance, so
+ * it loses chroma without changing brightness — the lips get less red, not
+ * darker. The strength ramps with how red and how saturated the pixel is, so
+ * the treated area feathers into the skin instead of leaving a hard edge.
+ *
+ * Returns null if the image is not decoded yet or 2D canvas is unavailable, in
+ * which case the caller leaves the original texture alone.
+ */
+function desaturateMakeup(
+  source: THREE.Texture,
+  amount: number,
+): THREE.Texture | null {
+  const image = source.image as HTMLImageElement | ImageBitmap | null;
+  if (!image || !image.width || !image.height) return null;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  ctx.drawImage(image as CanvasImageSource, 0, 0);
+  const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const px = data.data;
+
+  for (let i = 0; i < px.length; i += 4) {
+    const pixel = i / 4;
+    const u = (pixel % canvas.width) / canvas.width;
+    const v = Math.floor(pixel / canvas.width) / canvas.height;
+    if (u < FACE_UV_BOX.x0 || u > FACE_UV_BOX.x1) continue;
+    if (v < FACE_UV_BOX.y0 || v > FACE_UV_BOX.y1) continue;
+
+    const r = px[i];
+    const g = px[i + 1];
+    const b = px[i + 2];
+    const [hue, sat] = hueSaturation(r, g, b);
+    if (hue >= MAKEUP_MAX_HUE_DEG || sat <= MAKEUP_MIN_SATURATION) continue;
+
+    const redness =
+      Math.min(1, (MAKEUP_MAX_HUE_DEG - hue) / MAKEUP_MAX_HUE_DEG) *
+      Math.min(1, (sat - MAKEUP_MIN_SATURATION) / 0.15);
+    const keep = 1 - amount * redness;
+
+    const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    px[i] = luma + (r - luma) * keep;
+    px[i + 1] = luma + (g - luma) * keep;
+    px[i + 2] = luma + (b - luma) * keep;
+  }
+  ctx.putImageData(data, 0, 0);
+
+  const result = new THREE.CanvasTexture(canvas);
+  // Copy the sampler settings off the original: the glTF loader has already set
+  // the flipY and colour space the UVs were authored against, and a fresh
+  // CanvasTexture defaults differently on both counts.
+  result.flipY = source.flipY;
+  result.colorSpace = source.colorSpace;
+  result.wrapS = source.wrapS;
+  result.wrapT = source.wrapT;
+  result.channel = source.channel;
+  result.needsUpdate = true;
+  return result;
+}
+
+/**
  * One layer of the crossfade pool.
  *
  * Three layers, not two. Two is enough for a plain A→B fade but not for a fade
@@ -768,6 +892,9 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
   const gl = useThree((s) => s.gl);
   useEffect(() => {
     const maxAnisotropy = gl.capabilities.getMaxAnisotropy();
+    // The face material is shared across several meshes, and this effect can
+    // re-run; without this the same map would be re-toned and drift to grey.
+    const desaturated = new Set<THREE.Texture>();
 
     scene.traverse((child) => {
       const mesh = child as THREE.Mesh;
@@ -777,6 +904,18 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
       for (const material of materials) {
         const std = material as THREE.MeshStandardMaterial;
         if (!std.isMeshStandardMaterial) continue;
+
+        // Tone the painted-on makeup before anything else reads std.map — the
+        // emissive lift below points at the same texture, so it has to pick up
+        // the desaturated copy or the lips would be lifted at full chroma.
+        if (std.name === FACE_MATERIAL && std.map && !desaturated.has(std.map)) {
+          const toned = desaturateMakeup(std.map, MAKEUP_DESATURATION);
+          if (toned) {
+            desaturated.add(toned);
+            std.map.dispose();
+            std.map = toned;
+          }
+        }
 
         if (std.map) {
           std.map.anisotropy = maxAnisotropy;

@@ -43,7 +43,7 @@ def test_english_leaves_no_bare_digits() -> None:
     "text",
     [
         "خالص منافع 65.14 بلین روپے رہا۔",
-        "ماری گیس فیلڈ 1954 میں دریافت ہوا۔",
+        "گیس فیلڈ 1954 میں دریافت ہوا۔",
         "ملازمین کی تعداد 1,760 ہے۔",
     ],
 )
@@ -62,6 +62,16 @@ def test_phone_numbers_are_read_digit_by_digit() -> None:
 def test_acronyms_apply_in_both_languages() -> None:
     assert "M P C L" in _spoken("MPCL results", "en")
     assert "M P C L" in _spoken("MPCL کی رپورٹ", "ur")
+
+
+def test_mari_is_said_with_the_retroflex_flap() -> None:
+    """"Mari" is spelled with ر in both scripts, but said with ڑ, not a tapped ر."""
+    assert "ماڑی" in _spoken("MARI welcomes you to Mari Energies.", "en")
+    assert "ماڑی" in _spoken("آپ ماری ہیں — Mari Energies کی نمائندگی کرتی ہیں۔", "ur")
+
+
+def test_mari_respelling_does_not_touch_unrelated_words() -> None:
+    assert _spoken("مریم آج نہیں آئیں۔", "ur") == "مریم آج نہیں آئیں۔"
 
 
 @pytest.mark.parametrize(
