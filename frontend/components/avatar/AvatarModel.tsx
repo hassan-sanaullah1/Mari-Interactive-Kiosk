@@ -35,9 +35,10 @@
  * unchanged, so they are its own optimum rather than inherited numbers.
  *
  * The shipped girl15.glb is the output of scripts/optimize_glb.py rather than the
- * raw export: keyframes outside the three SEGMENTS windows below are stripped and
- * the morph-target NORMAL deltas are dropped, taking it from 56MB to 33MB (37MB to
- * 24MB over the wire, where it is the single largest thing the kiosk downloads).
+ * raw export: keyframes outside the three SEGMENTS windows below are stripped, the
+ * morph-target NORMAL deltas are dropped and the cloth rotations are stored as
+ * normalized int16, taking it from 56MB to 30MB (37MB to 20MB over the wire, where
+ * it is the single largest thing the kiosk downloads).
  * Everything this file relies on is bit-identical across that transform — verified
  * through three.js on every playable frame: all 51 ARKit morph names and their
  * POSITION deltas, and all 1083 bone world matrices. Two consequences worth

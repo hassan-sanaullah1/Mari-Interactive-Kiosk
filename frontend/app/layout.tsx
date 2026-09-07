@@ -29,8 +29,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Kick off the avatar model fetch as early as possible — before React
             mounts and before the dynamically-imported three.js scene chunk
             loads — so the network transfer of the (large) .glb overlaps with
-            JS bootstrap instead of starting after it. */}
-        <link rel="preload" href={AVATAR_MODEL_URL} as="fetch" crossOrigin="anonymous" fetchPriority="high" />
+            JS bootstrap instead of starting after it.
+
+            No crossOrigin here, deliberately. A preload is only reused for a
+            later request whose CORS mode matches it, and drei's useGLTF fetches
+            the model same-origin without CORS. With crossOrigin="anonymous" the
+            preloaded copy was therefore never claimed and the browser fetched
+            the whole model a SECOND time — the download counted twice on exactly
+            the connection least able to afford it. */}
+        <link rel="preload" href={AVATAR_MODEL_URL} as="fetch" fetchPriority="high" />
       </head>
       <body>
         {/* Apply the stored theme before first paint so there's no flash. */}

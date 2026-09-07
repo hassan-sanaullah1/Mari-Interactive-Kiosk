@@ -11,16 +11,29 @@ Two things dominate that, and neither is needed in full:
      listening 300-393, talking 558-780 — and never seeks outside them, so
      roughly half the keyframes are downloaded and never sampled.
 
-  2. MORPH TARGET NORMALS (9.8 MB). Every one of the 51 ARKit blendshapes
+  2. ROTATION PRECISION (3.5 MB). What is left after (1) is 96% cloth: 974
+     joints stored as float32 at 30 fps. Quaternions need nowhere near that —
+     glTF's normalized int16 encoding, which three.js dequantises in the loader,
+     holds one to within 0.067 degrees. Halving them is invisible and costs
+     nothing at runtime.
+
+     Two neighbouring ideas were measured and REJECTED. Quantising TRANSLATION
+     the same way is not possible: normalized shorts decode into [-1,1] and these
+     curves reach 141, with no per-channel scale in glTF to borrow. Resampling
+     the cloth to 15 fps reconstructs the dropped keys up to 46 mm off, which is
+     real flutter rather than rounding. Precision is free; range and keyframes
+     are not.
+
+  3. MORPH TARGET NORMALS (9.8 MB). Every one of the 51 ARKit blendshapes
      carries a NORMAL delta alongside its POSITION delta, at ~100x the size
      (9.84 MB vs 0.10 MB) because the normals are stored uncompressed while the
      positions are quantised. Dropping them makes three.js light the blended
      face from the base mesh normals instead.
 
-Both edits are lossless for what the kiosk actually shows: no frame the player
-can reach is altered, and no morph POSITION delta is touched. Nothing is
-resampled, requantised or re-encoded, so the geometry, the textures and the
-51 blendshape names all survive byte-identical.
+None of this resamples or re-times the animation: every keyframe the player can
+reach is still a keyframe, geometry and textures are copied byte for byte, and
+the 51 blendshape names and their POSITION deltas are untouched. Only the stored
+precision of the cloth curves changes, by less than the rig can express.
 
 Usage:
     python scripts/optimize_glb.py IN.glb OUT.glb [--keep-morph-normals]
@@ -109,6 +122,11 @@ def accessor_bytes(gltf, binary, idx):
     return [struct.unpack_from(fmt, binary, base + i * stride) for i in range(n)], acc
 
 
+def quant_short(x: float) -> int:
+    """Float in [-1,1] -> glTF normalized signed short."""
+    return max(-32767, min(32767, int(round(x * 32767.0))))
+
+
 class BinBuilder:
     """Accumulates the new BIN chunk, keeping each bufferView 4-byte aligned."""
 
@@ -130,7 +148,7 @@ class BinBuilder:
         return b"".join(self.parts)
 
 
-def optimize(src, dst, drop_morph_normals=True):
+def optimize(src, dst, drop_morph_normals=True, quantize=True):
     gltf, binary = read_glb(src)
     before = len(binary)
 
@@ -152,6 +170,19 @@ def optimize(src, dst, drop_morph_normals=True):
     anim_kept = anim_total = 0
     new_acc = []          # accessors rebuilt as (data, accessor-json)
     acc_map = {}          # old accessor idx -> new idx
+    quantised = [0, 0]    # [rotation channels, translation channels]
+
+    # A sampler carries no path of its own; only the channel that points at it
+    # knows whether it drives rotation or translation. Only cloth joints are
+    # quantised — the 110 body joints are 0.58 MB in total, so there is nothing
+    # to win there and the skeleton keeps full float precision.
+    channel_path = {}
+    cloth_nodes = {i for i, nd in enumerate(gltf.get("nodes", []))
+                   if "a_cloth" in str(nd.get("name", ""))}
+    for anim_ in gltf.get("animations", []):
+        for ch_ in anim_["channels"]:
+            if ch_["target"]["node"] in cloth_nodes:
+                channel_path[id(anim_["samplers"][ch_["sampler"]])] = ch_["target"]["path"]
 
     def emit(data: bytes, acc_json) -> int:
         new_acc.append((data, acc_json))
@@ -194,11 +225,37 @@ def optimize(src, dst, drop_morph_normals=True):
             vch, _ = CTYPE[vacc["componentType"]]
             ncomp = NCOMP[vacc["type"]]
             fmt = "<" + vch * ncomp
-            out = []
-            for i in sel:
-                for k in range(per):
-                    out.append(struct.pack(fmt, *values[i * per + k]))
-            va = OrderedDict(componentType=vacc["componentType"], count=len(sel) * per,
+            rows = [values[i * per + k] for i in sel for k in range(per)]
+
+            path = channel_path.get(id(samp))
+            if (quantize and vacc["componentType"] == 5126
+                    and path == "rotation"
+                    and samp.get("interpolation") != "CUBICSPLINE"):
+                # Rotations are unit quaternions, so they already live in [-1,1]
+                # and glTF's "normalized short" encoding applies directly.
+                # Translations are not bounded, so they are scaled into that range
+                # by the node's own TRS: the curve is divided by its peak magnitude
+                # and the node keeps that factor. Both are exactly the encodings
+                # glTF defines for animation output, and three.js dequantises them
+                # in the loader — there is no runtime cost and no shader change.
+                if path == "rotation":
+                    data = b"".join(
+                        struct.pack("<4h", *(quant_short(c) for c in row)) for row in rows)
+                    va = OrderedDict(componentType=5122, count=len(rows),
+                                     type="VEC4", normalized=True)
+                    samp["output"] = emit(data, va)
+                    quantised[0] += 1
+                    continue
+                # Translation is deliberately NOT quantised. A normalized short
+                # output decodes into [-1,1] and is read straight as metres, but
+                # these curves reach 141 (the rig is authored in centimetres under
+                # a 0.01-scaled root), so the encoding cannot represent them.
+                # glTF has no per-channel scale to borrow, and folding one into
+                # the node's own scale would rescale its children and its mesh
+                # too. So translation keeps float32 and only rotation is halved.
+
+            out = [struct.pack(fmt, *row) for row in rows]
+            va = OrderedDict(componentType=vacc["componentType"], count=len(rows),
                              type=vacc["type"])
             samp["output"] = emit(b"".join(out), va)
 
@@ -367,6 +424,7 @@ def optimize(src, dst, drop_morph_normals=True):
 
     print(f"  animation keyframes : {anim_total} -> {anim_kept} "
           f"({100 * anim_kept / max(anim_total, 1):.0f}%)")
+    print(f"  quantised channels  : {quantised[0]} rotation, {quantised[1]} translation")
     print(f"  morph deltas dropped: {dropped}")
     print(f"  binary              : {before / 1e6:.1f} MB -> {len(new_bin) / 1e6:.1f} MB")
     return 0
@@ -380,8 +438,11 @@ def main():
     ap.add_argument("--keep-morph-normals", action="store_true",
                     help="keep morph target NORMAL deltas (larger file, "
                          "marginally different face shading)")
+    ap.add_argument("--no-quantize", action="store_true",
+                    help="keep cloth rotation/translation as float32")
     a = ap.parse_args()
-    return optimize(a.src, a.dst, drop_morph_normals=not a.keep_morph_normals)
+    return optimize(a.src, a.dst, drop_morph_normals=not a.keep_morph_normals,
+                    quantize=not a.no_quantize)
 
 
 if __name__ == "__main__":

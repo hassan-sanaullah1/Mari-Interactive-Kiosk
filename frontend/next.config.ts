@@ -27,7 +27,7 @@ const nextConfig: NextConfig = {
         // instead of even doing a revalidation round trip.
         //
         // NOTE: girl15.glb is the output of scripts/optimize_glb.py, not the raw
-        // export — 33MB on disk / ~24MB gzipped, down from 56MB / 37MB. Re-run
+        // export — 30MB on disk / ~20MB gzipped, down from 56MB / 37MB. Re-run
         // that script after any re-export or the saving is silently lost.
         source: "/models/:file*.glb",
         headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
