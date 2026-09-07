@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import logging
 import os
 import re
 
@@ -37,6 +38,8 @@ from . import config as C
 from . import knowledge
 from . import providers
 from . import avatar
+
+logger = logging.getLogger(__name__)
 
 WEB_DIR = C.WEB_DIR
 
@@ -182,6 +185,7 @@ async def chat(body: ChatIn) -> dict:
     try:
         return {"reply": await run_llm(text, lang, body.history), "demo": False}
     except Exception as exc:
+        logger.warning("/chat: LLM call failed, falling back to demo line: %s", exc)
         return {"reply": DEMO_REPLY[lang], "demo": True, "error": str(exc)}
 
 
@@ -207,6 +211,7 @@ async def voice(request: Request, lang: str = "en") -> dict:
         try:
             out["reply"] = await run_llm(out["transcript"], lang)  # single-shot: no history
         except Exception as exc:
+            logger.warning("/voice: LLM call failed, falling back to demo line: %s", exc)
             out["reply"] = DEMO_REPLY[lang]
             out["error"] = f"llm: {exc}"
     else:
@@ -314,15 +319,20 @@ async def llm_stream_sentences(text: str, lang: str, history: list | None = None
             if buf.strip():
                 yield buf.strip(), False
             return
-        except Exception:
+        except Exception as exc:
             # Nothing spoken yet and the failure was in *reaching* the LLM: the
             # upstream path drops a sizeable share of connections outright, and a
             # fresh connection usually lands, so try again rather than sending the
             # visitor to the demo line over one unlucky dial.
             if not emitted and not buf.strip() and attempt + 1 < LLM_CONNECT_ATTEMPTS:
+                logger.warning("LLM stream attempt %d/%d failed, retrying: %s", attempt + 1, LLM_CONNECT_ATTEMPTS, exc)
                 await asyncio.sleep(LLM_RETRY_BACKOFF * (attempt + 1))
                 continue
             # Mid-stream failure (or out of attempts) — speak what we have, else demo.
+            # This is the path that made a real outage look identical to a normal
+            # demo reply to anyone watching the UI — log it so it shows up in
+            # `docker compose logs backend` instead of vanishing silently.
+            logger.warning("LLM reply failed after %d attempt(s), falling back to demo line: %s", attempt + 1, exc)
             if buf.strip():
                 yield buf.strip(), False
             elif not emitted:

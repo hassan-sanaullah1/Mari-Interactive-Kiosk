@@ -20,6 +20,11 @@ RUN pip install --no-cache-dir -r requirements-web.txt \
 
 COPY server /app/server
 # the knowledge base ships inside server/data/, so `COPY server` above already has it
+# Persona prompts, the abbreviation glossary and the spoken-form fixes. server/ imports
+# these through a try/except ImportError with a working fallback, so leaving this out
+# does not crash the app — it silently serves the pre-voice_config behaviour instead,
+# which is exactly the kind of "my changes aren't live" bug that is hard to spot.
+COPY voice_config /app/voice_config
 COPY web /app/web
 
 ENV MARI_HOST=0.0.0.0

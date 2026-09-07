@@ -21,10 +21,14 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        // The avatar .glb: large, versioned by filename (girl13.glb), and never
+        // The avatar .glb: large, versioned by filename (girl15.glb), and never
         // mutated in place — a rename accompanies any actual model change. Safe
-        // to cache immutably so returning visitors skip the ~56MB re-download
-        // entirely instead of even doing a revalidation round trip.
+        // to cache immutably so returning visitors skip the re-download entirely
+        // instead of even doing a revalidation round trip.
+        //
+        // NOTE: girl15.glb is the output of scripts/optimize_glb.py, not the raw
+        // export — 33MB on disk / ~24MB gzipped, down from 56MB / 37MB. Re-run
+        // that script after any re-export or the saving is silently lost.
         source: "/models/:file*.glb",
         headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
       },

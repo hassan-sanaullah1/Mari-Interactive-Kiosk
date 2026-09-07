@@ -18,6 +18,26 @@ import httpx
 from .. import config as C
 from .base import TTSProvider
 
+try:  # voice_config is optional — without it the Uplift-specific fixes just don't apply
+    from voice_config import (
+        normalise_for_uplift as _normalise_for_uplift,
+        spoken_addresses as _spoken_addresses,
+        spoken_names_and_ranks as _spoken_names_and_ranks,
+        spoken_urls as _spoken_urls,
+    )
+except ImportError:  # pragma: no cover - only hit if the folder is removed
+    def _normalise_for_uplift(text: str, lang: str = "ur") -> str:
+        return text
+
+    def _spoken_names_and_ranks(text: str, lang: str = "en") -> str:
+        return text
+
+    def _spoken_urls(text: str, lang: str = "en") -> str:
+        return text
+
+    def _spoken_addresses(text: str, lang: str = "en") -> str:
+        return text
+
 
 # The brand name has to be forced into words for Uplift's Urdu-first voices, both ways:
 # in English text "Sky47" comes out as one mangled word ("SkySitalis"), and in Urdu text
@@ -51,7 +71,17 @@ _ACRONYMS = {
     "E&P": "exploration and production",
     "ESG": "E S G",
     "EPS": "earnings per share",
+    # "HR&R" is run together into "H9R" by the voice; splitting the ampersand out is
+    # enough to fix it. Other initialisms in the corpus (SECP, ICAP, SNGPL, HSE) were
+    # tested the same way and left alone — letter-spacing them made the voice WORSE
+    # ("S N G P L" is heard as "S and GPL"), so they keep whatever the engine does.
+    "HR&R": "H R and R",
 }
+
+# The credit rating "A1" is a letter followed by a grade, not a quantity: the number
+# spell-out below turns it into the non-word "Aone". Written apart, the voice says it
+# correctly. "AAA" already reads fine on its own.
+_RATING_RE = re.compile(r"\bA1\b")
 
 _SAY_AS = (
     (re.compile(rf"(?<!\w){_SKY}\s*-?\s*{_47}(?!\w)", re.I), "Sky Forty Seven"),
@@ -136,11 +166,28 @@ def _spell_numbers(text: str) -> str:
 
 def _spoken(text: str, lang: str = "en") -> str:
     """Rewrite a reply the way it should be *said* rather than read."""
+    # Domains come FIRST: "sky47.com.pk" has to be seen whole, before the Sky47 rule in
+    # _SAY_AS rewrites its label and leaves the dots behind unsaid.
+    text = _spoken_urls(text, lang)
     for pattern, replacement in _SAY_AS:
         text = pattern.sub(replacement, text)
+    # Names, ranks and honours, in BOTH languages: the Urdu-first voice mangles
+    # Latin-script Pakistani names ("Anwar Ali Hyder" → "and were early hired") and
+    # abbreviated ranks ("Lt. Gen." → "Leftenant"). Runs before the number spell-out
+    # so a rank's own digits, if any, are still handled below.
+    text = _spoken_names_and_ranks(text, lang)
+    # Addresses, contact lines, chemical formulae and symbol-bearing abbreviations.
+    # Must precede the number spell-out below: a postcode, an Islamabad sector and the
+    # "2" in CO2 are identifiers, and that pass would turn them into quantities
+    # ("forty four thousand", "G-ten/four", "COtwo").
+    text = _spoken_addresses(text, lang)
+    text = _RATING_RE.sub("A one", text)
     if lang != "ur":
         text = _spell_numbers(text)
-    return text
+    # Urdu-only fixes for what the Uplift voice gets wrong on its own — Roman numerals,
+    # word/word slashes and bare URLs. Runs last so it sees the fully rewritten text.
+    # See voice_config/urdu_normalise.py for why it is this short.
+    return _normalise_for_uplift(text, lang)
 
 
 class UpliftTTS(TTSProvider):

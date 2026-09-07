@@ -34,6 +34,18 @@
  * The windows below were still re-derived against this clip and came back
  * unchanged, so they are its own optimum rather than inherited numbers.
  *
+ * The shipped girl15.glb is the output of scripts/optimize_glb.py rather than the
+ * raw export: keyframes outside the three SEGMENTS windows below are stripped and
+ * the morph-target NORMAL deltas are dropped, taking it from 56MB to 33MB (37MB to
+ * 24MB over the wire, where it is the single largest thing the kiosk downloads).
+ * Everything this file relies on is bit-identical across that transform — verified
+ * through three.js on every playable frame: all 51 ARKit morph names and their
+ * POSITION deltas, and all 1083 bone world matrices. Two consequences worth
+ * knowing: SEGMENTS is now load-bearing for the ASSET and not just for playback,
+ * so widening a window here without re-running the script seeks into keyframes
+ * that are no longer in the file; and a re-export has to go back through the
+ * script or the file silently returns to 56MB.
+ *
  * girl12.glb shipped with its morph NAMES shifted one place against that same
  * geometry, which drove every named morph onto its neighbour's shape — one eye
  * blinking, and jawOpen quietly driving mouthClose. girl15 is correct (checked:
