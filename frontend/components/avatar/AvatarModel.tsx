@@ -59,6 +59,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useAnimations, useGLTF } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
+import { fetchAvatar } from "@/lib/avatarFetch";
 import { applyA2FLipsync, createA2FMorphState } from "@/lib/a2fMorphs";
 import { setRigCalibration } from "@/lib/blendshapePlayer";
 import type { AvatarState } from "./state";
@@ -684,8 +685,44 @@ export interface AvatarModelProps {
   onReady?: () => void;
 }
 
+/**
+ * Makes GLTFLoader read from the one shared download instead of fetching.
+ *
+ * three.js's FileLoader has its own cache keyed by URL, but it is only
+ * consulted once a load completes — two loads started before either finishes
+ * still hit the network twice. Overriding `load` routes every caller into the
+ * same in-flight promise, so the model crosses the wire exactly once no matter
+ * how many things ask for it or when.
+ */
+function useSharedFetch(loader: THREE.Loader) {
+  const gltf = loader as unknown as {
+    load: (
+      url: string,
+      onLoad: (result: unknown) => void,
+      onProgress?: unknown,
+      onError?: (err: unknown) => void,
+    ) => void;
+    parse: (
+      data: ArrayBuffer,
+      path: string,
+      onLoad: (result: unknown) => void,
+      onError?: (err: unknown) => void,
+    ) => void;
+  };
+  gltf.load = (url, onLoad, _onProgress, onError) => {
+    fetchAvatar(url)
+      .then((buf) => gltf.parse(buf, "", onLoad, onError))
+      .catch((err) => onError?.(err));
+  };
+}
+
 export default function AvatarModel({ url, state = "idle", onMeasure, onReady }: AvatarModelProps) {
-  const { scene, animations } = useGLTF(url);
+  // The loader is pointed at the single shared download (lib/avatarFetch.ts)
+  // rather than issuing its own request. Without this the preload, this loader
+  // and the progress readout are three separate requests for the same 20MB;
+  // they only collapse into one when the first finishes before the others
+  // start, which is exactly what does NOT happen on a slow connection.
+  const { scene, animations } = useGLTF(url, undefined, undefined, useSharedFetch);
   const groupRef = useRef<THREE.Group>(null);
   const blinkRef = useRef({ nextBlink: 2, blinkProgress: 0 });
   const a2fStateRef = useRef(createA2FMorphState());

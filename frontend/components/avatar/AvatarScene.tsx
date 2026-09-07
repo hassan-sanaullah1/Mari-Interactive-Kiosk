@@ -33,18 +33,28 @@
 
 import { Component, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Environment, Lightformer, useGLTF } from "@react-three/drei";
+import { Environment, Lightformer } from "@react-three/drei";
 import * as THREE from "three";
 import AvatarModel from "./AvatarModel";
+import { fetchAvatar } from "@/lib/avatarFetch";
 import { AVATAR_MODEL_URL, type AvatarState } from "./state";
 
-// Fires as soon as this (dynamically-imported) module evaluates — before
-// <AvatarModel>'s own useGLTF() call, which only runs once Suspense mounts it.
-// layout.tsx's <link rel="preload"> already gets the raw bytes moving in
-// parallel with JS bootstrap; this starts drei's GLTFLoader parse (and, once
-// parsed, the mesh/texture GPU upload) the moment this chunk itself loads,
-// instead of waiting for the component tree under Suspense to mount.
-useGLTF.preload(AVATAR_MODEL_URL);
+// Start the ONE shared download the moment this chunk evaluates, rather than
+// waiting for <AvatarModel> to mount under Suspense.
+//
+// This used to be useGLTF.preload(), which was a mistake: that starts a request
+// owned by drei's loader cache, which the component's own extendLoader hook
+// cannot intercept — so the model was fetched by the preload tag, by
+// useGLTF.preload here, and by the component's useGLTF, three times. Locally
+// the later two coalesce onto the first and it looks free; on a slow link the
+// first is still in flight, nothing can be shared, and they become parallel
+// copies of the same 20MB competing for one pipe.
+//
+// fetchAvatar is idempotent, so this and every later caller share one transfer.
+fetchAvatar(AVATAR_MODEL_URL).catch(() => {
+  // Swallowed deliberately: the component's error boundary owns the retry and
+  // the user-visible failure. An unhandled rejection here would just be noise.
+});
 
 /**
  * Framing, expressed the way the reference composition actually behaves:

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import styles from "./LoadingScreen.module.css";
 import { COPY, type Lang } from "@/lib/i18n";
-import { AVATAR_MODEL_URL } from "./avatar/state";
+import { onAvatarProgress } from "@/lib/avatarFetch";
 
 export interface LoadingScreenProps {
   lang: Lang;
@@ -21,10 +21,7 @@ export interface LoadingScreenProps {
  * It shows real download progress rather than an indeterminate spinner alone.
  * The model is ~20MB, and on a slow link that is the difference between "this
  * is working, it is 40% through" and a screen that looks frozen — which is
- * exactly how a slow deployment was being read. Progress comes from the
- * fetch itself rather than three.js's LoadingManager, because the manager only
- * reports totals for requests it issues, and the browser may serve this one
- * from the <link rel="preload"> in layout.tsx instead.
+ * exactly how a slow deployment was being read.
  */
 export default function LoadingScreen({ lang, ready }: LoadingScreenProps) {
   const [pct, setPct] = useState<number | null>(null);
@@ -32,29 +29,17 @@ export default function LoadingScreen({ lang, ready }: LoadingScreenProps) {
 
   useEffect(() => {
     if (ready) return;
-    let live = true;
-    // Report progress against the same URL the scene loads. This resolves from
-    // the preload/HTTP cache, so it does not cost a second download.
-    (async () => {
-      try {
-        const res = await fetch(AVATAR_MODEL_URL);
-        const total = Number(res.headers.get("content-length")) || 0;
-        const reader = res.body?.getReader();
-        if (!reader || !total) return;
-        let got = 0;
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done || !live) break;
-          got += value?.length ?? 0;
-          setPct(Math.min(99, Math.round((got / total) * 100)));
-        }
-      } catch {
-        /* progress is a nicety; failure here must not affect loading */
-      }
-    })();
-    // If it is still going after 20s the connection, not the app, is the story.
-    const t = setTimeout(() => live && setSlow(true), 20000);
-    return () => { live = false; clearTimeout(t); };
+    // Subscribe to the one shared download (lib/avatarFetch.ts). This used to
+    // open its own fetch for the model, which on a slow link was a third
+    // parallel copy of the same 20MB — a progress indicator that made the thing
+    // it was measuring slower.
+    const off = onAvatarProgress((loaded, total) => {
+      if (total > 0) setPct(Math.min(99, Math.round((loaded / total) * 100)));
+    });
+    // Past this point the connection, not the app, is the story — say so rather
+    // than showing a spinner that is indistinguishable from a hang.
+    const t = setTimeout(() => setSlow(true), 20000);
+    return () => { off(); clearTimeout(t); };
   }, [ready]);
 
   return (
