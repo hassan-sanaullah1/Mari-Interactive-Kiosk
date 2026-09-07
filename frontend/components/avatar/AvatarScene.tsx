@@ -31,7 +31,7 @@
  * still lerps.
  */
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Component, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Environment, Lightformer, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
@@ -324,6 +324,45 @@ function DynamicLighting({ state = "idle", levelRef }: DynamicLightingProps) {
   );
 }
 
+/**
+ * Retries the avatar load once, uncached, when the first attempt fails.
+ *
+ * Chrome aborts a response whose body it cannot write into its HTTP cache and
+ * reports ERR_CACHE_WRITE_FAILURE — a 200 OK that the page never receives,
+ * surfacing to drei as "Could not load ...: Failed to fetch". The avatar is the
+ * one asset large enough to trip it (it is served `immutable`, and an incognito
+ * window caches in memory, where a single entry may not exceed a fraction of the
+ * store). Because drei retries the same URL, every attempt repeated the same
+ * failed cache write and re-downloaded the whole file — which is what turned a
+ * cache problem into minutes of apparent hanging before it finally errored.
+ *
+ * A cache-busting query makes the retry uncacheable, so the browser streams it
+ * straight through instead of trying to store it. The cost is one extra download
+ * in the failure case; the normal path never renders the fallback at all.
+ */
+class ModelErrorBoundary extends Component<
+  { url: string; children: (url: string) => ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.warn("[avatar] first load failed, retrying uncached:", error);
+  }
+
+  render() {
+    const url = this.state.failed
+      ? `${this.props.url}${this.props.url.includes("?") ? "&" : "?"}nocache=1`
+      : this.props.url;
+    // Remount on retry so Suspense re-runs the loader against the new URL.
+    return <Suspense key={url} fallback={null}>{this.props.children(url)}</Suspense>;
+  }
+}
+
 export interface AvatarSceneProps {
   state?: AvatarState;
   url?: string;
@@ -366,9 +405,11 @@ export default function AvatarScene({
         <Lightformer intensity={0.5} position={[3, 0, -2]} scale={[2, 3, 1]} color="#ffd6e0" />
       </Environment>
 
-      <Suspense fallback={null}>
-        <AvatarModel url={url} state={state} onMeasure={onMeasure} onReady={onReady} />
-      </Suspense>
+      <ModelErrorBoundary url={url}>
+        {(modelUrl) => (
+          <AvatarModel url={modelUrl} state={state} onMeasure={onMeasure} onReady={onReady} />
+        )}
+      </ModelErrorBoundary>
     </Canvas>
   );
 }

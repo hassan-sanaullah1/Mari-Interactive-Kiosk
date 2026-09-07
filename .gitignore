@@ -10,6 +10,7 @@ models/
 !frontend/public/models/
 frontend/public/models/*
 !frontend/public/models/girl15.glb
+!frontend/public/models/girl15.glb.gz
 *.bin
 .DS_Store
 Thumbs.db

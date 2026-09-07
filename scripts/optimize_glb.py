@@ -47,7 +47,10 @@ out of the file.
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
+import os
+import shutil
 import struct
 import sys
 from collections import OrderedDict
@@ -427,6 +430,15 @@ def optimize(src, dst, drop_morph_normals=True, quantize=True):
     print(f"  quantised channels  : {quantised[0]} rotation, {quantised[1]} translation")
     print(f"  morph deltas dropped: {dropped}")
     print(f"  binary              : {before / 1e6:.1f} MB -> {len(new_bin) / 1e6:.1f} MB")
+
+    # Ship the gzipped copy alongside it. The app requests THIS file (see
+    # components/avatar/state.ts): a static .gz is served with a real
+    # Content-Length, where Next's on-the-fly gzip can only answer chunked.
+    gz_path = dst + ".gz"
+    with open(dst, "rb") as fin, gzip.GzipFile(gz_path, "wb", compresslevel=9, mtime=0) as fout:
+        shutil.copyfileobj(fin, fout)
+    print(f"  wrote {os.path.basename(gz_path)}   : {os.path.getsize(gz_path) / 1e6:.1f} MB "
+          f"(what the browser actually downloads)")
     return 0
 
 

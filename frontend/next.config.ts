@@ -18,8 +18,24 @@ const nextConfig: NextConfig = {
       { source: "/api/healthz", destination: `${API_ORIGIN}/healthz` },
     ];
   },
+  // Next's on-the-fly gzip stays ON for ordinary responses (HTML/JS/CSS), where
+  // a chunked body is harmless. The avatar deliberately bypasses it by being
+  // requested as an already-compressed .gz — see the /models headers below.
   async headers() {
     return [
+      {
+        // The app requests this .gz path directly (see components/avatar/state.ts).
+        // It is a real file on disk, so it is served statically with a real
+        // Content-Length — unlike Next's on-the-fly gzip, which cannot know the
+        // length and falls back to chunked. Content-Encoding tells the browser to
+        // inflate it transparently, so GLTFLoader still receives plain GLB bytes.
+        source: "/models/girl15.glb.gz",
+        headers: [
+          { key: "Content-Encoding", value: "gzip" },
+          { key: "Content-Type", value: "model/gltf-binary" },
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+        ],
+      },
       {
         // The avatar .glb: large, versioned by filename (girl15.glb), and never
         // mutated in place — a rename accompanies any actual model change. Safe
