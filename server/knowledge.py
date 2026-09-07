@@ -23,6 +23,26 @@ from pathlib import Path
 
 from . import config as C
 
+try:  # voice_config is optional — the in-code prompt literals below are the fallback
+    from voice_config import (
+        extract_glossary,
+        find_glossary_matches,
+        format_glossary_block,
+        load_prompt as _load_prompt,
+    )
+except ImportError:  # pragma: no cover - only hit if the folder is removed
+    def _load_prompt(name: str) -> str | None:
+        return None
+
+    def extract_glossary(text: str) -> dict[str, str]:
+        return {}
+
+    def find_glossary_matches(query: str, glossary: dict[str, str]) -> dict[str, str]:
+        return {}
+
+    def format_glossary_block(matches: dict[str, str]) -> str:
+        return ""
+
 KB_PATH = Path(
     C.env("APP_KNOWLEDGE_FILE", str(C.ROOT / "server" / "data" / "mari_energies_knowledge_base.md"))
 )
@@ -348,42 +368,140 @@ def _acronyms(words: list[str]) -> list[str]:
 
 # GLOSSARY is looked up one word at a time, so a key containing a space could never
 # match; several did, and failed silently. Multi-word terms belong in PHRASES.
+# ── sounding out unlisted words ─────────────────────────────────────
+# GLOSSARY can only hold words someone thought to add, which is fine for topics but
+# hopeless for the long tail: people's names, well names, programmes ("آیلہ مجید",
+# "بھٹائی", "سیڈ"). Those are unbounded, and a question containing one used to expand
+# to nothing at all, so the whole question retrieved nothing and MARI said she had no
+# information about a fact sitting in the knowledge base.
+#
+# Proper nouns survive the trip between scripts phonetically, so we sound the Urdu out
+# and look for a knowledge-base word that sounds the same. Matching is exact on a
+# normalised consonant skeleton — never fuzzy. An earlier attempt with edit distance
+# matched "آڈیٹر" to "dsra" and "درخت" to "direct"; grounding a reply in the wrong
+# section is worse than retrieving nothing, so the tolerance is gone.
+_ROMAN = {
+    "ا": "a", "آ": "a", "ب": "b", "پ": "p", "ت": "t", "ٹ": "t", "ث": "s", "ج": "j",
+    "چ": "ch", "ح": "h", "خ": "kh", "د": "d", "ڈ": "d", "ذ": "z", "ر": "r", "ڑ": "r",
+    "ز": "z", "ژ": "zh", "س": "s", "ش": "sh", "ص": "s", "ض": "z", "ط": "t", "ظ": "z",
+    "ع": "a", "غ": "gh", "ف": "f", "ق": "k", "ک": "k", "گ": "g", "ل": "l", "م": "m",
+    "ن": "n", "ں": "n", "و": "w", "ہ": "h", "ھ": "h", "ء": "", "ی": "y", "ے": "e",
+    "ئ": "y", "ؤ": "w", "أ": "a", "ۃ": "h", "ة": "h",
+}
+# A single consonant matches a dozen unrelated words, so two is the floor — and a
+# two-consonant key is only trusted when exactly one knowledge-base word has it.
+_MIN_KEY = 2
+_SHORT_KEY = 2
+# A longer key claiming more than this many words is too vague to be worth injecting.
+_MAX_CANDIDATES = 4
+
+
+def _sound_key(word: str) -> str:
+    """Spelling-independent skeleton: c/k/q folded, doubles collapsed, vowels dropped.
+
+    Urdu writes no short vowels and picks its own consonant for a borrowed sound, so
+    "کارپلنک"/"Corplink" and "پنی"/"Panni" only line up once both are reduced this far.
+    """
+    word = word.lower()
+    for a, b in (("ck", "k"), ("ph", "f"), ("c", "k"), ("q", "k"), ("x", "ks")):
+        word = word.replace(a, b)
+    # Urdu writes both v and w as و, spells plural -s with ز, and hears a soft g as ج
+    word = re.sub(r"g(?=[eiy])", "j", word)
+    word = word.replace("v", "w").replace("z", "s")
+    word = re.sub(r"(.)\1+", r"\1", word)
+    word = re.sub(r"[aeiouwy]", "", word)
+    word = re.sub(r"h$", "", word)          # silent final ہ: "آیلہ" is "ayla"
+    return re.sub(r"(.)\1+", r"\1", word)
+
+
+def _romanise(word: str) -> str:
+    return "".join(_ROMAN.get(ch, "") for ch in word)
+
+
+def _sound_index() -> dict[str, list[str]]:
+    """Sound key -> knowledge-base words, built from the corpus so it needs no upkeep."""
+    idx: dict[str, list[str]] = {}
+    for term in _DF:
+        if term in _STOP:
+            continue
+        key = _sound_key(term)
+        if len(key) >= _MIN_KEY:
+            idx.setdefault(key, []).append(term)
+    limit = {k: (1 if len(k) == _SHORT_KEY else _MAX_CANDIDATES) for k in idx}
+    return {k: v for k, v in idx.items() if len(v) <= limit[k]}
+
+
+_SOUNDS = _sound_index()
+
+
+def _sounds_like(word: str) -> list[str]:
+    """Knowledge-base words that sound like this Urdu one, or [] if none clearly does."""
+    key = _sound_key(_romanise(word))
+    return _SOUNDS.get(key, []) if len(key) >= _MIN_KEY else []
+
+
 assert not [k for k in GLOSSARY if " " in k], "multi-word GLOSSARY key: use PHRASES"
+
+
+# What the visitor actually said outweighs what we inferred from it. A glossary entry
+# expands one Urdu word into several broad English ones ("فیلڈ" -> field development gas
+# daharki), and at equal weight those swamped the single specific term that identified
+# the section — a question about the Daharki field ranked generic "Field Development"
+# sections above the one naming Daharki.
+_W_LITERAL = 1.0    # words the visitor typed, and acronyms they spelled out
+_W_SOUND = 0.7      # a name matched by sound: usually right, but it can catch a
+                    # common word inside a compound ("ہولڈرز" -> the KB's "holders")
+_W_GLOSS = 0.5      # our own topic expansion: a hint, not evidence
+
+
+def _expand_weighted(query: str) -> dict[str, float]:
+    """Search terms mapped to how much trust each one has earned."""
+    weights: dict[str, float] = {}
+
+    def add(items, weight: float) -> None:
+        for t in items:
+            weights[t] = max(weights.get(t, 0.0), weight)
+
+    add(_tokens(query), _W_LITERAL)
+    rest = query
+    for phrase, mapped in PHRASES.items():
+        if phrase in rest:
+            add(_tokens(mapped), _W_GLOSS)
+            rest = rest.replace(phrase, " ")
+
+    words = [w for w in _UR_WORD.findall(rest) if w not in _UR_STOP]
+    add(_acronyms(words), _W_LITERAL)
+    for word in words:
+        if mapped := GLOSSARY.get(word):
+            add(_tokens(mapped), _W_GLOSS)
+        elif word not in _LETTER:
+            # not a topic we curated: fall back on what the word sounds like
+            add(_sounds_like(word), _W_SOUND)
+    return weights
 
 
 def _expand(query: str) -> list[str]:
     """Query terms, plus English equivalents for any Urdu words we recognise."""
-    terms = _tokens(query)
-    rest = query
-    for phrase, mapped in PHRASES.items():
-        if phrase in rest:
-            terms.extend(_tokens(mapped))
-            rest = rest.replace(phrase, " ")
-    words = [w for w in _UR_WORD.findall(rest) if w not in _UR_STOP]
-    terms += _acronyms(words)
-    for word in words:
-        if mapped := GLOSSARY.get(word):
-            terms.extend(_tokens(mapped))
-    return terms
+    return list(_expand_weighted(query))
 
 
 # ── retrieval ───────────────────────────────────────────────────────
 
 def search(query: str, k: int = MAX_CHUNKS) -> list[Chunk]:
     """Top-k knowledge-base sections for a question, best first (BM25, k1=1.2, b=0.75)."""
-    terms = _expand(query)
+    terms = _expand_weighted(query)
     if not terms or not CHUNKS:
         return []
     n = len(CHUNKS)
     scored: list[tuple[float, int, Chunk]] = []
     for i, c in enumerate(CHUNKS):
         score = 0.0
-        for t in set(terms):
+        for t, weight in terms.items():
             f = c.tf.get(t)
             if not f:
                 continue
             idf = math.log(1 + (n - _DF[t] + 0.5) / (_DF[t] + 0.5))
-            score += idf * (f * 2.2) / (f + 1.2 * (0.25 + 0.75 * c.length / _AVG_LEN))
+            score += weight * idf * (f * 2.2) / (f + 1.2 * (0.25 + 0.75 * c.length / _AVG_LEN))
         if score > 0:
             # index breaks ties deterministically and keeps Chunk out of the comparison
             scored.append((score, i, c))
@@ -457,7 +575,7 @@ abbreviation the voice should say in full ("one hundred and twenty-seven thousan
 equivalent per day", "sixty-five billion rupees")."""
 
 _RULES_UR = """\
-آپ ماری ہیں — Mari Energies کے انٹرایکٹو کیوسک پر موجود AI Representative۔ آپ Mari Energies Limited کی
+آپ ماری ہیں — Mari Energies کے انٹرایکٹو kiosk پر موجود AI Representative۔ آپ Mari Energies Limited کی
 نمائندگی کرتی ہیں اور آنے والوں کے سوالات کا جواب دیتی ہیں۔
 
 ہر حقیقت نیچے دیے گئے MARI ENERGIES KNOWLEDGE سے لیں — یہی مستند ماخذ ہے اور آپ کی اپنی معلومات پر
@@ -489,7 +607,14 @@ report، dashboard، software، system، app، team، project، feedback، updat
 آپ کا جواب اوتار کی آواز میں بولا جائے گا، اس لیے فطری اور مختصر رکھیں — عموماً ایک سے تین جملے،
 بغیر مارک ڈاؤن، بغیر فہرست، بغیر ایموجی۔ بڑے اعداد ایسے بولیں جیسے کوئی شخص بولتا ہے۔"""
 
-RULES = {"en": _RULES_EN, "ur": _RULES_UR}
+# The persona/rules text lives in voice_config/prompts/*.md so it can be edited without
+# touching code; the literals above are the fallback if a file is missing or unreadable
+# (see voice_config.load_prompt). Both are kept in sync — the .md files were extracted
+# from these literals verbatim.
+RULES = {
+    "en": _load_prompt("system_prompt_english") or _RULES_EN,
+    "ur": _load_prompt("system_prompt_urdu") or _RULES_UR,
+}
 LANGS = tuple(RULES)
 
 # Greeting/introduction is OPT-IN, added to the system prompt only for the turn that
@@ -511,7 +636,10 @@ _GREETING_UR = """\
 لسٹڈ انرجی کمپنی — اور آپ کمپنی کے کاموں، کارکردگی اور ٹیم سے متعلق سوالات میں مدد کے لیے حاضر ہیں۔
 یہ ہدایت اوپر دیے گئے "سلام نہ کریں" اصول پر صرف اسی جواب کے لیے مقدم ہے۔"""
 
-GREETINGS = {"en": _GREETING_EN, "ur": _GREETING_UR}
+GREETINGS = {
+    "en": _load_prompt("greeting_english") or _GREETING_EN,
+    "ur": _load_prompt("greeting_urdu") or _GREETING_UR,
+}
 
 # Matched against the whole (stripped) message, not a substring: "hi" should greet,
 # but "what is Mari's history" must not just because it contains "hi".
@@ -533,12 +661,23 @@ def is_greeting(text: str) -> bool:
     return bool(_GREETING_RE.match((text or "").strip()))
 
 
+# Abbreviation definitions mined from the knowledge base once at import (see
+# voice_config/glossary.py). BM25 ranks whole sections, so a question about "MSPC" can
+# easily surface sections that use the abbreviation without the one that defines it;
+# these are force-injected instead of being left to retrieval.
+ABBREVIATIONS: dict[str, str] = extract_glossary(
+    KB_PATH.read_text(encoding="utf-8") if KB_PATH.exists() else ""
+)
+
+
 def system_prompt(lang: str, query: str = "") -> str:
     """Persona + rules + core brief + whatever the knowledge base has on `query`."""
     parts = [RULES.get(lang, _RULES_EN)]
     if is_greeting(query):
         parts.append(GREETINGS.get(lang, _GREETING_EN))
     parts += ["MARI ENERGIES KNOWLEDGE — core facts:", CORE_BRIEF]
+    if glossary_block := format_glossary_block(find_glossary_matches(query, ABBREVIATIONS)):
+        parts.append(glossary_block)
     if retrieved := context_for(query):
         parts += ["MARI ENERGIES KNOWLEDGE — sections relevant to this question:", retrieved]
     return "\n\n".join(parts)
