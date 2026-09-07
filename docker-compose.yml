@@ -45,19 +45,6 @@ services:
       # Hugging Face cache across `docker compose up -d --build` container
       # recreates, so the slow download only ever happens once.
       - whisper_cache:/root/.cache/huggingface
-    # The A2F NIM publishes its port on the HOST's loopback only (a deliberate
-    # security choice — see deploy/a2f/docker-compose.yml), which a container on
-    # the default bridge cannot reach: APP_A2F_URL=127.0.0.1:52000 resolves to
-    # this container's own loopback and the connection is refused, so every clip
-    # open fails and no lipsync frames are ever produced. Joining the NIM's own
-    # network lets the backend address it by service name instead, without
-    # widening the NIM's host binding. External (`name:`) because that stack is
-    # deployed separately; when it is absent, bring this stack up with
-    # APP_A2F_URL unset and drop this block — the kiosk runs fine without
-    # lipsync.
-    networks:
-      - default
-      - a2f
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/healthz')"]
       interval: 30s
@@ -89,13 +76,6 @@ services:
       - "3000:3000"
     depends_on:
       - backend
-
-networks:
-  # The network created by deploy/a2f/docker-compose.yml (project name "mari-a2f",
-  # so its default network is "mari-a2f_default"). Not managed by this file.
-  a2f:
-    external: true
-    name: mari-a2f_default
 
 volumes:
   whisper_cache:
