@@ -59,6 +59,50 @@ const PARALLEL_PARTS = 6;
 const PARALLEL_MIN_BYTES = 4 * 1024 * 1024;
 
 /**
+ * Where the assembled model is kept between page loads.
+ *
+ * Ranged requests buy the first load a lot, but they cost every load after it:
+ * Chrome will not write a 206 into its HTTP disk cache the way it writes a 200,
+ * so splitting the download silently turned a cached asset into one that was
+ * re-fetched in full on every visit. Measured in headless Chrome, two launches
+ * sharing one profile: a plain GET took 64s cold and 1s warm (21MB written to
+ * the disk cache), while the six-part ranged download took 125s cold and 94s
+ * warm with nothing cached at all.
+ *
+ * The HTTP cache cannot hold this, so the bytes are kept here instead. The
+ * parallel first load is unchanged; every load after it is a local read.
+ */
+const CACHE_NAME = "mari-avatar-v1";
+/** Our own validator, stored beside the body — the entry is synthetic, so it has no real ETag. */
+const ETAG_HEADER = "x-avatar-etag";
+
+async function cacheGet(url: string): Promise<{ buf: ArrayBuffer; etag: string | null } | null> {
+  if (typeof caches === "undefined") return null;
+  try {
+    const res = await (await caches.open(CACHE_NAME)).match(url);
+    if (!res) return null;
+    return { buf: await res.arrayBuffer(), etag: res.headers.get(ETAG_HEADER) };
+  } catch {
+    return null;  // private mode, or storage disabled
+  }
+}
+
+async function cachePut(url: string, buf: ArrayBuffer, etag: string | null): Promise<void> {
+  if (typeof caches === "undefined") return;
+  try {
+    const cache = await caches.open(CACHE_NAME);
+    await cache.put(url, new Response(buf, {
+      headers: {
+        "content-type": "model/gltf-binary",
+        ...(etag ? { [ETAG_HEADER]: etag } : {}),
+      },
+    }));
+  } catch {
+    /* over quota or storage disabled — the model still loaded, so this is not fatal */
+  }
+}
+
+/**
  * Download in parallel byte ranges, reassembled in order.
  *
  * Returns null if the server will not serve ranges, so the caller can fall back
@@ -108,10 +152,27 @@ export function fetchAvatar(url: string, cacheBust = false): Promise<ArrayBuffer
 
   const target = cacheBust ? `${url}${url.includes("?") ? "&" : "?"}nocache=${Date.now()}` : url;
   inflight = (async () => {
+    /** Hand a stored copy to the progress listeners as an instant, complete load. */
+    const served = (buf: ArrayBuffer) => {
+      for (const fn of listeners) fn(buf.byteLength, buf.byteLength);
+      return buf;
+    };
+
+    let etag: string | null = null;
     // Ask first, so the size and range support are known before committing to a
     // strategy. HEAD is one round trip against a transfer measured in minutes.
     try {
       const head = await fetch(target, { method: "HEAD" });
+      etag = head.headers.get("etag");
+
+      // One round trip (0.47s against this host) to decide whether a download
+      // measured in minutes is needed at all. Checked after the HEAD rather than
+      // before it so a redeployed model is picked up instead of served stale.
+      if (!cacheBust) {
+        const hit = await cacheGet(url);
+        if (hit && (!etag || !hit.etag || hit.etag === etag)) return served(hit.buf);
+      }
+
       const len = Number(head.headers.get("content-length")) || 0;
       const ranged = head.headers.get("accept-ranges") === "bytes";
       // Only worth it on an unencoded body: ranges index the bytes on the wire,
@@ -120,10 +181,19 @@ export function fetchAvatar(url: string, cacheBust = false): Promise<ArrayBuffer
       const encoded = head.headers.get("content-encoding");
       if (ranged && !encoded && len >= PARALLEL_MIN_BYTES) {
         const buf = await fetchRanged(target, len);
-        if (buf) return buf;
+        if (buf) {
+          await cachePut(url, buf, etag);
+          return buf;
+        }
       }
     } catch {
-      /* fall through to the single-stream path */
+      // The origin is unreachable. A stored copy is better than no avatar, and
+      // this is the kiosk's offline path, so take it before failing outright.
+      if (!cacheBust) {
+        const hit = await cacheGet(url);
+        if (hit) return served(hit.buf);
+      }
+      /* otherwise fall through to the single-stream path */
     }
 
     const res = await fetch(target);
@@ -156,6 +226,9 @@ export function fetchAvatar(url: string, cacheBust = false): Promise<ArrayBuffer
     const out = new Uint8Array(loaded);
     let at = 0;
     for (const c of chunks) { out.set(c, at); at += c.length; }
+    // Deliberately not stored in CACHE_NAME: this was a plain 200, which the
+    // browser's own HTTP cache keeps (measured: 1s on the next load). Storing it
+    // again would hold a second 30MB copy to save nothing.
     return out.buffer;
   })();
 
