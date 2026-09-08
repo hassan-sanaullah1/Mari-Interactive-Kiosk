@@ -1,9 +1,11 @@
 """ABBR → full-form glossary built from the Mari Energies knowledge base.
 
-Retrieval here is BM25 over heading-delimited chunks (``server/knowledge.py``), and it
-ranks whole sections. An abbreviation like "MSPC" or "CDRS" can be *used* in a dozen
-sections but *spelled out* in only one, so the sections a question actually surfaces may
-never contain the definition — leaving the model to guess. This module scans the whole
+Retrieval (``server/services/retriever.py``) ranks whole chunks. An abbreviation like
+"MSPC" or "CDRS" can be *used* in a dozen chunks but *spelled out* in only one, so the
+chunks a question actually surfaces may never contain the definition — leaving the model
+to guess. That is true of hybrid search as much as it was of the BM25 index this
+replaced: the sparse channel matches the token either way, and the dense channel has no
+concept of "this is the chunk that defines the term". This module scans the whole
 corpus once at import time for "ABBR (Full Form)" / "Full Form (ABBR)" pairs, so the
 definition can be force-injected whenever a visitor asks about the abbreviation,
 independent of what retrieval returned.

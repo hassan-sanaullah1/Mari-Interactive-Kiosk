@@ -53,17 +53,35 @@ def test_hr_and_r() -> None:
 
 # ── slashed title pairs ─────────────────────────────────────────────
 
-@pytest.mark.parametrize("written", ["MD/CEO", "MD & CEO"])
-def test_title_pairs_are_spelled_out_in_english(written: str) -> None:
-    """"MD/CEO" was heard as "MD/C8 August"; even "MD and CEO" collided across the
-    "and" ("ESDM didn't see EO"), so each title is spelled out in full."""
+@pytest.mark.parametrize("written", ["MD/CEO", "MD & CEO", "CEO / Managing Director"])
+def test_title_pairs_are_separated_in_english(written: str) -> None:
+    """"MD/CEO" was heard as "MD/C8 August"; even "MD and CEO" collided across the "and"
+    ("ESDM didn't see EO"). Hyphenating the letters reads back as "MD and CEO"."""
     said = _spoken(f"The {written} is Faheem Haider.", "en")
-    assert "Managing Director and Chief Executive Officer" in said
+    assert "C-E-O" in said and "/" not in said
 
 
-def test_title_pairs_are_spelled_out_in_urdu() -> None:
+def test_title_pairs_are_separated_in_urdu() -> None:
     said = _spoken("MD/CEO فہیم حیدر ہیں۔", "ur")
-    assert "منیجنگ ڈائریکٹر اور چیف ایگزیکٹو آفیسر" in said
+    assert "M-D اور C-E-O" in said
+
+
+def test_a_doubled_title_pair_stays_short() -> None:
+    """§3.1.7 says the pair twice in one sentence — "Faheem Haider (MD/CEO) serves as
+    Chairman and MD/CEO". Expanding to six words twice was worse than the problem."""
+    said = _spoken("Faheem Haider (MD/CEO) serves as Chairman and MD/CEO.", "en")
+    assert said.count("M-D and C-E-O") == 2
+    assert "Managing Director and Chief Executive Officer" not in said
+
+
+def test_compound_chairman_md_ceo_does_not_say_and_twice() -> None:
+    said = _spoken("Chairman/MD-CEO of Tuzgi Minerals.", "en")
+    assert "and M-D C-E-O" in said and "and and" not in said
+
+
+def test_a_lone_initialism_is_left_alone() -> None:
+    """Only a *pair* joined by a separator breaks; "the CEO" on its own is fine."""
+    assert _spoken("He is the CEO of the company.", "en") == "He is the CEO of the company."
 
 
 # ── Islamabad sectors ───────────────────────────────────────────────

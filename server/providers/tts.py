@@ -53,6 +53,22 @@ _47 = r"(?:47|\u06f4\u06f7|\u0664\u0667)"  # ASCII, Urdu (۴۷) and Arabic-Indic
 # literally, so both spellings are rewritten to ماڑی before synthesis, in either
 # language.
 _MARI = r"(?:Mari|ماری)"
+
+# The persona's own two most-spoken phrases, for the SAME reason and by the same trick.
+# In English mode the model writes them in Latin script and the Urdu-first voice applies
+# English phonetics: "Maryam" comes out as the English "Mary-am" and "Assalamualaikum" as
+# a flat "assa-lamu-a-LAY-kum" — an English speaker's attempt at both. Written in Urdu
+# script the same voice reaches for Urdu phonemes and says them as a Pakistani speaker
+# does. The visitor still READS the Latin spelling on screen; only the TTS payload changes.
+_MARYAM = r"(?:Maryam|Mariam|Marium)"
+# Every spelling of the salam the model actually writes: "Assalamualaikum" (what
+# greetings.force_salam normalises the opener to), plus the hyphenated and spaced forms
+# it uses mid-reply — "Assalam-o-Alaikum", "As-salamu alaykum", "Salam alaikum".
+_SALAM = r"(?:as?[-\s]*)?salaa?m[ou]?[-\s]*(?:o[-\s]*)?a?l[ae][iy]kum"
+# The returned salam, for the rare non-greeting turn where the model writes one anyway
+# (greetings.force_salam rewrites the opener on greeting turns, so it never reaches here
+# from there). Matched before _SALAM because the two overlap on the word "salam".
+_WALAIKUM = r"w[ae]?[-\s]*a?l[ae][iy]kum[-\s,]*(?:as?[-\s]*)?salaa?m[ou]?"
 # Mari Energies' own reports are full of initialisms and industry units that the voices
 # either spell out wrongly or run together into a non-word, so they are written out too.
 # ``\b``-anchored and applied to both languages, since an Urdu reply keeps these in Latin script.
@@ -85,6 +101,11 @@ _RATING_RE = re.compile(r"\bA1\b")
 
 _SAY_AS = (
     (re.compile(rf"(?<!\w){_SKY}\s*-?\s*{_47}(?!\w)", re.I), "Sky Forty Seven"),
+    # Before the _MARI rule below: "Maryam" must be matched whole. (_MARI is
+    # boundary-anchored on both sides, so it would not touch it, but the order says why.)
+    (re.compile(rf"(?<!\w){_WALAIKUM}(?!\w)", re.I), "وعلیکم السلام"),
+    (re.compile(rf"(?<!\w){_SALAM}(?!\w)", re.I), "السلام علیکم"),
+    (re.compile(rf"(?<!\w){_MARYAM}(?!\w)"), "مریم"),
     (re.compile(rf"(?<!\w){_MARI}(?!\w)"), "ماڑی"),
     # currency reads after the amount in both languages: "PKR 65 billion" -> "65 billion rupees"
     (re.compile(r"\b(?:PKR|Rs\.?)\s*([\d,.]+)\s*(billion|million|trillion|bn|mn)?\b", re.I),

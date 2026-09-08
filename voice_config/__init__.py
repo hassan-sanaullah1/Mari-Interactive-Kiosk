@@ -4,6 +4,7 @@ avatar *says*, kept out of the pipeline code that decides *when* it says it.
     prompts/*.md         persona, rules and greetings, per language
     addresses.py         addresses, contact details, formulae and symbol abbreviations
     glossary.py          ABBR → full-form pairs mined from the knowledge base
+    greetings.py         deterministic "السلام علیکم" opener, and feminine agreement
     names.py             spoken forms for people's names, ranks and honours
     urdu_normalise.py    spoken-form fixes for what the Uplift voice mispronounces
 
@@ -18,6 +19,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .addresses import spoken_addresses
+from .greetings import feminine_agreement, force_salam
 from .glossary import extract_glossary, find_glossary_matches, format_glossary_block
 from .names import spoken_names_and_ranks
 from .urdu_normalise import normalise_for_uplift, spoken_urls
@@ -34,6 +36,8 @@ __all__ = [
     "spoken_names_and_ranks",
     "spoken_urls",
     "spoken_addresses",
+    "force_salam",
+    "feminine_agreement",
 ]
 
 

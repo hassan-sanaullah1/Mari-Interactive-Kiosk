@@ -35,9 +35,23 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import config as C
+
+try:  # voice_config is optional — without it the model's own opener is used as-is
+    from voice_config import (
+        feminine_agreement as _feminine_agreement,
+        force_salam as _force_salam,
+    )
+except ImportError:  # pragma: no cover - only hit if the folder is removed
+    def _force_salam(reply: str, lang: str = "ur") -> str:
+        return reply
+
+    def _feminine_agreement(reply: str, lang: str = "ur") -> str:
+        return reply
+
 from . import knowledge
 from . import providers
 from . import avatar
+from . import rag
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +78,16 @@ async def _warmup() -> None:
     # Dial the Audio2Face gRPC channel eagerly so the first reply's lipsync
     # isn't delayed by connection setup. No-op when A2F isn't configured.
     asyncio.create_task(avatar.warm())
+    # Retrieval layer: model load and corpus ingest. Backgrounded because a cold
+    # container spends minutes downloading ONNX weights, and until it is ready turns are
+    # answered from the core brief alone rather than being refused — the kiosk speaks
+    # from the moment it boots, and says what it does not yet know.
+    asyncio.create_task(rag.startup())
+
+
+@app.on_event("shutdown")
+async def _shutdown() -> None:
+    await rag.shutdown()
 
 
 @app.get("/")
@@ -76,7 +100,7 @@ async def healthz() -> dict:
     return {
         "ok": True,
         **await C.status(),
-        "knowledge": {"ready": knowledge.ready(), "sections": len(knowledge.CHUNKS)},
+        "rag": await rag.health(),
     }
 
 
@@ -133,7 +157,7 @@ async def run_llm(text: str, lang: str, history: list | None = None) -> str:
     payload = {
         "model": C.LLM_MODEL,
         "messages": [
-            {"role": "system", "content": knowledge.system_prompt(lang, text)},
+            {"role": "system", "content": await rag.system_prompt(lang, text, history)},
             *_history_messages(history),
             {"role": "user", "content": text},
         ],
@@ -153,7 +177,16 @@ async def run_llm(text: str, lang: str, history: list | None = None) -> str:
                     f"{C.LLM_BASE}/chat/completions", headers=headers, json=payload
                 )
                 r.raise_for_status()
-                return r.json()["choices"][0]["message"]["content"].strip()
+                reply = r.json()["choices"][0]["message"]["content"].strip()
+                # The Urdu prompt asks a greeting reply to open with "السلام علیکم";
+                # Qwen complies only about two thirds of the time (DeepSeek always did),
+                # so on a turn the server has already identified as a greeting the
+                # opener is normalised here rather than left to the model.
+                if knowledge.is_greeting(text):
+                    reply = _force_salam(reply, lang)
+                # MARI is a female persona; Qwen intermittently writes "Mari Energies کا
+                # AI Representative" (masculine) when introducing herself.
+                return _feminine_agreement(reply, lang)
         except (httpx.TransportError, httpx.HTTPStatusError) as exc:
             # Retry a dropped/hung dial (see LLM_CONNECT_ATTEMPTS); a 4xx is the
             # server's considered answer, so don't hammer it.
@@ -199,6 +232,7 @@ async def voice(request: Request, lang: str = "en") -> dict:
     # 1) speech-to-text
     try:
         out["transcript"] = await providers.stt(wav, lang)
+        rag.prestart(out["transcript"])
     except Exception as exc:
         out["error"] = f"stt: {exc}"
         return out
@@ -268,7 +302,7 @@ async def llm_stream_sentences(text: str, lang: str, history: list | None = None
     payload = {
         "model": C.LLM_MODEL,
         "messages": [
-            {"role": "system", "content": knowledge.system_prompt(lang, text)},
+            {"role": "system", "content": await rag.system_prompt(lang, text, history)},
             *_history_messages(history),
             {"role": "user", "content": text},
         ],
@@ -283,6 +317,20 @@ async def llm_stream_sentences(text: str, lang: str, history: list | None = None
 
     buf = ""
     emitted = False
+    # Only the FIRST sentence of a greeting turn carries the opener; normalising every
+    # sentence would sprinkle a salam through the whole reply.
+    needs_salam = knowledge.is_greeting(text)
+
+    def _open(sentence: str) -> str:
+        nonlocal needs_salam
+        # Feminine agreement applies to EVERY sentence — a self-description can appear
+        # anywhere in the reply — but the salam only to the first.
+        sentence = _feminine_agreement(sentence, lang)
+        if needs_salam:
+            needs_salam = False
+            return _force_salam(sentence, lang)
+        return sentence
+
     for attempt in range(LLM_CONNECT_ATTEMPTS):
         buf = ""
         try:
@@ -315,9 +363,9 @@ async def llm_stream_sentences(text: str, lang: str, history: list | None = None
                             buf = buf[cut:]
                             if sent:
                                 emitted = True
-                                yield sent, False
+                                yield _open(sent), False
             if buf.strip():
-                yield buf.strip(), False
+                yield _open(buf.strip()), False
             return
         except Exception as exc:
             # Nothing spoken yet and the failure was in *reaching* the LLM: the
@@ -334,7 +382,7 @@ async def llm_stream_sentences(text: str, lang: str, history: list | None = None
             # `docker compose logs backend` instead of vanishing silently.
             logger.warning("LLM reply failed after %d attempt(s), falling back to demo line: %s", attempt + 1, exc)
             if buf.strip():
-                yield buf.strip(), False
+                yield _open(buf.strip()), False
             elif not emitted:
                 for s in _split_sentences(DEMO_REPLY[lang]):
                     yield s, True
@@ -488,6 +536,7 @@ async def ws(sock: WebSocket) -> None:
                 if stream is not None:
                     await stream.close()
                     stream = None
+                rag.prestart(typed)
                 await run_reply(sock, typed, lang, echo_transcript=False, history=history)
                 break
             elif evt.get("type") == "end":
@@ -500,6 +549,12 @@ async def ws(sock: WebSocket) -> None:
                 except Exception as exc:
                     await sock.send_json({"type": "error", "message": f"stt: {exc}"})
                     break
+                # Start embedding the transcript the instant STT finalises it, before
+                # run_reply does anything else. Retrieval then claims the finished
+                # vector instead of waiting on the model, which takes 30-40 ms off the
+                # gap between the visitor finishing their sentence and the first audio
+                # coming back — the part of the turn they actually feel.
+                rag.prestart(transcript)
                 await run_reply(sock, transcript, lang, history=history)
                 break
     except WebSocketDisconnect:

@@ -18,3 +18,11 @@ frontend/.git
 deploy/a2f/configs/**/*.log
 
 tests
+
+# Ingestion bookkeeping: which corpus files are in the index, by content hash. It
+# defaults to a path inside server/data/ (the corpus directory), which the Dockerfile
+# COPYs wholesale — so without this line, a developer who has run the server locally
+# bakes their own machine's "already ingested" record into the image, and every
+# container built from it skips ingestion against an empty index. It is runtime state
+# belonging to a particular Qdrant volume, never build input.
+server/data/.rag_metadata.sqlite*

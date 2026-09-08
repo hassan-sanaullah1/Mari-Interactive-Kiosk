@@ -43,14 +43,40 @@ def test_missing_prompt_falls_back_to_none() -> None:
 def test_loaded_prompts_are_the_ones_actually_used() -> None:
     assert knowledge.RULES["en"] == load_prompt("system_prompt_english")
     assert knowledge.RULES["ur"] == load_prompt("system_prompt_urdu")
+    assert knowledge.GREETINGS["en"] == load_prompt("greeting_english")
+    assert knowledge.GREETINGS["ur"] == load_prompt("greeting_urdu")
+
+
+def test_in_code_fallbacks_still_match_the_files_byte_for_byte() -> None:
+    """The literals in knowledge.py are the fallback when a prompt file is unreadable.
+
+    A fallback that has drifted from the file is worse than no fallback: the kiosk would
+    keep answering, in a persona nobody edited.
+    """
+    assert knowledge._RULES_EN == load_prompt("system_prompt_english")
+    assert knowledge._RULES_UR == load_prompt("system_prompt_urdu")
+    assert knowledge._GREETING_EN == load_prompt("greeting_english")
+    assert knowledge._GREETING_UR == load_prompt("greeting_urdu")
 
 
 def test_persona_and_tone_rules_survived_the_move_to_files() -> None:
     """The .md files were extracted verbatim; these are the rules we most rely on."""
     en, ur = knowledge.RULES["en"], knowledge.RULES["ur"]
-    assert "AI Representative" in en and "AI Representative" in ur
-    assert "اچھی میزبان" in ur          # host persona, feminine
-    assert "Mari Energies" in ur         # brand stays in Latin script
+    assert "Maryam" in en and "مریم" in ur           # she has a name, and uses it
+    assert "Mari Energies" in en and "Mari Energies" in ur   # brand stays in Latin script
+    assert "کر سکتی ہوں" in ur          # feminine verb forms
+    assert "نمائندہ" in ur              # feminine role noun
+    # She presents as a member of the team, not as an assistant.
+    assert "never a salesperson" in en
+    assert "chatbot" in en and "چیٹ بوٹ" in ur       # ...and is told not to admit to being one
+
+
+def test_the_greeting_prompts_demand_the_salam_and_the_name() -> None:
+    """The kiosk's one hard promise: the first reply opens with the salam and her name."""
+    en, ur = knowledge.GREETINGS["en"], knowledge.GREETINGS["ur"]
+    assert "Assalamualaikum" in en and "Maryam" in en
+    assert "السلام علیکم" in ur and "مریم" in ur
+    assert "وعلیکم السلام" in ur         # named explicitly so it is never returned instead
 
 
 # ── abbreviation glossary ───────────────────────────────────────────
@@ -104,12 +130,29 @@ def test_glossary_block_is_empty_without_matches() -> None:
     assert format_glossary_block({}) == ""
 
 
+# The prompt is assembled by the generation service now, from a RetrievalResult, rather
+# than by knowledge.system_prompt building its own context. These two tests take the
+# same path the server does, minus the retrieval step: the glossary block is computed
+# from the query and carried on the result, so it survives an empty or failed retrieval.
+
+
+def _prompt_for(query: str) -> str:
+    from server.services.generation import GenerationService
+    from server.services.retriever import RetrievalResult
+
+    matches = find_glossary_matches(query, knowledge.ABBREVIATIONS)
+    result = RetrievalResult(query=query, glossary_block=format_glossary_block(matches))
+    return GenerationService().build_prompt(
+        result, "en", core_brief=knowledge.CORE_BRIEF
+    ).system
+
+
 def test_definition_is_injected_into_the_system_prompt() -> None:
-    assert "Mari Seismic Processing Center" in knowledge.system_prompt("en", "what is MSPC?")
+    assert "Mari Seismic Processing Center" in _prompt_for("what is MSPC?")
 
 
 def test_prompt_is_untouched_when_no_abbreviation_matches() -> None:
-    assert "Glossary" not in knowledge.system_prompt("en", "who is the CEO")
+    assert "Glossary" not in _prompt_for("who is the CEO")
 
 
 # ── Uplift spoken-form fixes ────────────────────────────────────────

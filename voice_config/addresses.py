@@ -49,22 +49,38 @@ _AMP_RE = re.compile("|".join(re.escape(k) for k in sorted(_AMP_ABBR, key=len, r
 
 
 # ── 3. Slashed initialism pairs ─────────────────────────────────────
-# "MD/CEO" is read as one run-on token. Splitting on "and" is right, but the letters
-# also need room: "the MD and CEO" came back as "ESDM didn't see EO". Spelling each
-# title out in full is the only form the voice says cleanly every time.
-_TITLE_WORDS = {
-    "MD": {"en": "Managing Director", "ur": "منیجنگ ڈائریکٹر"},
-    "CEO": {"en": "Chief Executive Officer", "ur": "چیف ایگزیکٹو آفیسر"},
-    "CFO": {"en": "Chief Financial Officer", "ur": "چیف فنانشل آفیسر"},
-    "COO": {"en": "Chief Operating Officer", "ur": "چیف آپریٹنگ آفیسر"},
-    "CTO": {"en": "Chief Technology Officer", "ur": "چیف ٹیکنالوجی آفیسر"},
-    "CIO": {"en": "Chief Information Officer", "ur": "چیف انفارمیشن آفیسر"},
-    "CISO": {"en": "Chief Information Security Officer", "ur": "چیف انفارمیشن سیکیورٹی آفیسر"},
+# "MD/CEO" is read as one run-on token ("MD/C8 August"), and a plain "MD and CEO" still
+# collides across the "and" ("ESDM didn't see EO"). Hyphenating the letters gives the
+# voice the separation it needs — "M-D and C-E-O" reads back as "MD and CEO" in English
+# and "ایم ڈی اور سی ای او" in Urdu.
+#
+# Spelling the titles out in full ("Managing Director and Chief Executive Officer") also
+# works, but the knowledge base repeats the pair inside a single sentence — §3.1.7 is
+# "Faheem Haider (MD/CEO) serves as Chairman and MD/CEO" — and six words twice in one
+# breath is far worse to listen to than the initialism it replaced. The short form keeps
+# a doubled mention bearable.
+_TITLE_LETTERS = {
+    "MD": "M-D", "CEO": "C-E-O", "CFO": "C-F-O", "COO": "C-O-O",
+    "CTO": "C-T-O", "CIO": "C-I-O", "CISO": "C-I-S-O",
+    # "Chairman/MD-CEO" is one role written as a compound; expanding both halves with
+    # "and" would say "and" twice in a row ("Chairman and M-D and C-E-O").
+    "MD-CEO": "M-D C-E-O",
 }
+# Matches "MD/CEO", "MD & CEO", "CEO / Managing Director", "Chairman/MD-CEO" — every
+# separator and ordering the corpus actually uses.
+_SPELLED_TITLE = r"Managing Director|Chief Executive Officer|Chairman"
 _TITLE_PAIR_RE = re.compile(
-    rf"\b({'|'.join(_TITLE_WORDS)})\s*[/&]\s*({'|'.join(_TITLE_WORDS)})\b"
+    rf"\b({'|'.join(sorted(_TITLE_LETTERS, key=len, reverse=True))}|{_SPELLED_TITLE})"
+    rf"\s*[/&]\s*"
+    rf"({'|'.join(sorted(_TITLE_LETTERS, key=len, reverse=True))}|{_SPELLED_TITLE})\b"
 )
+# A lone initialism is fine as-is; only a *pair* joined by a separator breaks, so single
+# occurrences are deliberately left alone.
 _AND = {"en": "and", "ur": "اور"}
+
+
+def _say_title(token: str) -> str:
+    return _TITLE_LETTERS.get(token, token)
 
 
 # ── 4. Islamabad sectors ────────────────────────────────────────────
@@ -143,6 +159,16 @@ _CONTACT = {
 }
 
 
+# ── 8b. Urdu transliterations the model produces anyway ─────────────
+# The Urdu prompt asks for "kiosk" in Latin letters, but a weaker instruction-follower
+# (Qwen, where DeepSeek complied) writes "کائوسک"/"کیوسک" regardless. The user chose the
+# Latin spelling because the Urdu one is said "kioosk", so this puts it back — a prompt
+# rule cannot be relied on for something the listener hears every greeting.
+_TRANSLIT_BACK = {
+    "ur": [(re.compile(r"کائیوسک|کائوسک|کیوسک|کیوسْک"), "kiosk")],
+    "en": [],
+}
+
 # ── 8. Hyphenated prefixes ──────────────────────────────────────────
 # In ENGLISH the hyphen swallows the prefix's final vowel and "anti-corruption" is heard
 # as "ant"; a space keeps the two words apart. Urdu mode is deliberately excluded — the
@@ -169,8 +195,7 @@ def spoken_addresses(text: str, lang: str = "en") -> str:
     text = _FORMULA_RE.sub(_say_formula, text)
     text = _AMP_RE.sub(lambda m: _AMP_ABBR[m.group(0)][key], text)
     text = _TITLE_PAIR_RE.sub(
-        lambda m: f"{_TITLE_WORDS[m.group(1)][key]} {_AND[key]} {_TITLE_WORDS[m.group(2)][key]}",
-        text,
+        lambda m: f"{_say_title(m.group(1))} {_AND[key]} {_say_title(m.group(2))}", text
     )
     text = _SECTOR_RE.sub(_say_sector, text)
 
@@ -182,6 +207,8 @@ def spoken_addresses(text: str, lang: str = "en") -> str:
 
     text = _ORDINAL_RE.sub(lambda m: _ORDINALS[m.group(1).lower()][key], text)
     for pattern, replacement in _CONTACT[key]:
+        text = pattern.sub(replacement, text)
+    for pattern, replacement in _TRANSLIT_BACK[key]:
         text = pattern.sub(replacement, text)
     if key == "en":
         text = _PREFIX_RE.sub(r"\1 ", text)

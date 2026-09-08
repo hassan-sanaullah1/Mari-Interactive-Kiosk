@@ -21,3 +21,14 @@ soundfile>=0.12      # WAV encoding for local Kokoro
 grpcio>=1.60          # transport to the A2F NIM
 # nvidia-ace==1.2.0   # pip install --no-deps nvidia-ace==1.2.0  (A2F protos)
 av>=11.0              # decode TTS mp3/wav to the 16 kHz PCM A2F expects
+
+# ── Retrieval layer (server/services/*) ─────────────────────────────
+# FastEmbed rather than sentence-transformers: ONNX Runtime, quantized weights, no
+# torch in the serving image (~2 GB smaller) and 2-5x faster CPU inference. It also
+# produces the sparse vectors Qdrant's hybrid query needs, from the same library.
+fastembed>=0.7,<0.9
+qdrant-client>=1.12       # async client; hybrid prefetch + server-side RRF fusion
+pydantic-settings>=2.4    # MARI_RAG_* configuration
+pdfplumber>=0.11          # PDF ingestion (keeps layout, so paragraphs survive)
+markdown-it-py>=3.0       # markdown normalisation
+PyYAML>=6.0               # eval/questions.yaml

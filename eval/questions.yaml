@@ -1,0 +1,684 @@
+# Retrieval evaluation set for the Mari Energies kiosk.
+#
+# Every entry is a question a visitor could plausibly ask at the kiosk, paired with what
+# a *correct* retrieval must return. Two independent signals, because they fail
+# differently:
+#
+#   expect_heading  the heading-path prefix of the section that answers the question
+#                   ("4.2" matches "4. Governance ... > 4.2 Board Members"). Catches
+#                   topic-level drift.
+#   expect_facts    literal substrings that must appear somewhere in the assembled
+#                   context. Catches the failure heading-matching misses entirely: the
+#                   right section is retrieved but the specific detail (a name, an NTN
+#                   number, a well) got cut out by chunking.
+#
+# expect_heading: null marks a NEGATIVE case — the corpus does not cover it, and a
+# correct system returns nothing above the relevance threshold. These are scored
+# separately (see eval/run_eval.py); without them a retriever that returns five chunks
+# for literally any input scores perfectly on hit@k.
+#
+# Urdu entries carry the register kiosk visitors actually speak: transliterated English
+# nouns inside Urdu grammar ("ریکروٹمنٹ کا کیا پروسیس ہے"). Do not "correct" them into
+# formal Urdu — that is not what the STT emits.
+#
+# Sources: tests/retrieval_cases.py (section coverage) and tests/test_retrieval_facts.py
+# (fact coverage), extended with the English half of the kiosk and negative cases.
+
+questions:
+  - id: ur-sec-001
+    lang: ur
+    question: "ماری انرجیز کیا کام کرتی ہے؟"
+    expect_heading: "1."
+  - id: ur-sec-002
+    lang: ur
+    question: "کمپنی کا ٹیگ لائن کیا ہے؟"
+    expect_heading: "1."
+  - id: ur-sec-003
+    lang: ur
+    question: "کمپنی کا مالک کون ہے؟"
+    expect_heading: "1.5"
+  - id: ur-sec-004
+    lang: ur
+    question: "شیئر ہولڈرز کون کون ہیں؟"
+    expect_heading: "1.5"
+  - id: ur-sec-005
+    lang: ur
+    question: "فوجی فاؤنڈیشن کا کتنا حصہ ہے؟"
+    expect_heading: "1.5"
+  - id: ur-sec-006
+    lang: ur
+    question: "کمپنی کا وژن کیا ہے؟"
+    expect_heading: "1.6"
+  - id: ur-sec-007
+    lang: ur
+    question: "کمپنی کی اقدار کیا ہیں؟"
+    expect_heading: "1.7"
+  - id: ur-sec-008
+    lang: ur
+    question: "ہیڈ آفس کہاں ہے؟"
+    expect_heading: "1.10"
+  - id: ur-sec-009
+    lang: ur
+    question: "فون نمبر کیا ہے؟"
+    expect_heading: "1.10"
+  - id: ur-sec-010
+    lang: ur
+    question: "کراچی آفس کا پتہ"
+    expect_heading: "1.10"
+  - id: ur-sec-011
+    lang: ur
+    question: "کریڈٹ ریٹنگ کیا ہے؟"
+    expect_heading: "1.4"
+  - id: ur-sec-012
+    lang: ur
+    question: "آڈیٹر کون ہیں؟"
+    expect_heading: "1.4"
+  - id: ur-sec-013
+    lang: ur
+    question: "کمپنی کے ورٹیکلز کیا ہیں؟"
+    expect_heading: "1.11"
+  - id: ur-sec-014
+    lang: ur
+    question: "کمپنی کب بنی؟"
+    expect_heading: "2."
+  - id: ur-sec-015
+    lang: ur
+    question: "ماری گیس فیلڈ کب دریافت ہوا؟"
+    expect_heading: "2."
+  - id: ur-sec-016
+    lang: ur
+    question: "ایم پی سی ایل کا نام کیوں بدلا؟"
+    expect_heading: "2."
+  - id: ur-sec-017
+    lang: ur
+    question: "ری برانڈنگ کب ہوئی؟"
+    expect_heading: "2."
+  - id: ur-sec-018
+    lang: ur
+    question: "ذیلی کمپنیاں کون سی ہیں؟"
+    expect_heading: "3."
+  - id: ur-sec-019
+    lang: ur
+    question: "ماری منرلز کیا کرتی ہے؟"
+    expect_heading: "3."
+  - id: ur-sec-020
+    lang: ur
+    question: "سکائی 47 کیا ہے؟"
+    expect_heading: "9.7"
+  - id: ur-sec-021
+    lang: ur
+    question: "وژن 2030 کیا ہے؟"
+    expect_heading: "3.2"
+  - id: ur-sec-022
+    lang: ur
+    question: "سی ای او کون ہے؟"
+    expect_heading: "4."
+  - id: ur-sec-023
+    lang: ur
+    question: "چیئرمین کون ہے؟"
+    expect_heading: "4."
+  - id: ur-sec-024
+    lang: ur
+    question: "بورڈ میں کون کون ہے؟"
+    expect_heading: "4.2"
+  - id: ur-sec-025
+    lang: ur
+    question: "بورڈ کی کمیٹیاں کون سی ہیں؟"
+    expect_heading: "4.3"
+  - id: ur-sec-026
+    lang: ur
+    question: "ایکسپلوریشن بلاکس کتنے ہیں؟"
+    expect_heading: "5."
+  - id: ur-sec-027
+    lang: ur
+    question: "آف شور کام کیا ہے؟"
+    expect_heading: "5.3"
+  - id: ur-sec-028
+    lang: ur
+    question: "کتنے کنویں کھودے؟"
+    expect_heading: "5.5"
+  - id: ur-sec-029
+    lang: ur
+    question: "حالیہ دریافتیں کون سی ہیں؟"
+    expect_heading: "6."
+  - id: ur-sec-030
+    lang: ur
+    question: "شیوا فیلڈ کا کیا ہوا؟"
+    expect_heading: "7."
+  - id: ur-sec-031
+    lang: ur
+    question: "پیداوار کتنی ہے؟"
+    expect_heading: "8."
+  - id: ur-sec-032
+    lang: ur
+    question: "ذخائر کتنے ہیں؟"
+    expect_heading: "8."
+  - id: ur-sec-033
+    lang: ur
+    question: "ڈیجیٹل ٹرانسفارمیشن کیا ہے؟"
+    expect_heading: "9."
+  - id: ur-sec-034
+    lang: ur
+    question: "اے آئی کا استعمال کیسے ہوتا ہے؟"
+    expect_heading: "9."
+  - id: ur-sec-035
+    lang: ur
+    question: "ڈیٹا سینٹر کا منصوبہ کیا ہے؟"
+    expect_heading: "9."
+  - id: ur-sec-036
+    lang: ur
+    question: "گاہک کون ہیں؟"
+    expect_heading: "10."
+  - id: ur-sec-037
+    lang: ur
+    question: "کھاد کمپنیوں کو گیس دیتے ہیں؟"
+    expect_heading: "10."
+  - id: ur-sec-038
+    lang: ur
+    question: "منافع کتنا ہوا؟"
+    expect_heading: "11."
+  - id: ur-sec-039
+    lang: ur
+    question: "نیٹ سیلز کتنی ہیں؟"
+    expect_heading: "11."
+  - id: ur-sec-040
+    lang: ur
+    question: "ای پی ایس کیا ہے؟"
+    expect_heading: "11."
+  - id: ur-sec-041
+    lang: ur
+    question: "ڈیویڈنڈ کتنا دیا؟"
+    expect_heading: "11."
+  - id: ur-sec-042
+    lang: ur
+    question: "ماحول کے لیے کیا کرتے ہیں؟"
+    expect_heading: "12."
+  - id: ur-sec-043
+    lang: ur
+    question: "پائیداری کی رپورٹ"
+    expect_heading: "12."
+  - id: ur-sec-044
+    lang: ur
+    question: "کتنے درخت لگائے؟"
+    expect_heading: "12."
+  - id: ur-sec-045
+    lang: ur
+    question: "خواتین ملازمین کتنی ہیں؟"
+    expect_heading: "12.6"
+  - id: ur-sec-046
+    lang: ur
+    question: "ریکروٹمنٹ کا کیا پروسیس ہے؟"
+    expect_heading: "13.4"
+  - id: ur-sec-047
+    lang: ur
+    question: "نوکری کے لیے اپلائی کیسے کریں؟"
+    expect_heading: "13."
+  - id: ur-sec-048
+    lang: ur
+    question: "انٹرویو کیسے ہوتا ہے؟"
+    expect_heading: "13.4"
+  - id: ur-sec-049
+    lang: ur
+    question: "ٹریننگ کا انتظام ہے؟"
+    expect_heading: "13.2"
+  - id: ur-sec-050
+    lang: ur
+    question: "یہاں کام کرنے کے فائدے کیا ہیں؟"
+    expect_heading: "13.5"
+  - id: ur-sec-051
+    lang: ur
+    question: "سی ایس آر میں کیا کرتے ہیں؟"
+    expect_heading: "14."
+  - id: ur-sec-052
+    lang: ur
+    question: "تعلیم کے لیے کیا کیا؟"
+    expect_heading: "14.4"
+  - id: ur-sec-053
+    lang: ur
+    question: "صحت کے منصوبے کون سے ہیں؟"
+    expect_heading: "14.2"
+  - id: ur-sec-054
+    lang: ur
+    question: "ماری میل پروگرام کیا ہے؟"
+    expect_heading: "14.3"
+  - id: ur-sec-055
+    lang: ur
+    question: "سرمایہ کاروں کے لیے رابطہ"
+    expect_heading: "15."
+  - id: ur-sec-056
+    lang: ur
+    question: "مالی رپورٹس کہاں ملیں گی؟"
+    expect_heading: "15."
+  - id: ur-sec-057
+    lang: ur
+    question: "سپلائر کیسے بنیں؟"
+    expect_heading: "16."
+  - id: ur-sec-058
+    lang: ur
+    question: "حالیہ اعلانات کیا ہیں؟"
+    expect_heading: "17."
+  - id: ur-sec-059
+    lang: ur
+    question: "مارکیٹ کیپ کتنا ہے؟"
+    expect_heading: "18."
+  - id: ur-sec-060
+    lang: ur
+    question: "ملازمین کی تعداد کتنی ہے؟"
+    expect_heading: "18."
+  - id: ur-sec-061
+    lang: ur
+    question: "پی ایس ایکس سمبل کیا ہے؟"
+    expect_heading: "18."
+  - id: ur-fact-062
+    lang: ur
+    question: "این ٹی این نمبر کیا ہے؟"
+    expect_heading: "1.4"
+    expect_facts: ["1414673"]
+  - id: ur-fact-063
+    lang: ur
+    question: "جی ایس ٹی نمبر بتائیں"
+    expect_heading: "1.4"
+    expect_facts: ["2710"]
+  - id: ur-fact-064
+    lang: ur
+    question: "کمپنی کا رجسٹریشن نمبر"
+    expect_heading: "1.4"
+    expect_facts: ["00012471"]
+  - id: ur-fact-065
+    lang: ur
+    question: "شیئرز رجسٹرار کون ہے؟"
+    expect_heading: "1.4"
+    expect_facts: ["Corplink"]
+  - id: ur-fact-066
+    lang: ur
+    question: "بینک پارٹنرز کون سے ہیں؟"
+    expect_heading: "1.4"
+    expect_facts: ["Meezan"]
+  - id: ur-fact-067
+    lang: ur
+    question: "لیگل ایڈوائزر کون ہے؟"
+    expect_heading: "1.4"
+    expect_facts: ["Panni"]
+  - id: ur-fact-068
+    lang: ur
+    question: "سی ایف او کون ہے؟"
+    expect_heading: "4.6"
+    expect_facts: ["Nabeel"]
+  - id: ur-fact-069
+    lang: ur
+    question: "فری فلوٹ کتنا ہے؟"
+    expect_heading: "15.2"
+    expect_facts: ["Free Float"]
+  - id: ur-fact-070
+    lang: ur
+    question: "آیلہ مجید کون ہیں؟"
+    expect_heading: "4.2"
+    expect_facts: ["Ayla"]
+  - id: ur-fact-071
+    lang: ur
+    question: "بھٹائی سکس ویل کیا ہے؟"
+    expect_heading: "7.4"
+    expect_facts: ["Bhitai"]
+  - id: ur-fact-072
+    lang: ur
+    question: "سیڈ پروگرام کیا ہے؟"
+    expect_heading: "13.2"
+    expect_facts: ["SEED"]
+  - id: ur-fact-073
+    lang: ur
+    question: "وزیرستان بلاک میں کیا ہو رہا ہے؟"
+    expect_heading: "5.4"
+    expect_facts: ["Waziristan"]
+  - id: ur-fact-074
+    lang: ur
+    question: "ڈہرکی فیلڈ کہاں ہے؟"
+    expect_heading: "2."
+    expect_facts: ["Daharki"]
+  - id: ur-fact-075
+    lang: ur
+    question: "غنی کیمیکل کے ساتھ کیا معاہدہ ہے؟"
+    expect_heading: "3.1"
+    expect_facts: ["Ghani"]
+  - id: ur-fact-076
+    lang: ur
+    question: "سجاول بلاک کا کیا حال ہے؟"
+    expect_heading: "7.3"
+    expect_facts: ["Sujawal"]
+  - id: ur-fact-077
+    lang: ur
+    question: "کریڈٹ ریٹنگ کیا ہے؟"
+    expect_heading: "1.4"
+    expect_facts: ["AAA"]
+  - id: ur-fact-078
+    lang: ur
+    question: "فہیم حیدر کون ہیں؟"
+    expect_heading: "4."
+    expect_facts: ["Faheem"]
+  - id: ur-fact-079
+    lang: ur
+    question: "ہیڈ آفس کا پتہ کیا ہے؟"
+    expect_heading: "1.10"
+    expect_facts: ["Mauve"]
+  - id: ur-fact-080
+    lang: ur
+    question: "مارکیٹ کیپیٹلائزیشن کتنی ہے؟"
+    expect_heading: "18."
+    expect_facts: ["753"]
+  - id: ur-fact-081
+    lang: ur
+    question: "سوہو ویل کے بارے میں بتائیں"
+    expect_heading: "6."
+    expect_facts: ["Soho"]
+  - id: en-082
+    lang: en
+    question: "What does Mari Energies do?"
+    expect_heading: "1."
+  - id: en-083
+    lang: en
+    question: "What is the company's tagline?"
+    expect_heading: "1."
+    expect_facts: ["challenges inspire excellence"]
+  - id: en-084
+    lang: en
+    question: "Who owns Mari Energies?"
+    expect_heading: "1.5"
+    expect_facts: ["Fauji"]
+  - id: en-085
+    lang: en
+    question: "What percentage does Fauji Foundation hold?"
+    expect_heading: "1.5"
+    expect_facts: ["40"]
+  - id: en-086
+    lang: en
+    question: "What is the company's vision?"
+    expect_heading: "1.6"
+  - id: en-087
+    lang: en
+    question: "What are Mari Energies' core values?"
+    expect_heading: "1.7"
+  - id: en-088
+    lang: en
+    question: "Where is the head office?"
+    expect_heading: "1.10"
+    expect_facts: ["Mauve"]
+  - id: en-089
+    lang: en
+    question: "What is the phone number?"
+    expect_heading: "1.10"
+    expect_facts: ["111"]
+  - id: en-090
+    lang: en
+    question: "What is the credit rating?"
+    expect_heading: "1.4"
+    expect_facts: ["AAA"]
+  - id: en-091
+    lang: en
+    question: "Who are the external auditors?"
+    expect_heading: "1.4"
+    expect_facts: ["Ferguson"]
+  - id: en-092
+    lang: en
+    question: "What are the company's four verticals?"
+    expect_heading: "1.11"
+  - id: en-093
+    lang: en
+    question: "When was the Mari gas field discovered?"
+    expect_heading: "2."
+    expect_facts: ["1954"]
+  - id: en-094
+    lang: en
+    question: "Why did MPCL change its name?"
+    expect_heading: "2."
+  - id: en-095
+    lang: en
+    question: "What subsidiaries does Mari Energies have?"
+    expect_heading: "3.1"
+  - id: en-096
+    lang: en
+    question: "What is Vision 2030?"
+    expect_heading: "3.2"
+  - id: en-097
+    lang: en
+    question: "Who is the CEO?"
+    expect_heading: "4."
+    expect_facts: ["Faheem"]
+  - id: en-098
+    lang: en
+    question: "Who is the chairman of the board?"
+    expect_heading: "4."
+    expect_facts: ["Hyder"]
+  - id: en-099
+    lang: en
+    question: "Who sits on the board of directors?"
+    expect_heading: "4.2"
+  - id: en-100
+    lang: en
+    question: "What board committees are there?"
+    expect_heading: "4.3"
+  - id: en-101
+    lang: en
+    question: "Who is the chief financial officer?"
+    expect_heading: "4.6"
+    expect_facts: ["Nabeel"]
+  - id: en-102
+    lang: en
+    question: "How many exploration blocks does Mari hold?"
+    expect_heading: "5."
+  - id: en-103
+    lang: en
+    question: "Tell me about the offshore expansion"
+    expect_heading: "5.3"
+    expect_facts: ["offshore"]
+  - id: en-104
+    lang: en
+    question: "How many wells were drilled in the last five years?"
+    expect_heading: "5.5"
+  - id: en-105
+    lang: en
+    question: "What is the reserves to production ratio?"
+    expect_heading: "5.6"
+    # "20 years", not "20": a bare "20" appears in almost every financial chunk, so it
+    # would pass on a retrieval that never found the ratio at all.
+    expect_facts: ["20 years"]
+  - id: en-106
+    lang: en
+    question: "What are the recent discoveries?"
+    expect_heading: "6."
+  - id: en-107
+    lang: en
+    question: "What happened at the Shewa field?"
+    expect_heading: "7.1"
+    expect_facts: ["Shewa"]
+  - id: en-108
+    lang: en
+    question: "What is the Bhitai-6 smart completion?"
+    expect_heading: "7.4"
+    expect_facts: ["Bhitai"]
+  - id: en-109
+    lang: en
+    question: "What is the production capacity?"
+    expect_heading: "8."
+    expect_facts: ["127"]
+  - id: en-110
+    lang: en
+    question: "How large are the reserves?"
+    expect_heading: "8.4"
+    expect_facts: ["952"]
+  - id: en-111
+    lang: en
+    question: "How does Mari Energies use artificial intelligence?"
+    expect_heading: "9.2"
+  - id: en-112
+    lang: en
+    question: "What is the data centre project?"
+    expect_heading: "9.7"
+    expect_facts: ["Sky47"]
+  - id: en-113
+    lang: en
+    question: "Who are Mari Energies' customers?"
+    expect_heading: "10."
+    expect_facts: ["fertilizer"]
+  - id: en-114
+    lang: en
+    question: "What was the profit last year?"
+    expect_heading: "11."
+    expect_facts: ["65"]
+  - id: en-115
+    lang: en
+    question: "What were net sales in FY2024-25?"
+    expect_heading: "11."
+    expect_facts: ["177"]
+  - id: en-116
+    lang: en
+    question: "What is the earnings per share?"
+    expect_heading: "11."
+    expect_facts: ["54.25"]
+  - id: en-117
+    lang: en
+    question: "How much dividend was paid?"
+    expect_heading: "11."
+  - id: en-118
+    lang: en
+    question: "What does Mari Energies do for the environment?"
+    expect_heading: "12."
+  - id: en-119
+    lang: en
+    question: "How many trees have been planted?"
+    expect_heading: "12."
+  - id: en-120
+    lang: en
+    question: "How many women work at Mari Energies?"
+    expect_heading: "12.6"
+  - id: en-121
+    lang: en
+    question: "What is the recruitment process?"
+    expect_heading: "13.4"
+  - id: en-122
+    lang: en
+    question: "How do I apply for a job?"
+    expect_heading: "13."
+  - id: en-123
+    lang: en
+    question: "What training does Mari Energies offer?"
+    expect_heading: "13.2"
+    expect_facts: ["SEED"]
+  - id: en-124
+    lang: en
+    question: "What are the benefits of working here?"
+    expect_heading: "13.5"
+  - id: en-125
+    lang: en
+    question: "What CSR work does the company do?"
+    expect_heading: "14."
+  - id: en-126
+    lang: en
+    question: "What healthcare initiatives are there?"
+    expect_heading: "14.2"
+  - id: en-127
+    lang: en
+    question: "What is the Mari Meal Program?"
+    expect_heading: "14.3"
+    expect_facts: ["Nourish"]
+  - id: en-128
+    lang: en
+    question: "How do I contact investor relations?"
+    expect_heading: "15.1"
+  - id: en-129
+    lang: en
+    question: "What is the free float of shares?"
+    expect_heading: "15.2"
+    expect_facts: ["Free Float"]
+  - id: en-130
+    lang: en
+    question: "Where can I find the financial reports?"
+    expect_heading: "15.5"
+  - id: en-131
+    lang: en
+    question: "How do I become a supplier?"
+    expect_heading: "16."
+  - id: en-132
+    lang: en
+    question: "What are the recent announcements?"
+    expect_heading: "17."
+  - id: en-133
+    lang: en
+    question: "What is the PSX symbol?"
+    expect_heading: "18."
+    expect_facts: ["MARI"]
+  - id: en-134
+    lang: en
+    question: "How many employees does Mari Energies have?"
+    expect_heading: "18."
+    expect_facts: ["1,760"]
+  - id: en-135
+    lang: en
+    question: "What is the share price of Apple today?"
+    expect_heading: null
+  - id: en-136
+    lang: en
+    question: "How do I cook biryani?"
+    expect_heading: null
+  - id: en-137
+    lang: en
+    question: "کیا آپ موسم بتا سکتی ہیں؟"
+    expect_heading: null
+
+  # ── additional negative cases ──────────────────────────────────────
+  # Calibrating a "return nothing" threshold against three examples is not calibration.
+  # These are the shapes of off-corpus question a public kiosk actually receives: other
+  # companies, live market data the corpus cannot hold, adjacent-but-absent topics
+  # (Mari's *competitors*, its share price *today*), and plain chit-chat. Several are
+  # deliberately near-miss — they use in-domain vocabulary about out-of-domain facts,
+  # which is the case a naive similarity threshold gets wrong.
+  - id: neg-138
+    lang: en
+    question: "What is OGDCL's annual profit?"
+    expect_heading: null
+  - id: neg-139
+    lang: en
+    question: "How does Mari Energies compare to Pakistan Petroleum Limited?"
+    expect_heading: null
+  - id: neg-140
+    lang: en
+    question: "What will the share price be next year?"
+    expect_heading: null
+  - id: neg-141
+    lang: en
+    question: "Who is the Prime Minister of Pakistan?"
+    expect_heading: null
+  - id: neg-142
+    lang: en
+    question: "What is the weather in Islamabad today?"
+    expect_heading: null
+  - id: neg-143
+    lang: en
+    question: "Can you book me a taxi?"
+    expect_heading: null
+  - id: neg-144
+    lang: en
+    question: "What is the capital of France?"
+    expect_heading: null
+  - id: neg-145
+    lang: ur
+    question: "او جی ڈی سی ایل کا منافع کتنا ہے؟"
+    expect_heading: null
+  - id: neg-146
+    lang: ur
+    question: "آج ڈالر کا ریٹ کیا ہے؟"
+    expect_heading: null
+  - id: neg-147
+    lang: ur
+    question: "پاکستان کا وزیر اعظم کون ہے؟"
+    expect_heading: null
+  - id: neg-148
+    lang: ur
+    question: "مجھے ایک لطیفہ سنائیں"
+    expect_heading: null
+  - id: neg-149
+    lang: ur
+    question: "کرکٹ میچ کا اسکور کیا ہے؟"
+    expect_heading: null
+  - id: neg-150
+    lang: ur
+    question: "اسلام آباد میں آج موسم کیسا ہے؟"
+    expect_heading: null

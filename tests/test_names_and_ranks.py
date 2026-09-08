@@ -101,12 +101,12 @@ def test_every_retired_spelling_the_model_writes(suffix: str) -> None:
     assert said.startswith("Retired Brigadier Ahmad is Secretary.")
 
 
-def test_md_ampersand_ceo_is_spelled_out() -> None:
-    """The model writes "MD & CEO" as well as "MD/CEO". Both are spelled out in full by
-    voice_config.addresses — "the MD and CEO" was still heard as "ESDM didn't see EO"."""
+def test_md_ampersand_ceo_is_separated() -> None:
+    """The model writes "MD & CEO" as well as "MD/CEO"; both go through the hyphenated
+    form in voice_config.addresses — "the MD and CEO" collided ("ESDM didn't see EO")."""
     from server.providers.tts import _spoken
 
-    assert "Managing Director and Chief Executive Officer" in _spoken("serves as MD & CEO", "en")
+    assert "M-D and C-E-O" in _spoken("serves as MD & CEO", "en")
 
 
 def test_late_moves_in_front_of_the_rank() -> None:
@@ -137,12 +137,11 @@ def test_dropping_the_honour_leaves_no_stray_comma() -> None:
 
 @pytest.mark.parametrize(
     "lang,expected",
-    [("en", "Managing Director and Chief Executive Officer"),
-     ("ur", "منیجنگ ڈائریکٹر اور چیف ایگزیکٹو آفیسر")],
+    [("en", "M-D and C-E-O"), ("ur", "M-D اور C-E-O")],
 )
-def test_md_slash_ceo_is_spelled_out(lang: str, expected: str) -> None:
-    """"MD/CEO" is read as "complete search seekie ko"; even "MD and CEO" collides
-    across the "and", so each title is spelled out in full."""
+def test_md_slash_ceo_is_separated(lang: str, expected: str) -> None:
+    """"MD/CEO" is read as one run-on token ("MD/C8 August"), and a plain "MD and CEO"
+    still collides across the "and". Hyphenating the letters separates them."""
     from server.providers.tts import _spoken
 
     assert expected in _spoken("The MD/CEO is here.", lang)
@@ -157,6 +156,51 @@ def test_chairman_line_from_the_knowledge_base() -> None:
     # "Anwar Ali Hyder" measured better in Latin than in Urdu script, so only the rank
     # and the honour are rewritten here.
     assert said.startswith("Board Chairman: Retired Lieutenant General Anwar Ali Hyder")
+
+
+# ── the persona's own name, and the salam ────────────────────────────
+# Same trick as the names above and as "ماڑی": in English mode the Urdu-first voice
+# applies English phonetics to Latin script, so the two phrases Maryam says most often
+# come out in an English accent. Urdu script makes the same voice say them as a
+# Pakistani speaker does. Only the TTS payload changes — the kiosk still displays the
+# Latin spelling the model wrote.
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "Assalamualaikum! I'm Maryam from Mari Energies.",
+        "Assalam-o-Alaikum, I'm Maryam.",
+        "As-salamu alaykum. Maryam here.",
+        "Salam alaikum! Maryam speaking.",
+    ],
+)
+def test_the_salam_and_her_name_are_said_in_urdu_in_english_mode(reply: str) -> None:
+    said = _spoken(reply, "en")
+    assert "السلام علیکم" in said
+    assert "مریم" in said
+    assert "Maryam" not in said and "alaikum" not in said.lower()
+
+
+def test_a_returned_salam_is_not_split_across_the_two_rules() -> None:
+    """"Walaikum assalam" overlaps _SALAM on the word "salam"; it must match as one."""
+    said = _spoken("Walaikum assalam, I'm Maryam.", "en")
+    assert "وعلیکم السلام" in said and "السلام علیکم" not in said
+
+
+def test_urdu_mode_leaves_an_already_urdu_salam_alone() -> None:
+    said = _spoken("السلام علیکم! میں مریم ہوں۔", "ur")
+    assert said.count("السلام علیکم") == 1 and "مریم" in said
+
+
+def test_urdu_mode_still_respells_a_latin_name_the_model_left_behind() -> None:
+    """The Urdu prompt asks for Latin-script names, and sometimes catches her own."""
+    assert "مریم" in _spoken("میں Maryam ہوں۔", "ur")
+
+
+@pytest.mark.parametrize("reply", ["The marina is in Marietta.", "Mary and Sam arrived.",
+                                   "Salamanders live there."])
+def test_words_that_merely_look_like_the_persona_phrases_are_untouched(reply: str) -> None:
+    assert _spoken(reply, "en") == reply
 
 
 def test_credit_rating_a1_is_not_glued_into_a_non_word() -> None:

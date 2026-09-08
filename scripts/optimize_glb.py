@@ -39,9 +39,14 @@ Usage:
     python scripts/optimize_glb.py IN.glb OUT.glb [--keep-morph-normals]
 
 Re-run it whenever the avatar is re-exported, and re-check KEEP_WINDOWS below
-against AvatarModel.tsx's SEGMENTS if the clip is re-authored: they are the one
-thing here that encodes an assumption about the animation rather than reading it
-out of the file.
+against the female rig's loop windows in frontend/components/avatar/models.ts if
+the clip is re-authored: they are the one thing here that encodes an assumption
+about the animation rather than reading it out of the file.
+
+This script is aimed at girl15.glb specifically, and there is nothing for it to
+do on male1.glb: that rig is 31 MB of textures against 1.0 MB of animation, has
+no cloth sim to requantise and no morph targets to strip normals from, so all
+three passes together would take under a megabyte off it.
 """
 
 from __future__ import annotations
@@ -60,10 +65,10 @@ BIN_CHUNK = 0x004E4942
 
 FPS = 30.0
 
-# Must mirror SEGMENTS in frontend/components/avatar/AvatarModel.tsx. Frames
-# outside these windows are never sampled: each segment is a self-contained
-# loop and transitions crossfade between them rather than playing through.
-# Given as inclusive frame numbers.
+# Must mirror the FEMALE rig's loop windows in
+# frontend/components/avatar/models.ts. Frames outside these windows are never
+# sampled: each segment is a self-contained loop and transitions crossfade
+# between them rather than playing through. Given as inclusive frame numbers.
 KEEP_WINDOWS = [
     (119, 241),  # breathing
     (300, 393),  # listening
