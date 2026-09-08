@@ -11,6 +11,7 @@ models/
 frontend/public/models/*
 !frontend/public/models/girl15.glb
 !frontend/public/models/girl15.glb.gz
+!frontend/public/models/male1.glb
 *.bin
 .DS_Store
 Thumbs.db
@@ -22,6 +23,7 @@ deploy/a2f/.env
 # Local-only scripts/docs, not for version control
 mari.sh
 ARCHITECTURE.md
+docker-compose.override.yml
 
 # Node / frontend
 node_modules/
@@ -54,3 +56,8 @@ secrets.json
 
 # Local env backups
 .env.bak-*
+
+# Retrieval layer: the ingest metadata DB is derived state, rebuilt by
+# scripts/rag_ingest.py. Committing it would make every checkout think the corpus
+# was already ingested against whatever index happens to be running.
+server/data/.rag_metadata.sqlite*

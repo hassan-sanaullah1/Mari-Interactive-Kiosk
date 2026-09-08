@@ -1,7 +1,13 @@
 "use client";
 
 /**
- * girl15.glb — the MARI presenter.
+ * The MARI presenter — either rig, driven by the config it is handed.
+ *
+ * Everything that differs between the two presenters lives in ./models.ts (loop
+ * windows, material names, whether the rig has blendshapes at all); everything
+ * in this file is the machinery they share. The notes below were written
+ * against girl15.glb, which is still the default, and remain the reference for
+ * how that rig's numbers were arrived at — see models.ts for male1.glb's.
  *
  * Ported from the working implementation (THREEJS_A2F_INTEGRATION.md §4/§5/§9).
  *
@@ -35,14 +41,14 @@
  * unchanged, so they are its own optimum rather than inherited numbers.
  *
  * The shipped girl15.glb is the output of scripts/optimize_glb.py rather than the
- * raw export: keyframes outside the three SEGMENTS windows below are stripped, the
+ * raw export: keyframes outside its three loop windows (./models.ts) are stripped, the
  * morph-target NORMAL deltas are dropped and the cloth rotations are stored as
  * normalized int16, taking it from 56MB to 30MB (37MB to 20MB over the wire, where
  * it is the single largest thing the kiosk downloads).
  * Everything this file relies on is bit-identical across that transform — verified
  * through three.js on every playable frame: all 51 ARKit morph names and their
  * POSITION deltas, and all 1083 bone world matrices. Two consequences worth
- * knowing: SEGMENTS is now load-bearing for the ASSET and not just for playback,
+ * knowing: those windows are now load-bearing for the ASSET and not just for playback,
  * so widening a window here without re-running the script seeks into keyframes
  * that are no longer in the file; and a re-export has to go back through the
  * script or the file silently returns to 56MB.
@@ -59,10 +65,17 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useAnimations, useGLTF } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { fetchAvatar } from "@/lib/avatarFetch";
+import { fetchAvatar, releaseAvatar } from "@/lib/avatarFetch";
 import { applyA2FLipsync, createA2FMorphState } from "@/lib/a2fMorphs";
 import { setRigCalibration } from "@/lib/blendshapePlayer";
 import type { AvatarState } from "./state";
+import {
+  CLIP_NAME,
+  FPS,
+  type AvatarConfig,
+  type BodyState,
+  type Segment,
+} from "./models";
 
 // ---------------------------------------------------------------------------
 // Body animation — clip "CINEMA_4D_Main", 902 frames @ 30 fps (30.0s), holding
@@ -101,10 +114,8 @@ import type { AvatarState } from "./state";
 // reason the breathing loop starts where it does rather than at the first
 // frame the body is willing to loop from.
 // ---------------------------------------------------------------------------
-const FPS = 30;
-const CLIP_NAME = "CINEMA_4D_Main";
-
-type BodyState = "breathing" | "listening" | "talking";
+// FPS, CLIP_NAME, BodyState and Segment are shared with the registry — see
+// ./models.ts, which is where each rig's own windows are measured and kept.
 
 /**
  * A looping window of the clip, and nothing else.
@@ -133,25 +144,8 @@ type BodyState = "breathing" | "listening" | "talking";
  * crossfading into it from elsewhere costs more than it saves. Crossfading in
  * measured 0.0995m of wrist spread against 0.0062m for going direct.
  */
-interface Segment {
-  loop: [number, number];
-}
-
-const SEGMENTS: Record<BodyState, Segment> = {
-  // Starts at 119, not 0: the clip opens on ~38 frames of frozen pose, and of
-  // the breathing cycles that follow this is the pair whose cloth agrees as
-  // well as the body does (body 0.005, cloth 0.036 — one frame's worth).
-  breathing: { loop: [119 / FPS, 241 / FPS] },
-  // The arms are settled into the listening pose by 300, after the authored
-  // hands-rise at 241–300. (body 0.070, cloth 0.245 at the loop seam.)
-  listening: { loop: [300 / FPS, 393 / FPS] },
-  // Starting at 558 rather than 490 halves the cloth drift at the seam
-  // (body 0.002, cloth 1.10). Frames 393–558 ahead of it are the authored
-  // settle-into-gesturing, and 780–901 behind it the authored settle back
-  // down; both are left out of the loop deliberately, see Segment.
-  talking: { loop: [558 / FPS, 780 / FPS] },
-};
-
+// The Segment type itself, and each rig's windows, live in ./models.ts.
+//
 /** Crossfade (s) hiding a loop seam — both ends are near-identical poses. */
 const LOOP_XFADE_SECS = 0.35;
 /**
@@ -212,8 +206,8 @@ const bodyStateFor = (state: AvatarState): BodyState => {
  * a different rig. Tune live with ?a2fGain= / ?a2fShapes=jawopen: — the query
  * string overrides both.
  */
-const A2F_GAIN = 0.9;
-const A2F_SHAPE_GAINS: Record<string, number> = { jawopen: 0.375 };
+// The numbers are per-rig (`a2f` in ./models.ts); girl15's are 0.9 with jawOpen
+// trimmed to 0.375 of that, and a rig with no morphs has none at all.
 
 /**
  * Horizontal placement. The rig's origin is already its visual centreline, so
@@ -238,7 +232,8 @@ const AVATAR_POSITION_X = 0;
  * usually crops them — a visible forearm and an invisible shin should not be
  * different colours if the shot ever widens.
  */
-const SKIN_MATERIALS = new Set(["lambert11", "lambert13", "lambert12"]);
+// Per-rig, as `skinMaterials` in ./models.ts: girl15's lambert11/12/13 and
+// male1's Std_Skin_Head/Arm/Leg.
 
 /**
  * How much to lift skin, as an emissive term.
@@ -261,7 +256,8 @@ const SKIN_EMISSIVE_INTENSITY = 0.25;
  * lambert11 samples Arm_Diffuse and lambert12 the head. Verified against the
  * file's texture/image indices.)
  */
-const FACE_MATERIAL = "lambert12";
+// Per-rig, as `faceMaterial` in ./models.ts — null for a rig with no makeup,
+// which skips the read-back below entirely.
 
 /**
  * How much chroma to remove from the makeup. 0 = texture as authored,
@@ -427,7 +423,7 @@ const makeLayer = (): Layer => ({
  * hand-tuned.
  *
  * Rotations only, summed as quaternion angle over the body joints — the same
- * measure the loop windows in SEGMENTS were derived with (see the header), and
+ * measure each rig's loop windows were derived with (see ./models.ts), and
  * for the same reason: this rig is authored in centimetres under a 0.01-scaled
  * root, so translations would weight the rig's units against it. The 975 baked
  * cloth joints are skipped as well; a baked sim never repeats, so matching it is
@@ -571,6 +567,7 @@ function blendedPoseSample(index: PoseIndex, layers: Layer[]): Float32Array | nu
  * hundred samples, once per transition.
  */
 function bestLoopEntry(
+  segments: Record<BodyState, Segment>,
   index: PoseIndex | null,
   state: BodyState,
   fromPose: Float32Array | null,
@@ -583,7 +580,7 @@ function bestLoopEntry(
    */
   excludeTailSecs = 0,
 ): number {
-  const [loopStart, loopEnd] = SEGMENTS[state].loop;
+  const [loopStart, loopEnd] = segments[state].loop;
   if (!index || !fromPose) return loopStart;
 
   const first = sampleIndexFor(index, loopStart);
@@ -615,6 +612,7 @@ function bestLoopEntry(
  * pose-matched transition gets in at the frame it picked.
  */
 function beginSegment(
+  segments: Record<BodyState, Segment>,
   layers: Layer[],
   activeIndexRef: { current: number },
   state: BodyState,
@@ -638,7 +636,7 @@ function beginSegment(
     }
   }
 
-  const segment = SEGMENTS[state];
+  const segment = segments[state];
   const incoming = layers[index];
   incoming.state = state;
   incoming.time = entryTime ?? segment.loop[0];
@@ -661,8 +659,12 @@ function beginSegment(
  * than wrapped — a layer only reaches it while its replacement is already
  * fading in, and wrapping there would snap the pose behind the fade.
  */
-function advanceLayer(layer: Layer, delta: number): void {
-  const [loopStart, loopEnd] = SEGMENTS[layer.state].loop;
+function advanceLayer(
+  segments: Record<BodyState, Segment>,
+  layer: Layer,
+  delta: number,
+): void {
+  const [loopStart, loopEnd] = segments[layer.state].loop;
   layer.time += delta;
   if (layer.time < loopStart) layer.time = loopStart;
   if (layer.time > loopEnd) layer.time = loopEnd;
@@ -670,6 +672,8 @@ function advanceLayer(layer: Layer, delta: number): void {
 
 export interface AvatarModelProps {
   url: string;
+  /** Which rig this is, and everything that differs about it — see ./models.ts. */
+  config: AvatarConfig;
   state?: AvatarState;
   /** Reports the rig's world-space height once, so the scene can frame it. */
   onMeasure?: (height: number) => void;
@@ -711,12 +715,33 @@ function useSharedFetch(loader: THREE.Loader) {
   };
   gltf.load = (url, onLoad, _onProgress, onError) => {
     fetchAvatar(url)
-      .then((buf) => gltf.parse(buf, "", onLoad, onError))
+      .then((buf) =>
+        gltf.parse(
+          buf,
+          "",
+          (result) => {
+            // Parsed — drei caches the result under this URL from here on, so
+            // switching presenters and back never asks for the bytes again and
+            // holding them would just pin tens of MB per rig behind geometry
+            // that is already on the GPU.
+            releaseAvatar(url);
+            onLoad(result);
+          },
+          onError,
+        ),
+      )
       .catch((err) => onError?.(err));
   };
 }
 
-export default function AvatarModel({ url, state = "idle", onMeasure, onReady }: AvatarModelProps) {
+export default function AvatarModel({
+  url,
+  config,
+  state = "idle",
+  onMeasure,
+  onReady,
+}: AvatarModelProps) {
+  const segments = config.segments;
   // The loader is pointed at the single shared download (lib/avatarFetch.ts)
   // rather than issuing its own request. Without this the preload, this loader
   // and the progress readout are three separate requests for the same 20MB;
@@ -727,12 +752,14 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
   const blinkRef = useRef({ nextBlink: 2, blinkProgress: 0 });
   const a2fStateRef = useRef(createA2FMorphState());
 
-  // This rig gets its own amplitude calibration; restore the shared defaults on
-  // unmount.
+  // Each rig gets its own amplitude calibration; restore the shared defaults on
+  // unmount, and for a rig with no morphs leave them alone entirely — there is
+  // nothing for A2F to drive, so its own gain is the honest thing to keep.
   useEffect(() => {
-    setRigCalibration({ gain: A2F_GAIN, shapeGains: A2F_SHAPE_GAINS });
+    if (!config.a2f) return;
+    setRigCalibration({ gain: config.a2f.gain, shapeGains: config.a2f.shapeGains });
     return () => setRigCalibration(null);
-  }, []);
+  }, [config]);
 
   const { actions, mixer } = useAnimations(animations, groupRef);
 
@@ -837,7 +864,7 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
     clonedClipsRef.current = clones;
 
     const initial = bodyStateFor(state);
-    const loopStart = SEGMENTS[initial].loop[0];
+    const loopStart = segments[initial].loop[0];
     const layers = layersRef.current;
 
     pool.forEach((action, i) => {
@@ -875,7 +902,7 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
     signalReadyAfterPosedFrame();
     // Intentionally excludes `state`: this sets the *initial* pose only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actions, animations, mixer]);
+  }, [actions, animations, mixer, segments]);
 
   // ── CONVERSATION STATE → DEBOUNCED TARGET SEGMENT ───────────
   useEffect(() => {
@@ -958,7 +985,12 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
         // Tone the painted-on makeup before anything else reads std.map — the
         // emissive lift below points at the same texture, so it has to pick up
         // the desaturated copy or the lips would be lifted at full chroma.
-        if (std.name === FACE_MATERIAL && std.map && !desaturated.has(std.map)) {
+        if (
+          config.faceMaterial &&
+          std.name === config.faceMaterial &&
+          std.map &&
+          !desaturated.has(std.map)
+        ) {
           const toned = desaturateMakeup(std.map, MAKEUP_DESATURATION);
           if (toned) {
             desaturated.add(toned);
@@ -972,10 +1004,10 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
           std.map.needsUpdate = true;
         }
 
-        // Face and hands only — see SKIN_MATERIALS. Driving the emissive from
-        // the diffuse map keeps the skin's own shading; a flat emissive colour
-        // would fill the shadow side of the face and flatten it.
-        if (SKIN_MATERIALS.has(std.name)) {
+        // Face and hands only — see `skinMaterials` in ./models.ts. Driving the
+        // emissive from the diffuse map keeps the skin's own shading; a flat
+        // emissive colour would fill the shadow side of the face and flatten it.
+        if (config.skinMaterials.has(std.name)) {
           std.emissiveMap = std.map;
           std.emissive.setRGB(1, 1, 1);
           std.emissiveIntensity = SKIN_EMISSIVE_INTENSITY;
@@ -1001,7 +1033,7 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
         std.needsUpdate = true;
       }
     });
-  }, [scene, gl]);
+  }, [scene, gl, config]);
 
   // ── MORPH TARGET MESHES ─────────────────────────────────────
   const morphMeshes = useMemo(() => {
@@ -1026,8 +1058,25 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
   // shift girl12 shipped with: it announced itself with a "weight_0_" entry,
   // and it also cost the list its last real name.
   useEffect(() => {
+    if (!config.hasMorphs) {
+      // A rig declared without blendshapes has nothing to check and nothing to
+      // drive — say so once rather than leaving the silent mouth a mystery.
+      if (morphMeshes.length === 0) {
+        console.info(
+          `[Avatar] ${url}: no morph targets — lipsync and blinking are off for this rig.`,
+        );
+      }
+      return;
+    }
     const dict = morphMeshes[0]?.morphTargetDictionary;
-    if (!dict) return;
+    if (!dict) {
+      console.error(
+        `[Avatar] ${url}: expected ARKit morph targets and found none — ` +
+          `lipsync will be silent. Re-export with blendshapes, or set ` +
+          `hasMorphs: false for this rig in models.ts.`,
+      );
+      return;
+    }
     const missing = ["eyeBlinkLeft", "eyeBlinkRight", "jawOpen", "browDownLeft"].filter(
       (name) => dict[name] === undefined,
     );
@@ -1039,7 +1088,7 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
           `Re-export with the names aligned.`,
       );
     }
-  }, [morphMeshes, url]);
+  }, [morphMeshes, url, config]);
 
   // Blink indices, resolved once. This rig uses the ARKit names, and every
   // primitive (eyelashes included) carries them.
@@ -1078,19 +1127,26 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
         const poseIndex = poseIndexRef.current;
         const fromPose = poseIndex ? blendedPoseSample(poseIndex, layers) : null;
         beginSegment(
+          segments,
           layers,
           activeLayerRef,
           target,
           SWITCH_XFADE_SECS,
-          bestLoopEntry(poseIndex, target, fromPose, SWITCH_XFADE_SECS + LOOP_XFADE_SECS),
+          bestLoopEntry(
+            segments,
+            poseIndex,
+            target,
+            fromPose,
+            SWITCH_XFADE_SECS + LOOP_XFADE_SECS,
+          ),
         );
       } else if (active.weight >= 0.999) {
         // Settled on a segment: start the seam crossfade one fade-length before
         // the loop end, so the incoming copy is up to speed by the time the
         // outgoing one runs out of frames.
-        const loopEnd = SEGMENTS[active.state].loop[1];
+        const loopEnd = segments[active.state].loop[1];
         if (active.time >= loopEnd - LOOP_XFADE_SECS) {
-          // The windows in SEGMENTS were chosen so that loop[1] already matches
+          // Every rig's windows are cut so that loop[1] already matches
           // loop[0]; re-deriving the entry here costs one search and keeps the
           // seam honest if those windows are ever re-cut for a new rig. At
           // weight >= 0.999 the pool is effectively just this layer, so its
@@ -1101,13 +1157,14 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
           const poseIndex = poseIndexRef.current;
           const fromPose = poseIndex ? blendedPoseSample(poseIndex, layers) : null;
           beginSegment(
+            segments,
             layers,
             activeLayerRef,
             active.state,
             LOOP_XFADE_SECS,
             // Rule out the whole crossfade tail, so the layer coming in has
             // frames left to play before its own seam comes round.
-            bestLoopEntry(poseIndex, active.state, fromPose, LOOP_XFADE_SECS * 2),
+            bestLoopEntry(segments, poseIndex, active.state, fromPose, LOOP_XFADE_SECS * 2),
           );
         }
       }
@@ -1120,7 +1177,7 @@ export default function AvatarModel({ url, state = "idle", onMeasure, onReady }:
         if (layer.weight <= 0 && layer.targetWeight <= 0) continue;
         // Fading-out layers keep playing rather than freezing — a body that
         // stops mid-motion behind the fade is visible even at low weight.
-        advanceLayer(layer, delta);
+        advanceLayer(segments, layer, delta);
         const step = delta * layer.fadeRate;
         layer.weight =
           layer.targetWeight > layer.weight

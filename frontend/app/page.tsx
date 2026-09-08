@@ -9,11 +9,17 @@ import LanguageBar from "@/components/LanguageBar";
 import LoadingScreen from "@/components/LoadingScreen";
 import { useVoiceSession } from "@/hooks/useVoiceSession";
 import { applyTheme, readTheme, type Theme } from "@/lib/theme";
+import { applyAvatar, readAvatar } from "@/lib/avatar";
+import { DEFAULT_AVATAR, type AvatarId } from "@/components/avatar/models";
 import { COPY, type Lang } from "@/lib/i18n";
 
 export default function Page() {
   const [lang, setLang] = useState<Lang>("en");
   const [theme, setTheme] = useState<Theme>("dark");
+  // Starts on the default rather than on the stored choice: this renders on the
+  // server too, and reading localStorage during render would not match. The
+  // effect below corrects it before the model is fetched.
+  const [avatar, setAvatar] = useState<AvatarId>(DEFAULT_AVATAR);
   const [chatOpen, setChatOpen] = useState(false);
   // False until the avatar reports it has loaded AND is posed — see
   // AvatarModel's onReady. The rest of the page mounts and loads underneath
@@ -26,14 +32,30 @@ export default function Page() {
   const voice = useVoiceSession(lang);
   const t = COPY[lang];
 
-  // Pick up the theme the inline script in layout.tsx already applied.
+  // Pick up the theme the inline script in layout.tsx already applied, and the
+  // stored presenter, which has no such script — see lib/avatar.ts.
   useEffect(() => {
     setTheme(readTheme());
+    setAvatar(readAvatar());
   }, []);
 
   const changeTheme = (t: Theme) => {
     setTheme(t);
     applyTheme(t);
+  };
+
+  /**
+   * Switching presenters re-arms the loading overlay, because it is a fresh
+   * multi-megabyte download and a fresh parse. Without this the old rig stays
+   * on screen, apparently frozen, until the new one is posed — and coming back
+   * to a rig already in drei's cache still needs it, because `avatarReady` is
+   * what un-hides the canvas and the new rig has not signalled it yet.
+   */
+  const changeAvatar = (id: AvatarId) => {
+    if (id === avatar) return;
+    setAvatarReady(false);
+    setAvatar(id);
+    applyAvatar(id);
   };
 
   useEffect(() => {
@@ -56,12 +78,20 @@ export default function Page() {
       {/* The 3D presenter. `mode` drives her body animation (idle → listening →
           talking); her mouth is driven separately by the Audio2Face frames that
           arrive alongside the reply audio. */}
-      <AvatarStage mode={voice.mode} levelRef={voice.levelRef} onReady={onAvatarReady} ready={avatarReady} />
+      <AvatarStage
+        mode={voice.mode}
+        avatar={avatar}
+        levelRef={voice.levelRef}
+        onReady={onAvatarReady}
+        ready={avatarReady}
+      />
 
       <LanguageBar
         className={styles.langBar}
         lang={lang}
         onLang={setLang}
+        avatar={avatar}
+        onAvatar={changeAvatar}
         theme={theme}
         onTheme={changeTheme}
       />

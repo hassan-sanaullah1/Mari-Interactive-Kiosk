@@ -76,3 +76,38 @@ export function SendIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+/**
+ * Presenter silhouettes for the avatar toggle — a head over shoulders, the
+ * female one with longer hair and the male with a flat-topped short cut.
+ *
+ * Drawn rather than labelled because the pill sits in a bottom-left cluster
+ * that is already at its width budget on a 402-unit phone (see
+ * LanguageBar.module.css), and because a glyph needs no translating between
+ * English and Urdu.
+ */
+export function FemaleAvatarIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      {/* hair falling past the jaw, behind the head */}
+      <path d="M12 1.9c-3.2 0-5.2 2.1-5.2 5.1 0 1.5.1 2.7-.5 4.1-.2.5.1.9.6.9h1.4a4.6 4.6 0 0 1-.6-2.3V7.2a9.6 9.6 0 0 0 6.4-2 6 6 0 0 0 2.1 2v2.5c0 .9-.2 1.6-.6 2.3h1.4c.5 0 .8-.4.6-.9-.6-1.4-.5-2.6-.5-4.1 0-3-2-5.1-5.1-5.1Z" />
+      {/* face */}
+      <circle cx="12" cy="9" r="3.4" />
+      {/* shoulders */}
+      <path d="M12 13.6c-3.9 0-7 2.5-7.6 5.9-.2.9.5 1.7 1.4 1.7h12.4c.9 0 1.6-.8 1.4-1.7-.6-3.4-3.7-5.9-7.6-5.9Z" />
+    </svg>
+  );
+}
+
+export function MaleAvatarIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      {/* short, flat-topped hair sitting on the crown only */}
+      <path d="M12 2.1c-2.7 0-4.6 1.6-4.6 3.9 0 .5.4.8.9.7a15 15 0 0 1 7.4 0c.5.1.9-.2.9-.7 0-2.3-1.9-3.9-4.6-3.9Z" />
+      {/* face */}
+      <circle cx="12" cy="9.2" r="3.5" />
+      {/* shoulders, squarer than the female silhouette */}
+      <path d="M12 13.8c-4 0-7.1 2.4-7.7 5.8-.2.9.5 1.6 1.4 1.6h12.6c.9 0 1.6-.7 1.4-1.6-.6-3.4-3.7-5.8-7.7-5.8Z" />
+    </svg>
+  );
+}

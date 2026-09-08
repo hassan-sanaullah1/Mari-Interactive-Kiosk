@@ -29,6 +29,11 @@ export default function LoadingScreen({ lang, ready }: LoadingScreenProps) {
 
   useEffect(() => {
     if (ready) return;
+    // Start each load from nothing. Switching presenters re-arms this overlay
+    // with the previous rig's percentage still in state, which would show the
+    // new download opening at "99%" and counting down.
+    setPct(null);
+    setSlow(false);
     // Subscribe to the one shared download (lib/avatarFetch.ts). This used to
     // open its own fetch for the model, which on a slow link was a third
     // parallel copy of the same 20MB — a progress indicator that made the thing

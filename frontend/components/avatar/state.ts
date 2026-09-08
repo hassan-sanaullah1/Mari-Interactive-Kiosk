@@ -5,6 +5,7 @@
  */
 
 import type { Mode } from "@/hooks/useVoiceSession";
+import { AVATARS, DEFAULT_AVATAR } from "./models";
 
 export type AvatarState = "idle" | "listening" | "thinking" | "speaking";
 
@@ -23,7 +24,12 @@ export function avatarStateFor(mode: Mode): AvatarState {
 }
 
 /**
- * Where the avatar lives, served from frontend/public.
+ * Where the DEFAULT avatar lives, served from frontend/public.
+ *
+ * The full per-model registry — URLs, loop windows, materials — is in
+ * ./models.ts, and the scene resolves its URL from there. This re-export is the
+ * default rig's URL under its original name, for app/netcheck, which times a
+ * cold and a warm fetch of one representative model rather than of every rig.
  *
  * This points at the UNCOMPRESSED .glb on purpose, even though a .gz sits next
  * to it and is 10MB smaller. The deployed host throttles each connection rather
@@ -37,4 +43,4 @@ export function avatarStateFor(mode: Mode): AvatarState {
  * behaves differently. The .gz is still built and served (see next.config.ts)
  * for exactly that fallback path.
  */
-export const AVATAR_MODEL_URL = "/models/girl15.glb";
+export const AVATAR_MODEL_URL = AVATARS[DEFAULT_AVATAR].url;

@@ -397,6 +397,15 @@ export function useVoiceSession(lang: Lang) {
 
     cancelledRef.current = false;
     endPendingRef.current = false;
+    // A new turn always starts a new reply bubble, exactly as sendText does.
+    // Without this the turn inherits whatever assistantIdRef was left holding,
+    // and bindReplyStream's {"reply"} branch appends this turn's sentences onto
+    // the PREVIOUS answer instead of creating one below the new question — so
+    // the spoken reply looks missing while a typed one (which clears the ref
+    // itself) looks fine. endOfTurn clears it too, but only on the path where
+    // the reply audio plays to the end; an interrupted, paused or stopped queue
+    // never gets there.
+    assistantIdRef.current = null;
     const vad = { started: false, silence: 0, elapsed: 0 };
     const queue = createQueue();
     queueRef.current = queue;

@@ -1,6 +1,13 @@
-/* Bottom-left cluster: language pill (265x58, r29) + theme switch (d59),
-   separated by a 22-unit gap. Reference geometry, 2000x1125 space.
-   Both follow the active theme; only the dock's ✕/pause stay permanently dark. */
+/* Bottom-left cluster: language pill (265x58, r29) + presenter pill + theme
+   switch (d59), each separated by a 22-unit gap. Reference geometry, 2000x1125
+   space. All three follow the active theme; only the dock's ✕/pause stay
+   permanently dark.
+
+   Width matters here: on a phone the cluster shares one bottom row with the
+   chat launcher on the right (see app/page.module.css), and the reference space
+   is only 402 units across. The language pill's two word segments take ~168 of
+   those, so the presenter pill uses square icon segments (~106) rather than a
+   second pair of word segments (~180), which would not fit. */
 
 .bar {
   display: flex;
@@ -71,4 +78,63 @@
 .themeIcon {
   width: 44%;
   height: 44%;
+}
+
+/* --- presenter switch --- */
+
+/* Square rather than --pill-seg wide: these segments hold a silhouette, not a
+   word, so the word width would be all padding. */
+.iconSeg {
+  min-width: calc(var(--pill-h) - 2 * var(--pill-pad));
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.avatarIcon {
+  width: 62%;
+  height: 62%;
+}
+
+/* The phone form: one round button, identical to the theme switch next to it.
+   Hidden here and shown at the breakpoint below; the pill is hidden there in
+   turn, so exactly one of the two is ever in the layout — and `display: none`
+   keeps the other out of the accessibility tree as well as off the screen. */
+.compactAvatar {
+  display: none;
+  width: var(--theme-btn);
+  height: var(--theme-btn);
+  border-radius: 50%;
+  background: var(--surface);
+  place-items: center;
+  color: var(--text);
+  box-shadow: 0 calc(2 * var(--s)) calc(14 * var(--s)) rgba(0, 0, 0, 0.34);
+  transition: background 140ms ease, color 180ms ease;
+}
+
+.compactAvatar:hover {
+  background: var(--surface-hover);
+}
+
+.compactAvatar:active {
+  transform: scale(0.94);
+}
+
+/* Larger than .themeIcon's 44%: a silhouette needs more area than a sun to
+   stay legible at this size. */
+.compactIcon {
+  width: 52%;
+  height: 52%;
+}
+
+/* Matches app/page.module.css's phone breakpoint, where the cluster shares a
+   row with the chat launcher and the two-segment pill no longer fits. */
+@media (max-width: 760px) {
+  .pill.iconPill {
+    display: none;
+  }
+
+  .compactAvatar {
+    display: grid;
+  }
 }

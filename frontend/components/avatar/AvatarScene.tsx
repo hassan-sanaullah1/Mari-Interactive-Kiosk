@@ -36,8 +36,10 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Environment, Lightformer } from "@react-three/drei";
 import * as THREE from "three";
 import AvatarModel from "./AvatarModel";
-import { fetchAvatar } from "@/lib/avatarFetch";
-import { AVATAR_MODEL_URL, type AvatarState } from "./state";
+import { fetchAvatar, isAvatarParsed } from "@/lib/avatarFetch";
+import { type AvatarState } from "./state";
+import { avatarConfig, DEFAULT_AVATAR, type AvatarId } from "./models";
+import { readAvatar } from "@/lib/avatar";
 
 // Start the ONE shared download the moment this chunk evaluates, rather than
 // waiting for <AvatarModel> to mount under Suspense.
@@ -50,8 +52,15 @@ import { AVATAR_MODEL_URL, type AvatarState } from "./state";
 // first is still in flight, nothing can be shared, and they become parallel
 // copies of the same 20MB competing for one pipe.
 //
-// fetchAvatar is idempotent, so this and every later caller share one transfer.
-fetchAvatar(AVATAR_MODEL_URL).catch(() => {
+// fetchAvatar is idempotent per URL, so this and every later caller share one
+// transfer.
+//
+// It warms the STORED presenter, not the default one. This module is only ever
+// evaluated in the browser (AvatarStage imports it with ssr: false), so the
+// stored choice is readable here, and reading it is what keeps a kiosk set to
+// the non-default rig from pulling BOTH models on every cold load — measured,
+// that was a whole unused 30MB ahead of the one it actually shows.
+fetchAvatar(avatarConfig(readAvatar()).url).catch(() => {
   // Swallowed deliberately: the component's error boundary owns the retry and
   // the user-visible failure. An unhandled rejection here would just be noise.
 });
@@ -74,8 +83,8 @@ const FRAME_HEIGHT_M = 1.15;
 const HEAD_ROOM = 0.045;
 /** Distance from the model. Together with the frame size this sets the fov. */
 const CAMERA_Z = 2.5;
-/** Fallback until the rig reports its real height (girl15.glb is ~1.68m). */
-const FALLBACK_HEIGHT = 1.68;
+// The fallback height used until the rig reports its real one is per-model
+// (`fallbackHeight` in ./models.ts) — the two rigs are ~1.68m and ~1.85m.
 
 /**
  * Drives the camera from the CONTAINER's size, not the viewport's — R3F's
@@ -192,9 +201,8 @@ const LIGHT_CONFIGS: Record<AvatarState, LightConfig> = {
 /** Per-frame approach rate toward the active preset — slow enough that a state
  *  change takes about a second to land. */
 const LERP_SPEED = 0.04;
-/** Where the face spot aims. Retune if the rig's proportions change; girl15's
- *  head sits around here (its rig is the same 1.68m figure as girl11's). */
-const HEAD_TARGET_Y = 1.45;
+// Where the face spot aims is per-model too (`headTargetY` in ./models.ts):
+// girl15's face centre sits at 1.45 and male1's, on a taller rig, at 1.60.
 
 /**
  * `levelRef` carries this app's smoothed 0..1 amplitude (useVoiceSession's
@@ -206,9 +214,11 @@ const HEAD_TARGET_Y = 1.45;
 interface DynamicLightingProps {
   state?: AvatarState;
   levelRef?: { current: number };
+  /** World Y the face spot aims at — this rig's face centre. */
+  headTargetY: number;
 }
 
-function DynamicLighting({ state = "idle", levelRef }: DynamicLightingProps) {
+function DynamicLighting({ state = "idle", levelRef, headTargetY }: DynamicLightingProps) {
   const keyLightRef = useRef<THREE.DirectionalLight>(null);
   const fillLightRef = useRef<THREE.DirectionalLight>(null);
   const rimLightRef = useRef<THREE.SpotLight>(null);
@@ -261,7 +271,7 @@ function DynamicLighting({ state = "idle", levelRef }: DynamicLightingProps) {
     if (faceLightRef.current) {
       // A spotLight's default target is a bare Object3D outside the scene
       // graph, so its world matrix has to be refreshed by hand.
-      faceLightRef.current.target.position.set(0, HEAD_TARGET_Y, 0);
+      faceLightRef.current.target.position.set(0, headTargetY, 0);
       faceLightRef.current.target.updateMatrixWorld();
     }
   });
@@ -318,7 +328,7 @@ function DynamicLighting({ state = "idle", levelRef }: DynamicLightingProps) {
         color={KICK_COLOR}
         castShadow={false}
       />
-      {/* Tight face spot, aimed at HEAD_TARGET_Y by the frame loop above. */}
+      {/* Tight face spot, aimed at the rig's headTargetY by the frame loop above. */}
       <spotLight
         ref={faceLightRef}
         position={[0, 2.2, 1]}
@@ -352,12 +362,25 @@ function DynamicLighting({ state = "idle", levelRef }: DynamicLightingProps) {
  */
 class ModelErrorBoundary extends Component<
   { url: string; children: (url: string) => ReactNode },
-  { failed: boolean }
+  { failed: boolean; forUrl: string }
 > {
-  state = { failed: false };
+  state = { failed: false, forUrl: this.props.url };
 
   static getDerivedStateFromError() {
     return { failed: true };
+  }
+
+  /**
+   * A failure belongs to the model that failed. Without this the flag is
+   * sticky across a presenter switch, and the rig the user just picked would be
+   * fetched cache-busted on its very first attempt — one guaranteed extra
+   * multi-megabyte download for an error the other model had.
+   */
+  static getDerivedStateFromProps(
+    props: { url: string },
+    state: { failed: boolean; forUrl: string },
+  ) {
+    return props.url === state.forUrl ? null : { failed: false, forUrl: props.url };
   }
 
   componentDidCatch(error: unknown) {
@@ -375,7 +398,8 @@ class ModelErrorBoundary extends Component<
 
 export interface AvatarSceneProps {
   state?: AvatarState;
-  url?: string;
+  /** Which presenter to show. Defaults to the registry's default rig. */
+  avatar?: AvatarId;
   /** Smoothed 0..1 amplitude, from useVoiceSession. Optional: without it the
    *  key and rim lights simply hold their per-state intensities. */
   levelRef?: { current: number };
@@ -385,14 +409,47 @@ export interface AvatarSceneProps {
 
 export default function AvatarScene({
   state = "idle",
-  url = AVATAR_MODEL_URL,
+  avatar = DEFAULT_AVATAR,
   levelRef,
   onReady,
 }: AvatarSceneProps) {
-  const [modelHeight, setModelHeight] = useState(FALLBACK_HEIGHT);
-  const onMeasure = useCallback((h: number) => {
-    if (Number.isFinite(h) && h > 0.2) setModelHeight(h);
-  }, []);
+  const config = avatarConfig(avatar);
+
+  /**
+   * The rig's height, tagged with the rig it was measured on.
+   *
+   * Tagged rather than reset, because the two rigs differ by ~17cm and framing
+   * one against the other's height is most of a head at this shot. Deriving the
+   * height during render instead of clearing it from an effect keeps that
+   * correct no matter how the mount interleaves: a measurement only ever
+   * applies to the rig it came from, and any other rig frames on its own
+   * fallback until it reports. (An effect that reset the height on config
+   * change happened to work, but only because the incoming rig's measure landed
+   * after the parent's reset — an ordering React does not owe us, and one that
+   * silently flips when the model is already in drei's cache.)
+   */
+  const [measured, setMeasured] = useState<{ id: AvatarId; height: number } | null>(null);
+  const modelHeight = measured?.id === config.id ? measured.height : config.fallbackHeight;
+  const onMeasure = useCallback(
+    (h: number) => {
+      if (Number.isFinite(h) && h > 0.2) setMeasured({ id: config.id, height: h });
+    },
+    [config.id],
+  );
+
+  // The presenter's own bytes, warmed as soon as the choice is known — the
+  // module-scope call above only covers whichever rig was stored at load.
+  //
+  // Skipped for a rig that has already been parsed once this session: drei then
+  // serves it from its own cache without calling the loader, so warming it
+  // again is a download nothing consumes. Without that check, every toggle back
+  // and forth re-pulled a whole model.
+  useEffect(() => {
+    if (isAvatarParsed(config.url)) return;
+    fetchAvatar(config.url).catch(() => {
+      /* the error boundary owns the retry and the user-visible failure */
+    });
+  }, [config]);
 
   return (
     <Canvas
@@ -405,7 +462,7 @@ export default function AvatarScene({
       resize={{ scroll: false }}
     >
       <Framing modelHeight={modelHeight} />
-      <DynamicLighting state={state} levelRef={levelRef} />
+      <DynamicLighting state={state} levelRef={levelRef} headTargetY={config.headTargetY} />
 
       {/* Reflections only — an <Environment> with no `background` prop does not
           draw anything, so the artwork behind the canvas stays visible. */}
@@ -415,9 +472,18 @@ export default function AvatarScene({
         <Lightformer intensity={0.5} position={[3, 0, -2]} scale={[2, 3, 1]} color="#ffd6e0" />
       </Environment>
 
-      <ModelErrorBoundary url={url}>
+      {/* Keyed on the rig, so switching presenters tears the old one down
+          rather than trying to reconcile two different skeletons through the
+          same component instance. */}
+      <ModelErrorBoundary key={config.id} url={config.url}>
         {(modelUrl) => (
-          <AvatarModel url={modelUrl} state={state} onMeasure={onMeasure} onReady={onReady} />
+          <AvatarModel
+            url={modelUrl}
+            config={config}
+            state={state}
+            onMeasure={onMeasure}
+            onReady={onReady}
+          />
         )}
       </ModelErrorBoundary>
     </Canvas>
