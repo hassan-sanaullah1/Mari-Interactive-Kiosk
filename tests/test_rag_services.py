@@ -8,6 +8,7 @@ and none of those need a real model to verify.
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from pathlib import Path
 
@@ -15,12 +16,15 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from server.services.expansion import expand_for_lexical, has_urdu  # noqa: E402
+from server.services.expansion import (  # noqa: E402
+    expand_for_lexical, has_urdu, strip_corpus_subject,
+)
 from server.services.generation import GenerationService  # noqa: E402
 from server.services.metadata import MetadataService  # noqa: E402
 from server.services.retriever import RetrievalResult, RetrievedChunk, Retriever  # noqa: E402
 from server.services.rewriter import needs_rewrite  # noqa: E402
 from server.services.settings import RagSettings  # noqa: E402
+from server.services.store import Hit  # noqa: E402
 from server.services.transcript import correct_transcript  # noqa: E402
 
 
@@ -185,6 +189,117 @@ def test_gate_on_empty_input() -> None:
     assert _retriever()._gate([], 0.02) == []
 
 
+# ── section expansion ───────────────────────────────────────────────
+
+class _FakeStore:
+    """Stands in for Qdrant. `fetch_section` is the only method expansion touches."""
+
+    def __init__(self, sections: dict[str, list[str]]) -> None:
+        self.sections = sections
+        self.asked: list[str] = []
+
+    async def fetch_section(self, section: str, limit: int = 32):
+        self.asked.append(section)
+        return [
+            Hit(text=text, source="kb.md", heading_path=f"{section} > sub",
+                chunk_index=i, score=0.0, payload={})
+            for i, text in enumerate(self.sections.get(section, []))
+        ]
+
+
+def _ranked(section: str, text: str, score: float = 0.9) -> RetrievedChunk:
+    return RetrievedChunk(text=text, source="kb.md", heading_path=f"{section} > sub",
+                          score=score, fusion_score=score, reranked=True)
+
+
+def _expander(store, **kw) -> Retriever:
+    r = Retriever(store=store, settings=RagSettings(**kw))
+    return r
+
+
+def test_expansion_completes_the_section_that_ranked() -> None:
+    """The failure this exists for: the right section is retrieved and the answer is
+    still partial, because only one of its chunks reached the model."""
+    store = _FakeStore({"6. Discoveries": ["first", "second", "third"]})
+    r = _expander(store)
+    chunks, added = asyncio.run(r._expand_section([_ranked("6. Discoveries", "first")]))
+    assert added == 2
+    assert [c.text for c in chunks] == ["first", "second", "third"]
+    assert all(c.expanded for c in chunks[1:])
+    assert not chunks[0].expanded
+
+
+def test_expansion_does_not_reorder_the_ranked_chunks() -> None:
+    """Appending only. This is why expansion cannot cost hit@k, and the guarantee the
+    measured "ranking metrics unchanged" result rests on."""
+    store = _FakeStore({"A": ["a1", "a2"], "B": ["b1"]})
+    r = _expander(store)
+    ranked = [_ranked("A", "a1", 0.9), _ranked("B", "b1", 0.5)]
+    chunks, _ = asyncio.run(r._expand_section(ranked))
+    assert chunks[:2] == ranked
+
+
+def test_only_the_rank_one_section_is_completed() -> None:
+    """Regression, and the expensive kind — this asserted the OPPOSITE first.
+
+    Completing every retrieved section raises section recall and lowers context
+    precision, because the company-overview section is weakly relevant to everything and
+    so gets completed constantly. Measured, it appends ~1,400 off-topic chunks against
+    ~160 useful ones across the tester set. See `Retriever._sections_to_complete`.
+    """
+    store = _FakeStore({"2. History": ["h1", "h2"], "17. Recent": ["r1", "r2"]})
+    r = _expander(store)
+    chunks, _ = asyncio.run(
+        r._expand_section([_ranked("2. History", "h1"), _ranked("17. Recent", "r1")])
+    )
+    assert store.asked == ["2. History"]
+    assert {c.text for c in chunks} == {"h1", "h2", "r1"}
+
+
+def test_expansion_respects_its_char_budget() -> None:
+    store = _FakeStore({"A": ["x" * 400, "y" * 400, "z" * 400]})
+    r = _expander(store, section_expansion_chars=500)
+    _, added = asyncio.run(r._expand_section([_ranked("A", "seed")]))
+    assert added == 1
+
+
+def test_expansion_skips_an_oversized_chunk_rather_than_stopping() -> None:
+    """Sections are in document order, not size order, so one long chunk in the middle
+    must not hide the short ones behind it."""
+    store = _FakeStore({"A": ["x" * 5000, "short"]})
+    r = _expander(store, section_expansion_chars=1000)
+    chunks, added = asyncio.run(r._expand_section([_ranked("A", "seed")]))
+    assert added == 1
+    assert chunks[-1].text == "short"
+
+
+def test_expansion_does_not_duplicate_an_already_retrieved_chunk() -> None:
+    store = _FakeStore({"A": ["seed", "other"]})
+    r = _expander(store)
+    chunks, added = asyncio.run(r._expand_section([_ranked("A", "seed")]))
+    assert added == 1
+    assert [c.text for c in chunks] == ["seed", "other"]
+
+
+def test_expansion_can_be_turned_off() -> None:
+    store = _FakeStore({"A": ["a1", "a2"]})
+    r = _expander(store, section_expansion=False)
+    chunks, added = asyncio.run(r._expand_section([_ranked("A", "a1")]))
+    assert added == 0 and len(chunks) == 1
+
+
+def test_a_store_failure_leaves_the_ranked_chunks_untouched() -> None:
+    """Completeness is an improvement, not a promise — it must never fail a turn."""
+    class _Broken(_FakeStore):
+        async def fetch_section(self, section: str, limit: int = 32):
+            raise RuntimeError("qdrant is down")
+
+    r = _expander(_Broken({}))
+    ranked = [_ranked("A", "a1")]
+    chunks, added = asyncio.run(r._expand_section(ranked))
+    assert added == 0 and chunks == ranked
+
+
 # ── context assembly ────────────────────────────────────────────────
 
 def test_assembly_dedupes_and_caps_length() -> None:
@@ -260,3 +375,48 @@ def test_metadata_summary_counts(tmp_path: Path) -> None:
     assert summary["documents"] == 2 and summary["chunks"] == 7 and summary["ready"] == 2
     db.delete("a.md")
     assert db.summary()["documents"] == 1
+
+
+# ── corpus-subject stripping (dense channel only) ───────────────────
+
+@pytest.mark.parametrize("query,expected", [
+    ("What discoveries has Mari Energies made recently?", "What discoveries has made recently?"),
+    ("Who is Mari Energies' CEO?", "Who is CEO?"),
+    ("What was MariEnergies' FY2024-25 net profit?", "What was FY2024-25 net profit?"),
+    ("MPCL history", "history"),
+    ("What is Mari Petroleum Company Limited's tagline?", "What is tagline?"),
+])
+def test_the_corpus_subject_is_removed(query: str, expected: str) -> None:
+    """Every chunk is about this company, so its name cannot pick between them — and a
+    dense embedding, unlike BM25, has no document frequency to discount it with."""
+    assert strip_corpus_subject(query) == expected
+
+
+def test_an_orphaned_possessive_does_not_survive() -> None:
+    """" ' " left dangling embeds as a token of its own and measurably hurt."""
+    assert "'" not in strip_corpus_subject("Where is Mari Energies' head office located?")
+
+
+@pytest.mark.parametrize("query", [
+    "Mari Energies?",
+    "tell me about MariEnergies",
+    "What is Mari Energies?",
+])
+def test_a_query_that_is_only_the_subject_is_left_alone(query: str) -> None:
+    """Nothing retrievable survives the strip, and the overview section really is the
+    right answer. The check counts content words, not tokens: "tell me about" is four
+    tokens of pure function word."""
+    assert strip_corpus_subject(query) == query
+
+
+def test_urdu_queries_are_untouched() -> None:
+    """Measured identical either way — the cross-lingual embedding does not align the
+    Urdu form onto the English name strongly enough for it to dominate."""
+    q = "ماری انرجیز کا سی ای او کون ہے؟"
+    assert strip_corpus_subject(q) == q
+
+
+def test_stripping_leaves_other_company_names_alone() -> None:
+    """OGDCL and Fauji Foundation are genuinely discriminating here."""
+    q = "What stake does OGDCL hold in Mari Energies?"
+    assert "OGDCL" in strip_corpus_subject(q)

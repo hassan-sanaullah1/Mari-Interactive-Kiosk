@@ -70,7 +70,22 @@ UPLIFT_VOICE = env("APP_UPLIFT_VOICE_ID", "v_8eelc901v6")
 # Uplift also handles English (see APP_EN_TTS=uplift below). Same voice by default so
 # the kiosk keeps one persona across both languages; override for a separate English one.
 UPLIFT_VOICE_EN = env("APP_UPLIFT_VOICE_ID_EN", UPLIFT_VOICE)
+# The male presenter's voice. UPLIFT_VOICE above is the female rig's, and stays the
+# default so a deployment that never shows the male rig — or never sets this — sounds
+# exactly as it did. Ids: https://docs.upliftai.org/orator_voices
+UPLIFT_VOICE_MALE = env("APP_UPLIFT_VOICE_ID_MALE", UPLIFT_VOICE)
 UPLIFT_FORMAT = env("APP_UPLIFT_OUTPUT_FORMAT", "MP3_22050_32")
+# Speaking rate. Below 1.0 because at the default the voice clips short unstressed
+# words — visitors reported "about us" with the "us" swallowed. Measured by
+# synthesising the phrase and reading the word timings back off a transcription, the
+# "us" lasts 0.18s at 1.0 and 0.26s at 0.9, which is the difference between hearing it
+# and not. The curve is NOT monotonic (0.95 measured WORSE than 1.0, at 0.14s), so
+# retune by measuring rather than by nudging this number in the direction that seems
+# right. Applies to both languages, since one Uplift voice serves both.
+try:
+    UPLIFT_SPEED = float(env("APP_UPLIFT_SPEED", "0.9"))
+except ValueError:  # a typo in the env must not take the kiosk's voice down
+    UPLIFT_SPEED = 0.9
 
 # ── English STT/TTS. STT runs LOCALLY by default (the s2s built-in faster-whisper).
 #    English TTS defaults to Uplift — the same provider (and voice) as Urdu, reading

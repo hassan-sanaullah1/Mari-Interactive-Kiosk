@@ -69,6 +69,12 @@ FPS = 30.0
 # frontend/components/avatar/models.ts. Frames outside these windows are never
 # sampled: each segment is a self-contained loop and transitions crossfade
 # between them rather than playing through. Given as inclusive frame numbers.
+#
+# These are the DEFAULT because girl15 is what this script was written for. Any
+# other rig has its own windows cut from its own curves and MUST pass them with
+# --keep-windows: trimming one rig's animation to another's frame numbers keeps
+# the wrong keys, and the failure is silent until the body seeks into a frame
+# that is no longer in the file.
 KEEP_WINDOWS = [
     (119, 241),  # breathing
     (300, 393),  # listening
@@ -156,7 +162,8 @@ class BinBuilder:
         return b"".join(self.parts)
 
 
-def optimize(src, dst, drop_morph_normals=True, quantize=True):
+def optimize(src, dst, drop_morph_normals=True, quantize=True,
+             keep_windows=None, trim_anim=True):
     gltf, binary = read_glb(src)
     before = len(binary)
 
@@ -172,8 +179,14 @@ def optimize(src, dst, drop_morph_normals=True, quantize=True):
     # frame if any window contains it. One frame of margin each side, because a
     # crossfade samples slightly past a window edge and the loop-entry search
     # compares against the frame before the window starts.
+    windows = KEEP_WINDOWS if keep_windows is None else keep_windows
+
     def wanted(frame_idx: int) -> bool:
-        return any(a - 1 <= frame_idx <= b + 1 for a, b in KEEP_WINDOWS)
+        # trim_anim False keeps every key — for a rig whose animation is a small
+        # fraction of the file and whose windows are not worth encoding here.
+        if not trim_anim:
+            return True
+        return any(a - 1 <= frame_idx <= b + 1 for a, b in windows)
 
     anim_kept = anim_total = 0
     new_acc = []          # accessors rebuilt as (data, accessor-json)
@@ -457,9 +470,22 @@ def main():
                          "marginally different face shading)")
     ap.add_argument("--no-quantize", action="store_true",
                     help="keep cloth rotation/translation as float32")
+    ap.add_argument("--keep-windows", metavar="A-B,C-D,...",
+                    help="inclusive frame windows to keep, overriding the "
+                         "female rig's. REQUIRED for any rig other than "
+                         "girl15 — see KEEP_WINDOWS.")
+    ap.add_argument("--no-trim-anim", action="store_true",
+                    help="keep every animation keyframe (skips pass 1)")
     a = ap.parse_args()
+    windows = None
+    if a.keep_windows:
+        windows = []
+        for part in a.keep_windows.split(","):
+            lo, hi = part.split("-")
+            windows.append((int(lo), int(hi)))
     return optimize(a.src, a.dst, drop_morph_normals=not a.keep_morph_normals,
-                    quantize=not a.no_quantize)
+                    quantize=not a.no_quantize, keep_windows=windows,
+                    trim_anim=not a.no_trim_anim)
 
 
 if __name__ == "__main__":

@@ -4,9 +4,11 @@ avatar *says*, kept out of the pipeline code that decides *when* it says it.
     prompts/*.md         persona, rules and greetings, per language
     addresses.py         addresses, contact details, formulae and symbol abbreviations
     glossary.py          ABBR → full-form pairs mined from the knowledge base
-    greetings.py         deterministic "السلام علیکم" opener, and feminine agreement
+    greetings.py         deterministic "السلام علیکم" opener, and gender agreement
     names.py             spoken forms for people's names, ranks and honours
-    urdu_normalise.py    spoken-form fixes for what the Uplift voice mispronounces
+    places.py            Urdu/Pashto place, field and programme names
+    urdu_normalise.py    Uplift's Urdu mispronunciations, and report formats/symbols
+    english_normalise.py percent, slashes, times and Latin abbreviations (English only)
 
 The prompt files hold exactly the text that previously lived as string literals in
 ``server/knowledge.py``; that module now loads them through :func:`load_prompt` and
@@ -19,10 +21,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from .addresses import spoken_addresses
-from .greetings import feminine_agreement, force_salam
+from .english_normalise import normalise_for_english
+from .greetings import feminine_agreement, force_salam, gender_agreement, masculine_agreement
 from .glossary import extract_glossary, find_glossary_matches, format_glossary_block
 from .names import spoken_names_and_ranks
-from .urdu_normalise import normalise_for_uplift, spoken_urls
+from .places import spoken_places
+from .urdu_normalise import normalise_for_uplift, spoken_formats, spoken_urls
 
 PROMPT_DIR = Path(__file__).resolve().parent / "prompts"
 
@@ -33,11 +37,16 @@ __all__ = [
     "find_glossary_matches",
     "format_glossary_block",
     "normalise_for_uplift",
+    "normalise_for_english",
     "spoken_names_and_ranks",
     "spoken_urls",
+    "spoken_formats",
     "spoken_addresses",
+    "spoken_places",
     "force_salam",
     "feminine_agreement",
+    "masculine_agreement",
+    "gender_agreement",
 ]
 
 

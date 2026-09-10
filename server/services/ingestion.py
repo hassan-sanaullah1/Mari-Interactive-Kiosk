@@ -150,6 +150,12 @@ class IngestionService:
                     "text": c.text,
                     "source": c.source,
                     "heading_path": c.heading_path,
+                    # The top-level section this chunk belongs to, denormalised out of
+                    # the heading path so retrieval can look it up by exact keyword
+                    # match. Derived here rather than at query time because the split
+                    # rule then lives in one place: a chunk's section is decided once,
+                    # at ingest, and every reader agrees about it.
+                    "section": c.heading_path.split(" > ")[0] if c.heading_path else "",
                     "chunk_index": c.chunk_index,
                     "token_count": c.token_count,
                     "doc_hash": digest,

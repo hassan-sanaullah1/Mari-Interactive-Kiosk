@@ -7,7 +7,7 @@
  * windows, material names, whether the rig has blendshapes at all); everything
  * in this file is the machinery they share. The notes below were written
  * against girl15.glb, which is still the default, and remain the reference for
- * how that rig's numbers were arrived at — see models.ts for male1.glb's.
+ * how that rig's numbers were arrived at — see models.ts for male2.glb's.
  *
  * Ported from the working implementation (THREEJS_A2F_INTEGRATION.md §4/§5/§9).
  *
@@ -233,7 +233,7 @@ const AVATAR_POSITION_X = 0;
  * different colours if the shot ever widens.
  */
 // Per-rig, as `skinMaterials` in ./models.ts: girl15's lambert11/12/13 and
-// male1's Std_Skin_Head/Arm/Leg.
+// male2's lambert5/Std_Skin_Arm/Std_Skin_Leg.
 
 /**
  * How much to lift skin, as an emissive term.
@@ -245,7 +245,20 @@ const AVATAR_POSITION_X = 0;
  * a flat colour — pores, lips and nail beds keep their relative values, the
  * whole surface just sits higher.
  */
-const SKIN_EMISSIVE_INTENSITY = 0.25;
+// Per-rig now, as `skinEmissive` in ./models.ts: the lift is proportional to
+// the texture it samples, so one number cannot serve two skin tones. girl15
+// keeps the 0.25 this constant held; male2 takes 0, because his albedo is
+// already bright enough that the term erased his shading instead of revealing
+// it. See that field for the measurements.
+
+/**
+ * Materials whose albedo has already been scaled by `materialTint`.
+ *
+ * The scale is in-place on a material that drei's glTF cache hands back across
+ * an unmount, so without this guard every presenter switch would darken the
+ * same material again.
+ */
+const tintedMaterials = new WeakSet<THREE.Material>();
 
 /**
  * Which material carries the face — and therefore the makeup.
@@ -303,6 +316,16 @@ function hueSaturation(r: number, g: number, b: number): [number, number] {
 
   return [hue, max === 0 ? 0 : delta / max];
 }
+
+/**
+ * Textures this pass has already produced, tracked at module scope so it
+ * survives across effect re-runs (and across component instances sharing the
+ * same three.js scene/texture objects — R3F's glTF cache keeps them alive
+ * when a model is swapped out and back). Without this, re-running the effect
+ * would desaturate an already-desaturated texture, and repeated model
+ * switches would walk the lipstick to black.
+ */
+const MAKEUP_TONED = new WeakSet<THREE.Texture>();
 
 /**
  * Tone the painted-on makeup down, once, on the CPU.
@@ -969,9 +992,6 @@ export default function AvatarModel({
   const gl = useThree((s) => s.gl);
   useEffect(() => {
     const maxAnisotropy = gl.capabilities.getMaxAnisotropy();
-    // The face material is shared across several meshes, and this effect can
-    // re-run; without this the same map would be re-toned and drift to grey.
-    const desaturated = new Set<THREE.Texture>();
 
     scene.traverse((child) => {
       const mesh = child as THREE.Mesh;
@@ -989,11 +1009,11 @@ export default function AvatarModel({
           config.faceMaterial &&
           std.name === config.faceMaterial &&
           std.map &&
-          !desaturated.has(std.map)
+          !MAKEUP_TONED.has(std.map)
         ) {
           const toned = desaturateMakeup(std.map, MAKEUP_DESATURATION);
           if (toned) {
-            desaturated.add(toned);
+            MAKEUP_TONED.add(toned);
             std.map.dispose();
             std.map = toned;
           }
@@ -1010,7 +1030,19 @@ export default function AvatarModel({
         if (config.skinMaterials.has(std.name)) {
           std.emissiveMap = std.map;
           std.emissive.setRGB(1, 1, 1);
-          std.emissiveIntensity = SKIN_EMISSIVE_INTENSITY;
+          std.emissiveIntensity = config.skinEmissive;
+          // Only where the export left roughnessFactor out — see skinRoughness.
+          // Scoped to that case so a rig with nothing to correct (girl15) takes
+          // exactly the path it took before this became per-rig.
+          if (config.skinRoughness !== null) std.roughness = config.skinRoughness;
+        }
+
+        // Albedo scale, matching this rig's exposure to the female rig's under
+        // the one shared light rig — see materialTint in ./models.ts.
+        const tint = config.materialTint[std.name];
+        if (tint !== undefined && !tintedMaterials.has(std)) {
+          tintedMaterials.add(std);
+          std.color.multiplyScalar(tint);
         }
 
         if (std.transparent) {

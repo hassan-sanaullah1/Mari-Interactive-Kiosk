@@ -107,56 +107,11 @@
 
 - **3.1.1** Mari Minerals (Pvt) Limited — Wholly owned subsidiary of MariEnergies, established in 2023 as part of the company's diversification strategy, focused on copper, gold, and REE (rare earth elements) mining.
 - **3.1.2** Mari Technologies Limited — Wholly owned subsidiary of MariEnergies, leading the company's expansion into the technology domain through the establishment of large-scale data centers.
-- **3.1.3** Sky47 Limited — MariEnergies (via Mari Technologies) holds a 60% majority equity stake, in joint venture with Paramount Ventures (30%) and Capital Smart Technologies (10%). Sky47 is Pakistan's largest cloud and AI infrastructure platform, operating Tier III/IV data centers. Its cloud, AI and Huawei partnership detail is in Section 3.1.3 below.
+- **3.1.3** Sky47 Limited — MariEnergies (via Mari Technologies) holds a 60% majority equity stake, in joint venture with Paramount Ventures (30%) and Capital Smart Technologies (10%). Sky47 is Pakistan's largest cloud and AI infrastructure platform, operating Tier III/IV data centers.
 - **3.1.4** Pakistan International Oil Limited (Abu Dhabi) — MariEnergies holds a 25% equity stake, representing the company's international presence.
 - **3.1.5** GHG Emissions Mitigation Limited (branded "GEM Energy") — MariEnergies holds a 51% equity stake, in joint venture with Ghani Chemical Industries Limited. Builds a methane-mitigation and gas-processing facility near the Sachal Gas Processing Complex, Mari Field, producing LNG and food/industrial-grade CO₂. See Section 1.11.4 for full project financing details.
 - **3.1.6** Ammuri Minerals (Pvt) Limited and Ammuri Resources (Pvt) Limited — MariEnergies holds a 25% equity stake in each, through Mari Minerals.
 - **3.1.7** Tuzgi Minerals (Pvt) Limited — Faheem Haider (MD/CEO) serves as Chairman and MD/CEO.
-
-### 3.1.3 Sky47 Limited — Cloud Services, AI Infrastructure, and the Huawei Partnership
-
-Sky47 Limited is the MariEnergies group company (60% owned via Mari Technologies Limited,
-with Paramount Ventures at 30% and Capital Smart Technologies at 10%) that delivers
-Pakistan's sovereign cloud and AI infrastructure. It operates Tier III/IV data centers and
-is described as Pakistan's first purpose-built, AI-ready sovereign cloud data center.
-
-#### 3.1.3.1 Sky47 Cloud — Sovereign Cloud Services
-
-- Sky47 Cloud is Sky47's sovereign cloud platform, commercially live since 15 January 2026, built to give Pakistani enterprises a secure, scalable cloud for digital transformation without offshore dependency.
-- Infrastructure as a Service (IaaS): virtual machines, auto-scaling, and high-performance compute.
-- Storage as a Service: high-performance block storage and object storage.
-- Platform as a Service (PaaS): Kubernetes container service, RDS managed databases (MySQL, PostgreSQL), distributed cache (Redis), a big data platform, and application O&M with log trace.
-- Network as a Service: load balancer, IPSEC VPN, Direct Connect dedicated connectivity, elastic IP, and NAT gateway.
-- Business continuity: Backup as a Service (BaaS), Disaster Recovery as a Service (DRaaS), and database replication service.
-- The platform is built on Huawei Cloud Stack (HCS), offers pay-as-you-go and allocation-based pricing, and carries a 99.95% uptime SLA.
-- It complies fully with Pakistan's Cloud-First Policy and data residency mandates, guaranteeing data privacy, regulatory alignment, low latency, and predictable pricing.
-
-#### 3.1.3.2 Sky47 Managed and Security Services
-
-- Sky47 Manage provides end-to-end operational management of cloud infrastructure, databases, and containerized workloads, backed by SLAs and dedicated 24/7 engineering support.
-- Managed Infrastructure (ECS): lifecycle management, 24/7 monitoring, patching, auto-scaling, and security group and access control optimization.
-- Managed Database (MDB): architecture design and deployment for MySQL, PostgreSQL, SQL Server, and MongoDB, with automated backup, replication, failover, query tuning, and RPO/RTO compliance.
-- Managed Kubernetes (MKS): cluster provisioning, policy-based access control, CI/CD pipeline integration, high-availability configuration, and day-2 operations support.
-- Managed NOC/SOC: performance tuning, capacity forecasting, unified dashboards, compliance-ready reporting, and continuous security posture improvement.
-- Sky47 Secure delivers the group's cybersecurity services, and Sky47 Space delivers carrier-neutral colocation from the same Tier III/IV facilities.
-
-#### 3.1.3.3 Sky47 AI — GPU as a Service and AI Solutions
-
-- Sky47 AI has been commercially live since 15 January 2026 and operates Pakistan's largest Cloud AI Farm.
-- GPU as a Service and AI infrastructure: Huawei Ascend NPU and NVIDIA-compatible GPU clusters, up to 50kW per rack density, liquid-cooled for AI/ML training and inference.
-- AI as a Service marketplace: pre-built models, partner APIs, and ready-to-deploy applications including LLMs, RAG, Vision AI, Speech AI, OCR, and Pangu Brain RAG.
-- Pay-as-you-grow, consumption-based billing for GPU and AI services.
-- Industry solutions span enterprise (customer support RAG, call center QA, voice agents, document AI), finance (fraud detection, financial crime analysis, risk modeling), healthcare (AI radiology, virtual medical scribe, AI drug discovery), industrial and mobility (predictive maintenance, construction monitoring, driver safety), and government (national education tutor, public safety, border and port security AI).
-- Custom AI development covers purpose-built models, tailored ML pipelines, and enterprise AI integration, all deployed on data-sovereign, low-latency infrastructure.
-
-#### 3.1.3.4 Huawei Partnership
-
-- Sky47 signed its partnership with Huawei in September 2025 at the 2nd Pakistan-China B2B Conference in China.
-- Scope: collaboration to strengthen Pakistan's digital infrastructure by enabling secure cloud services, scalable AI deployments, and compliance with the Cloud-First Policy, ensuring both data sovereignty and data residency.
-- Key milestone: Huawei data center containers were energized at the Sky47 Islamabad campus in December 2025, and the Cloud AI Farm was developed in collaboration with Huawei and DWP (Digital World Pakistan).
-- Huawei technology underpins Sky47's core platforms: Huawei Cloud Stack (HCS) powers Sky47 Cloud, and Huawei Ascend NPUs power the GPU as a Service and AI Farm compute.
-- In the context of the Huawei partnership, Sky47 is described as Pakistan's first purpose-built AI-ready sovereign cloud data center.
-
 
 ### 3.2 Vision 2030 — Diversification Strategy
 

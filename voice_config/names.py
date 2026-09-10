@@ -13,16 +13,24 @@ names in the knowledge base the result is not an accent, it is the wrong name:
 Writing the name in Urdu script instead makes the same voice reach for Urdu phonemes,
 and it comes out right — the trick already used for ``ماڑی`` in ``server/providers/tts.py``.
 
-Two things keep this a lookup table rather than a rule:
+This began as a measured subset: only names a round trip (Uplift TTS → Soniox STT)
+showed to be broken were listed, and ten people were pinned as deliberately absent
+because Latin had come out closer for them. **Listening to the deployed kiosk showed
+that was the wrong call** — those ten were precisely the names still being
+mispronounced in English mode. Every person in the corpus is now respelled, in both
+languages, and "which names" is no longer a judgement call that can be got wrong.
 
-*   **It is not a blanket win.** "Faheem Haider" is already correct in English mode and
-    Urdu script makes it *worse* ("Fahim headers"); in Urdu mode the reverse is true.
-    So every entry is per-language, and only names that a round trip (Uplift TTS →
-    Soniox STT) showed to be broken are listed. Names that already work are absent on
-    purpose — see ``tests/test_names_and_ranks.py``, which pins that.
+Two things still hold:
+
+*   **A full name is not enough.** The tables only match the whole name, but a spoken
+    answer rarely repeats one — "Ask Kazmi about it", "Faheem chairs the board". Those
+    went through untouched, so the same person was said correctly in one sentence and
+    mangled in the next. ``_WORD_FORMS`` covers each name word on its own, applied
+    after the full-name pass, and is filtered by the names actually in the tables so
+    the two cannot drift apart.
 *   **Transliteration is a judgement call.** Getting "عائلہ" vs "آئلہ" wrong swaps one
-    mispronunciation for another, so each spelling here was checked against the engine
-    rather than derived.
+    mispronunciation for another. The spellings here are conventional ones; a round
+    trip is still the right way to settle a doubtful vowel.
 
 Ranks and honours are separate from names and are handled by rule, because the failure
 there is abbreviation, not phonetics: the voice reads "Lt. Gen." as "Leftenant"/"Eldeej"
@@ -54,15 +62,22 @@ _NAMES_FOR_ENGLISH: dict[str, str] = {
     "Seema Adil": "سیما عادل",
     "Ayla Majid": "عائلہ مجید",
     "Hamid Niaz": "حامد نیاز",
+    # These ten were previously absent on a round-trip finding that Latin came out
+    # closer than Urdu script for them. Listening to the deployed kiosk says otherwise:
+    # they were the names still being mispronounced in English mode. Every person in
+    # the corpus is now respelled, so the rule is "all of them", not a measured subset
+    # — which also means a name added to the corpus is covered by adding it here once.
+    "Sumair Ashraf Sheikh": "سمیر اشرف شیخ",
+    "Ishfaq Nadeem Ahmad": "اشفاق ندیم احمد",
+    "Khalid Nawaz Malik": "خالد نواز ملک",
+    "Raza Muhammad Khan": "رضا محمد خان",
+    "Syed Shahzad Nabi": "سید شہزاد نبی",
+    "Anwar Ali Hyder": "انور علی حیدر",
+    "Abid Niaz Hasan": "عابد نیاز حسن",
+    "Abdullah Asif": "عبداللہ آصف",
+    "Nadeem Ahmed": "ندیم احمد",
+    "Zafar Abbas": "ظفر عباس",
 }
-
-# Everyone else in the knowledge base was tested the same way and is deliberately NOT
-# here, because Latin came out closer than Urdu script for them:
-#     "Abdullah Asif", "Abid Niaz Hasan", "Anwar Ali Hyder", "Ishfaq Nadeem Ahmad",
-#     "Khalid Nawaz Malik", "Nadeem Ahmed", "Raza Muhammad Khan", "Sumair Ashraf Sheikh",
-#     "Syed Shahzad Nabi", "Zafar Abbas"
-# Re-run the round trip before adding one — respelling a name the voice already says
-# correctly makes it worse, which is why this is a measured list and not a rule.
 
 # The same idea in Urdu mode, where the LLM often leaves the name in Latin script
 # because the system prompt tells it to keep names in their original spelling. There the
@@ -98,6 +113,38 @@ _NAMES_FOR_URDU: dict[str, str] = {
 }
 
 
+# ── individual name words ───────────────────────────────────────────
+# The tables above only match a full name, but a spoken answer rarely repeats one.
+# "Ask Kazmi about it", "Faheem chairs the board", "Mr. Rasheed" — every one of those
+# went through untouched, so the same person was said correctly in one sentence and
+# mangled in the next.
+#
+# Each distinct word of every name therefore gets its own spoken form, applied after
+# the full-name pass has had first refusal. The words come from the full names above,
+# so there is one source of truth: a name added there is covered here automatically,
+# and the per-word spellings only have to be given for words the split cannot infer.
+_WORD_FORMS: dict[str, str] = {
+    "Abbas": "عباس", "Abdullah": "عبداللہ", "Abid": "عابد", "Adil": "عادل",
+    "Ahmad": "احمد", "Ahmed": "احمد", "Ali": "علی", "Anwar": "انور",
+    "Aamir": "عامر", "Ashraf": "اشرف", "Asif": "آصف", "Aslam": "اسلم",
+    "Ayla": "عائلہ", "Afzal": "افضل", "Bakhsh": "بخش", "Bakhtiyar": "بختیار",
+    "Faheem": "فہیم", "Ghulam": "غلام", "Haider": "حیدر", "Hamed": "حامد",
+    "Hamid": "حامد", "Hasan": "حسن", "Hayat": "حیات", "Hazoor": "حضور",
+    "Hussain": "حسین", "Hyder": "حیدر", "Imtiaz": "امتیاز", "Ishfaq": "اشفاق",
+    "Janjua": "جنجوعہ", "Kazmi": "کاظمی", "Khalid": "خالد", "Khan": "خان",
+    "Lak": "لک", "Majid": "مجید", "Malik": "ملک", "Mehmood": "محمود",
+    "Muhammad": "محمد", "Mushtaq": "مشتاق", "Nabeel": "نبیل", "Nabi": "نبی",
+    "Nadeem": "ندیم", "Nawaz": "نواز", "Niaz": "نیاز", "Rasheed": "رشید",
+    "Raza": "رضا", "Sajjad": "سجاد", "Salim": "سلیم", "Seema": "سیما",
+    "Shaheen": "شاہین", "Shahzad": "شہزاد", "Sheikh": "شیخ", "Sumair": "سمیر",
+    "Syed": "سید", "Yaqoob": "یعقوب", "Zafar": "ظفر",
+}
+
+# Words that are also ordinary English, or a place the places table owns. Respelling
+# these would fire on sentences that have nothing to do with a person.
+_WORD_BLOCKLIST = frozenset({"Ali", "Khan", "Malik"})
+
+
 def _name_pattern(names: dict[str, str]) -> re.Pattern[str] | None:
     if not names:
         return None
@@ -108,33 +155,76 @@ def _name_pattern(names: dict[str, str]) -> re.Pattern[str] | None:
 _EN_NAME_RE = _name_pattern(_NAMES_FOR_ENGLISH)
 _UR_NAME_RE = _name_pattern(_NAMES_FOR_URDU)
 
+# Only words that actually occur in a name the kiosk knows, minus the blocklist. Built
+# from the tables rather than hand-listed, so the two cannot drift apart.
+_KNOWN_WORDS: dict[str, str] = {
+    word: _WORD_FORMS[word]
+    for full in {**_NAMES_FOR_ENGLISH, **_NAMES_FOR_URDU}
+    for word in full.split()
+    if word in _WORD_FORMS and word not in _WORD_BLOCKLIST
+}
+
+_WORD_RE = _name_pattern(_KNOWN_WORDS)
+
 
 # ── ranks ───────────────────────────────────────────────────────────
 # Abbreviated ranks are read as words ("Leftenant", "Brick", "Eldeej", "Mert Can").
 # Spelled out, the same voice says them correctly in both languages.
+# Two-word ranks come first in both tables: "Lt Gen" must be matched whole, or the
+# bare "Lt" rule would claim its first half and leave "Lieutenant Gen".
 _RANKS_EN: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"\bLt\.?\s*Gen\.?(?=\s|$)"), "Lieutenant General"),
     (re.compile(r"\bMaj\.?\s*Gen\.?(?=\s|$)"), "Major General"),
+    (re.compile(r"\bBrig\.?\s*Gen\.?(?=\s|$)"), "Brigadier General"),
     (re.compile(r"\bBrig\.?(?=\s|$)"), "Brigadier"),
     (re.compile(r"\bCol\.?(?=\s|$)"), "Colonel"),
+    (re.compile(r"\bLt\.?\s*Col\.?(?=\s|$)"), "Lieutenant Colonel"),
     (re.compile(r"\bCapt\.?(?=\s|$)"), "Captain"),
+    (re.compile(r"\bMaj\.?(?=\s|$)"), "Major"),
+    (re.compile(r"\bLt\.?(?=\s|$)"), "Lieutenant"),
 )
 
+# Every rank the English table knows needs an Urdu form too. "Col", "Capt", "Maj" and a
+# bare "Lt" had none, so in Urdu mode they stayed Latin — three letters in an Urdu
+# sentence, which is the failure the acronym table in providers/tts.py exists to fix.
+# The spelled-out English forms are listed as well, because the model writes those when
+# the prompt tells it to keep a title in full.
 _RANKS_UR: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"\bLt\.?\s*Gen\.?(?=\s|$)"), "لیفٹیننٹ جنرل"),
     (re.compile(r"\bMaj\.?\s*Gen\.?(?=\s|$)"), "میجر جنرل"),
+    (re.compile(r"\bBrig\.?\s*Gen\.?(?=\s|$)"), "بریگیڈیئر جنرل"),
+    (re.compile(r"\bLt\.?\s*Col\.?(?=\s|$)"), "لیفٹیننٹ کرنل"),
     (re.compile(r"\bBrig\.?(?=\s|$)"), "بریگیڈیئر"),
+    (re.compile(r"\bCol\.?(?=\s|$)"), "کرنل"),
+    (re.compile(r"\bCapt\.?(?=\s|$)"), "کیپٹن"),
+    (re.compile(r"\bMaj\.?(?=\s|$)"), "میجر"),
+    (re.compile(r"\bLt\.?(?=\s|$)"), "لیفٹیننٹ"),
     (re.compile(r"\bLieutenant General\b"), "لیفٹیننٹ جنرل"),
     (re.compile(r"\bMajor General\b"), "میجر جنرل"),
+    (re.compile(r"\bBrigadier General\b"), "بریگیڈیئر جنرل"),
+    (re.compile(r"\bLieutenant Colonel\b"), "لیفٹیننٹ کرنل"),
     (re.compile(r"\bBrigadier\b"), "بریگیڈیئر"),
+    (re.compile(r"\bColonel\b"), "کرنل"),
+    (re.compile(r"\bCaptain\b"), "کیپٹن"),
+    (re.compile(r"\bMajor\b"), "میجر"),
+    (re.compile(r"\bLieutenant\b"), "لیفٹیننٹ"),
 )
 
 # "(Retd)" is read as "Grade" and "(Late)" swallows the surrounding words, but the bare
 # words are said correctly. A plain substitution would leave the ungrammatical
 # "Brigadier Sumair Ashraf Sheikh Retired ...", so the suffix is lifted out and
 # re-attached in front of the rank it belongs to: "Retired Brigadier Sumair ...".
-_RANK_NAMES_EN = "Lieutenant General|Major General|Brigadier|Colonel|Captain"
-_RANK_NAMES_UR = "لیفٹیننٹ جنرل|میجر جنرل|بریگیڈیئر"
+# Longest first: "Lieutenant General" must win over "Lieutenant", or the suffix would
+# be re-attached in front of half a rank ("Retired Lieutenant General ..." vs
+# "Retired Lieutenant" followed by a stranded "General").
+_RANK_NAMES_EN = (
+    "Lieutenant General|Major General|Brigadier General|Lieutenant Colonel"
+    "|Brigadier|Colonel|Captain|Major|Lieutenant"
+)
+_RANK_NAMES_UR = (
+    "لیفٹیننٹ جنرل|میجر جنرل|بریگیڈیئر جنرل|لیفٹیننٹ کرنل"
+    "|بریگیڈیئر|کرنل|کیپٹن|میجر|لیفٹیننٹ"
+)
 
 _SUFFIX_EN = {"retd": "Retired", "retired": "Retired", "r": "Retired", "late": "the late"}
 _SUFFIX_UR = {"retd": "ریٹائرڈ", "retired": "ریٹائرڈ", "r": "ریٹائرڈ", "late": "مرحوم",
@@ -217,5 +307,12 @@ def spoken_names_and_ranks(text: str, lang: str = "en") -> str:
         text = _BARE_SUFFIX_RE.sub(lambda m: f" {_SUFFIX_EN[m.group(1).rstrip('.').lower()]}", text)
         if _EN_NAME_RE is not None:
             text = _EN_NAME_RE.sub(lambda m: _NAMES_FOR_ENGLISH[m.group(0)], text)
+
+    # Last: any name word the full-name pass did not already consume. A reply that
+    # says "Kazmi" or "Faheem" on its own has to be said the same way as the sentence
+    # that gave the name in full. Runs in both languages, for the same reason the
+    # tables above do.
+    if _WORD_RE is not None:
+        text = _WORD_RE.sub(lambda m: _KNOWN_WORDS[m.group(0)], text)
 
     return text

@@ -22,8 +22,9 @@ STT transcript
   ├─ 4. hybrid search           Qdrant prefetch ×2 + server-side RRF  ~10 ms
   ├─ 5. rerank                  cross-encoder (OFF by default)      ~450 ms
   ├─ 6. relevance gate          on the best chunk, not each chunk       <1 ms
-  ├─ 7. glossary injection      deterministic abbreviation override      <1 ms
-  └─ 8. context assembly        dedupe, cap, join                       <1 ms
+  ├─ 7. section expansion       complete the sections that ranked       ~3 ms
+  ├─ 8. glossary injection      deterministic abbreviation override      <1 ms
+  └─ 9. context assembly        dedupe, cap, join                       <1 ms
   │
 system prompt → LLM → TTS
 ```
@@ -54,6 +55,50 @@ pinned — re-measure on the real target.)
 Both the HTTP API and the voice path call `Retriever.retrieve`. The voice path may pass
 a smaller `top_k`; the logic does not fork. The previous system had retrieval
 implemented twice and the two copies drifted.
+
+---
+
+## 1a. Retrieving the right section is not the same as answering the question
+
+Two changes came out of scoring the retriever against the 342-question evaluation the
+kiosk's tester actually ran (`Ref #` in that sheet labels the section each question is
+answered from, so it is ground truth somebody else wrote). They are recorded together
+because they are the two halves of the same finding: **hit@k was not measuring what was
+going wrong.**
+
+**The sparse channel had no IDF.** FastEmbed's `Qdrant/bm25` emits only the
+term-frequency half of BM25 — query vectors are literally all `1.0` — and expects Qdrant
+to supply inverse document frequency from the sparse index's `modifier=IDF`. That
+modifier was never set. Nothing errored; BM25 silently became "sum of term frequencies",
+which on a single-subject corpus ranks by how often a chunk repeats the words every
+query contains. The top lexical hit for *"How does Mari Energies use artificial
+intelligence?"* was §1.1, which does not mention AI, winning on the count of "Mari",
+"Energies" and "company"; §9.2, **titled** "Artificial Intelligence", was not in the top
+ten. Setting the modifier moves it to rank 1 and the fused result from rank 7 to rank 1.
+Worth **+4.1 hit@1 / +3.0 hit@5** on the tester's set. `ensure_collection` detects a
+collection built without the modifier and recreates it, which re-ingests on that boot.
+
+**The remaining failures were complete-section failures, and hit@k cannot see them.**
+Every question the tester marked *Partial* or *Not Matched* retrieved the right section
+— and got a partial answer, because only part of that section reached the model. Ten of
+eighteen sections are enumerations (eleven discoveries, five field developments,
+seventeen sustainability milestones). Asked *"what discoveries have you made?"*, every
+chunk of §6 is equally on-topic, so which two of them top-k returns is decided by
+wording noise, and the kiosk names two discoveries out of ten with total confidence.
+Section expansion completes the sections that ranked, inside the existing context cap.
+
+| | before | after |
+|---|---|---|
+| hit@1 / hit@3 / hit@5 (tester set) | 74.6% / 92.1% / 94.4% | **78.4% / 95.0% / 97.4%** |
+| mean section recall | 79.7% | **92.0%** |
+| questions whose section arrives **complete** | 62.6% | **84.2%** |
+| context at p50 | 4,204 ch | 5,795 ch |
+| retrieve p50 | 60 ms | 73 ms |
+
+Two things to note about that table. Ranking metrics are unchanged by expansion to three
+decimal places — it appends, never reorders, so it *cannot* cost hit@k. And the reason
+it is scored on section recall at all is that this failure is invisible to hit@k: every
+row of the "before" column already had the right section at rank 1.
 
 ---
 
@@ -311,7 +356,7 @@ while what it buys is invisible to that metric. Calibrated directly by
 | Parameter | Value | Why |
 |---|---|---|
 | `score_threshold` | 0.02 | Rerank probability. Keeps 83% of answerable, blocks 78% of unanswerable. The plan's 0.3 keeps only **66%** — that is what collapsed hit@5 from 92% to 62% when first measured. |
-| `dense_score_threshold` | 0.75 | Cosine similarity, used when the reranker is off. Deliberately loose — see below. |
+| `dense_score_threshold` | 0.72 | Cosine similarity, used when the reranker is off. Deliberately loose — see below. |
 | `relative_score_floor` | 0.10 | Secondary: once the best chunk clears the bar, drop supporting chunks below this fraction of it. |
 
 ### Two mistakes worth recording
@@ -339,11 +384,21 @@ the last of the retrieval-layer abstention.
 
 Two independent reasons:
 
-1. **Cross-lingual cosine similarities compress into a narrow band** (0.72–0.84 on this
-   corpus), so no threshold cleanly separates answerable Urdu questions from
-   unanswerable ones: 0.75 keeps 94% and blocks 14%; 0.774 blocks 43% but throws away
-   26% of answerable questions. Recall is the better trade only because the system
-   prompt still refuses to answer from irrelevant context.
+1. **English and Urdu questions sit in different similarity bands, and neither
+   separates.** Re-calibrated per language (`eval/calibrate.py --lang en|ur`), the two
+   overlap on both sides, and a single global threshold has to straddle them:
+
+   | | answerable range | best trade available |
+   |---|---|---|
+   | English | correct top-1 down to 0.735; unanswerable up to 0.887 | 0.782 keeps 92.5%, blocks 40% |
+   | Urdu | correct top-1 down to 0.731; unanswerable up to 0.796 | 0.743 keeps 96.3%, blocks 33% |
+
+   Per-language thresholds would buy roughly 40%/33% abstention for 7.5%/3.7% of
+   answerable questions. That was measured and **not** adopted: refusing an answerable
+   question is what a tester scores as a failure, while the off-topic questions this
+   would block are already declined by the persona's own on-topic guardrail. It is
+   written down so the trade is a decision rather than an oversight — if abstention
+   ever matters more than recall here, those are the numbers.
 2. **Some "unanswerable" questions legitimately retrieve relevant chunks.** "What is
    OGDCL's annual profit?" pulls the shareholding section because OGDCL genuinely is in
    the corpus as a 20% shareholder. No retrieval threshold can catch that.

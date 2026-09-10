@@ -29,7 +29,10 @@ export default function Page() {
   const [avatarReady, setAvatarReady] = useState(false);
   const onAvatarReady = useCallback(() => setAvatarReady(true), []);
 
-  const voice = useVoiceSession(lang);
+  // The presenter goes in so the reply comes back in that rig's voice — the
+  // toggle switches the voice with the model. Turns already in flight keep the
+  // voice they started in; see run_reply's `avatar`.
+  const voice = useVoiceSession(lang, avatar);
   const t = COPY[lang];
 
   // Pick up the theme the inline script in layout.tsx already applied, and the

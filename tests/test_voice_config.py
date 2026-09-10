@@ -29,7 +29,7 @@ from voice_config.urdu_normalise import normalise_for_uplift, spoken_urls  # noq
 # ── prompt files ────────────────────────────────────────────────────
 
 @pytest.mark.parametrize(
-    "name", ["system_prompt_english", "system_prompt_urdu", "greeting_english", "greeting_urdu"]
+    "name", ["system_prompt_english", "system_prompt_urdu", "greeting_english"]
 )
 def test_prompt_files_load(name: str) -> None:
     assert load_prompt(name)
@@ -44,7 +44,9 @@ def test_loaded_prompts_are_the_ones_actually_used() -> None:
     assert knowledge.RULES["en"] == load_prompt("system_prompt_english")
     assert knowledge.RULES["ur"] == load_prompt("system_prompt_urdu")
     assert knowledge.GREETINGS["en"] == load_prompt("greeting_english")
-    assert knowledge.GREETINGS["ur"] == load_prompt("greeting_urdu")
+    # Urdu has no separate greeting file: its opening turn is a section of the system
+    # prompt, so there is deliberately nothing to append for that language.
+    assert "ur" not in knowledge.GREETINGS
 
 
 def test_in_code_fallbacks_still_match_the_files_byte_for_byte() -> None:
@@ -56,7 +58,6 @@ def test_in_code_fallbacks_still_match_the_files_byte_for_byte() -> None:
     assert knowledge._RULES_EN == load_prompt("system_prompt_english")
     assert knowledge._RULES_UR == load_prompt("system_prompt_urdu")
     assert knowledge._GREETING_EN == load_prompt("greeting_english")
-    assert knowledge._GREETING_UR == load_prompt("greeting_urdu")
 
 
 def test_persona_and_tone_rules_survived_the_move_to_files() -> None:
@@ -73,7 +74,7 @@ def test_persona_and_tone_rules_survived_the_move_to_files() -> None:
 
 def test_the_greeting_prompts_demand_the_salam_and_the_name() -> None:
     """The kiosk's one hard promise: the first reply opens with the salam and her name."""
-    en, ur = knowledge.GREETINGS["en"], knowledge.GREETINGS["ur"]
+    en, ur = knowledge.GREETINGS["en"], knowledge.RULES["ur"]
     assert "Assalamualaikum" in en and "Maryam" in en
     assert "السلام علیکم" in ur and "مریم" in ur
     assert "وعلیکم السلام" in ur         # named explicitly so it is never returned instead
@@ -241,7 +242,10 @@ def test_domains_are_fixed_in_english_mode_too() -> None:
     "text",
     [
         "منافع 65.14 ارب روپے۔",      # decimals — Uplift is correct already
-        "یہ 1954 میں دریافت ہوا۔",     # years
+        "یہ 2024 میں ہوا۔",            # 20xx years — the cardinal reading is the year
+        # 18xx/19xx years are NOT in this list: Uplift reads "1954" as the cardinal
+        # "ایک ہزار نو سو چون" where the year is "انیس سو چون", which is why
+        # urdu_normalise.spoken_years exists. See tests/test_tts_spoken.py.
         "یہ 99.98% ہے۔",              # percentages
         "ہم AI استعمال کرتے ہیں۔",     # acronyms
     ],
@@ -258,3 +262,41 @@ def test_english_replies_are_not_normalised() -> None:
 def test_latin_only_urdu_mode_text_is_left_alone() -> None:
     """The fixes key off Urdu script, so a Latin-only string is passed through."""
     assert normalise_for_uplift("Tier III", "ur") == "Tier III"
+
+
+@pytest.mark.parametrize(
+    "prompt_name",
+    [
+        "system_prompt_english",
+        "system_prompt_english_male",
+        "system_prompt_urdu",
+        "system_prompt_urdu_male",
+    ],
+)
+def test_gpuaas_answers_must_name_both_vendors(prompt_name: str) -> None:
+    """A "do you offer GPU as a Service" question was being answered "yes, we do",
+    dropping the hardware in §3.1.3.3. Every persona and language carries the rule."""
+    rules = load_prompt(prompt_name)
+    assert "GPU as a Service" in rules
+    assert "Huawei Ascend NPU" in rules
+    assert "NVIDIA-compatible GPU" in rules
+
+
+def test_the_core_brief_carries_the_sky47_ai_hardware() -> None:
+    """The brief is injected even when the index is empty, so the fact has to be here
+    too — not only in the retrieved section."""
+    brief = knowledge.CORE_BRIEF
+    assert "GPU as a Service" in brief
+    assert "Huawei Ascend NPU" in brief
+    assert "NVIDIA-compatible GPU clusters" in brief
+
+
+@pytest.mark.parametrize("query", ["جی پی یو", "جی پی یوز", "اے آئی فارم", "کلسٹرز"])
+def test_urdu_gpuaas_questions_expand_to_the_english_section_terms(query: str) -> None:
+    """§3.1.3.3 is the only section naming the accelerators, and Urdu spells "GPU" out
+    letter by letter, which matched nothing in the lexical channel."""
+    from server.services.expansion import expand_for_lexical
+
+    expanded, terms = expand_for_lexical(f"{query} کے بارے میں بتائیں")
+    assert "gpu" in expanded.lower() or "clusters" in expanded.lower()
+    assert terms

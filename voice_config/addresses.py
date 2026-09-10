@@ -5,6 +5,7 @@ and keeping only the spelling that came back right. What the voice does untreate
 
     "CO₂"            → "seagull dough"        the subscript is read as a word
     "CO2"            → "COtwo"                the number spell-out glues it on
+                     → "C-O-do" (ur)          Latin letters in English, digit in Urdu
     "Ext. 483"       → "x483"                 "Ext" is read as the letter x
     "G-10/4"         → "G-ten/four" (en) and "ٹی جا سلاش ۴" (ur, says "slash")
     "44000"          → "forty four thousand"  a postcode is not a quantity
@@ -22,15 +23,54 @@ import re
 
 # ── 1. Chemical formulae ────────────────────────────────────────────
 # "CO₂" is read as a word ("seagull dough"); "CO2" is caught by the English number
-# spell-out and becomes "COtwo". Spacing the letters and the digit apart makes the voice
-# say "C O 2", which is what a listener expects. Runs before the number pass.
+# spell-out and becomes "COtwo".
+#
+# Spacing the characters apart ("C O 2") fixed those, but it was never what a person
+# says, and in Urdu it is actively wrong: the voice reads the Latin letters in English
+# and then the digit in Urdu, giving "C-O-do". A formula is a compound with a NAME —
+# nobody says "C O 2" out loud — so each one is named instead, per language. That fixes
+# the English reading and the Urdu one with the same rule.
 _FORMULA_SUB = str.maketrans("₀₁₂₃₄₅₆₇₈₉", "0123456789")
-_FORMULA_RE = re.compile(r"\b(CO|NO|SO|CH|H|N)([₀-₉]|(?<=[A-Z])\d)(?![\d\w])")
+# The trailing ``([A-Z])?`` is what lets "H2S" match: without it the lookahead below
+# rejected any formula that ends in a letter rather than at a word boundary.
+_FORMULA_RE = re.compile(r"\b(CO|NO|SO|CH|H|N)([₀-₉]|(?<=[A-Z])\d)([A-Z])?(?![\d\w])")
+
+_FORMULA_NAMES: dict[str, dict[str, str]] = {
+    "CO2": {"en": "carbon dioxide", "ur": "کاربن ڈائی آکسائیڈ"},
+    "CO": {"en": "carbon monoxide", "ur": "کاربن مونو آکسائیڈ"},
+    "CH4": {"en": "methane", "ur": "میتھین"},
+    "H2": {"en": "hydrogen", "ur": "ہائیڈروجن"},
+    "H2S": {"en": "hydrogen sulphide", "ur": "ہائیڈروجن سلفائیڈ"},
+    "N2": {"en": "nitrogen", "ur": "نائٹروجن"},
+    "N2O": {"en": "nitrous oxide", "ur": "نائٹرس آکسائیڈ"},
+    "NO2": {"en": "nitrogen dioxide", "ur": "نائٹروجن ڈائی آکسائیڈ"},
+    "SO2": {"en": "sulphur dioxide", "ur": "سلفر ڈائی آکسائیڈ"},
+}
 
 
-def _say_formula(match: re.Match[str]) -> str:
+def _say_formula(match: re.Match[str], lang: str = "en") -> str:
+    """"CO₂" → "carbon dioxide" / "کاربن ڈائی آکسائیڈ"."""
     letters, digit = match.group(1), match.group(2).translate(_FORMULA_SUB)
-    return " ".join(letters) + " " + digit
+    tail = match.group(3) or ""
+    named = _FORMULA_NAMES.get(f"{letters}{digit}{tail}")
+    if named:
+        return named["ur" if lang == "ur" else "en"]
+    # An unknown formula keeps the old spacing, which at least stops the number pass
+    # gluing the digit onto the letters.
+    return " ".join(letters + tail) + " " + digit
+
+
+# The model sometimes spells "CO2" out as Urdu letter names instead of the Latin
+# formula — "سی او 2" ("C", "O", digit) rather than "CO2" — which _FORMULA_RE above
+# does not match at all, so it fell through untouched and was read letter by letter
+# with the digit glued on ("C-O-do"). Only "CO"/"CO2" occur spelled out this way in
+# the corpus, so this is a fixed pair rather than a general letter-name parser.
+_SPELLED_CO_RE = re.compile(r"\bسی\s+او\s*([۰-۹2])?\b")
+
+
+def _say_spelled_co(match: re.Match[str]) -> str:
+    digit = (match.group(1) or "").translate(_FORMULA_SUB)
+    return _FORMULA_NAMES["CO2" if digit == "2" else "CO"]["ur"]
 
 
 # ── 2. Ampersand initialisms ────────────────────────────────────────
@@ -108,8 +148,32 @@ def _say_sector(match: re.Match[str]) -> str:
 # ── 5. Postcodes ────────────────────────────────────────────────────
 # "44000" is an identifier, not a quantity — "forty four thousand" is wrong. Said digit
 # by digit, and labelled so the listener knows what the number is.
-_POSTCODE_RE = re.compile(r"(?<![\d-])(?:[–—-]\s*)?\b(\d{5})\b(?!\s*(?:million|billion|thousand))")
+#
+# The rule must see the CITY, not just five digits. Matching any bare 5-digit run made
+# the voice announce "postal code" in front of every ISO certification in the corpus —
+# "ISO postal code one four zero zero one" for ISO 14001, and the same for 26000, 27001
+# and 45001. Both postcodes that actually exist in the knowledge base are written
+# "<city> – <digits>" ("Islamabad – 44000", "Karachi – 75600"), so the city is the
+# anchor. Anything else five digits long is left to the number spell-out, which reads a
+# standard's number the way a person says it: "ISO fourteen thousand and one".
+_CITY = (
+    r"Islamabad|Karachi|Lahore|Rawalpindi|Peshawar|Quetta|Multan|Hyderabad|Sukkur|"
+    r"Ghotki|Daharki|اسلام\s*آباد|کراچی|لاہور|راولپنڈی|پشاور|کوئٹہ|ملتان|حیدرآباد|"
+    r"سکھر|گھوٹکی|ڈہرکی"
+)
+# The separator ("–", ",", or just a space) is consumed and re-emitted as a comma, so the
+# voice pauses there instead of trying to say the dash.
+_POSTCODE_RE = re.compile(
+    rf"({_CITY})[\s,–—-]+(\d{{5}})\b(?!\s*(?:million|billion|thousand))"
+)
 _POSTAL_LABEL = {"en": "postal code", "ur": "پوسٹل کوڈ"}
+
+# "ISO 45001:2018" — the colon separates the standard from the edition year, and the
+# voice runs the two numbers together into one stumble. A comma makes it a pause; both
+# numbers are then spelled out normally by the pass in server/providers/tts.py.
+_STANDARD_EDITION_RE = re.compile(
+    r"\b((?:ISO|IEC|OHSAS|ASTM|EN)(?:/[A-Z]{2,6})?\s*\d{4,5})\s*:\s*(\d{4})\b"
+)
 _DIGIT_WORDS = {
     "en": ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"),
     "ur": ("صفر", "ایک", "دو", "تین", "چار", "پانچ", "چھ", "سات", "آٹھ", "نو"),
@@ -192,16 +256,22 @@ def spoken_addresses(text: str, lang: str = "en") -> str:
         return text
     key = "ur" if lang == "ur" else "en"
 
-    text = _FORMULA_RE.sub(_say_formula, text)
+    text = _FORMULA_RE.sub(lambda m: _say_formula(m, lang), text)
+    if key == "ur":
+        text = _SPELLED_CO_RE.sub(lambda m: _say_spelled_co(m), text)
     text = _AMP_RE.sub(lambda m: _AMP_ABBR[m.group(0)][key], text)
     text = _TITLE_PAIR_RE.sub(
         lambda m: f"{_say_title(m.group(1))} {_AND[key]} {_say_title(m.group(2))}", text
     )
     text = _SECTOR_RE.sub(_say_sector, text)
 
+    comma = "،" if key == "ur" else ","
+    text = _STANDARD_EDITION_RE.sub(rf"\1{comma} \2", text)
+
     digits = _DIGIT_WORDS[key]
     text = _POSTCODE_RE.sub(
-        lambda m: f"{_POSTAL_LABEL[key]} " + " ".join(digits[int(d)] for d in m.group(1)),
+        lambda m: f"{m.group(1)}{comma} {_POSTAL_LABEL[key]} "
+        + " ".join(digits[int(d)] for d in m.group(2)),
         text,
     )
 

@@ -106,6 +106,30 @@ def test_ordinary_questions_are_not_greetings(text: str) -> None:
     assert not knowledge.is_greeting(text)
 
 
+@pytest.mark.parametrize("text", [
+    # A salam, an intro ask and a real question in one breath — how a visitor actually
+    # opens. This matched neither pattern, so the kiosk skipped its own introduction.
+    "السلام علیکم۔ اپنا انٹروڈکشن دیجیے، اور مجھے ماری انرجیز کے ورٹیکلز کے بارے میں بتائیے۔",
+    "سلام، مجھے verticals بتائیں",
+    # The borrowed "انٹروڈکشن" and the "دیجیے/دیں" verbs, not just "تعارف کرائیں".
+    "اپنا انٹروڈکشن دیجیے",
+    "اپنا انٹروڈکشن دیں",
+    "Hi, introduce yourself and tell me about the verticals",
+])
+def test_a_greeting_followed_by_a_real_question_still_greets(text: str) -> None:
+    assert knowledge.is_greeting(text)
+
+
+@pytest.mark.parametrize("text", [
+    # The same question WITHOUT the greeting must not trigger the introduction.
+    "ماری انرجیز کے ورٹیکلز کے بارے میں بتائیے۔",
+    "tell me about Mari Energies",
+    "کمپنی کی تاریخ بتائیں",
+])
+def test_the_same_question_without_a_greeting_does_not_greet(text: str) -> None:
+    assert not knowledge.is_greeting(text)
+
+
 # ── feminine agreement ──────────────────────────────────────────────
 # Urdu marks gender on the possessive as well as on the verb. The prompt covers the
 # verbs and Qwen gets those right, but it intermittently writes "میں Mari Energies کا

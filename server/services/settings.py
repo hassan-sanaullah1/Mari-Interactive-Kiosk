@@ -170,18 +170,30 @@ class RagSettings(BaseSettings):
     # exists however irrelevant the candidates are.
     #
     # Set deliberately low, and this is the weakest point in the system — say so rather
-    # than hide it. Cross-lingual cosine similarities compress into a narrow band
-    # (0.72-0.84 on this corpus), so no value separates answerable Urdu questions from
-    # unanswerable ones well: 0.75 keeps 94% and blocks 14%; 0.774 blocks 43% but
-    # (set to 0.72, not 0.75, after a live miss: "What is the NTN number?" — a
+    # than hide it. At 0.72 this gate blocks NOTHING: measured, 0 of 16 unanswerable
+    # questions are refused at the retrieval layer. That is the honest state of it.
+    #
+    # It is 0.72 rather than 0.75 because of a live miss. "What is the NTN number?" — a
     # perfectly answerable question — scored 0.746 and was blocked, while the same
     # question naming the company scored 0.833. Short queries with no subject sit low
-    # in this compressed band, and blocking a real question is a far worse kiosk
-    # failure than answering an off-topic one. Lowest correct top-1 is 0.7305.)
-    # throws away 26% of answerable questions. Recall is the better trade here because
-    # the system prompt still refuses to answer from irrelevant context.
+    # in this band, and blocking a real question is a far worse kiosk failure than
+    # answering an off-topic one.
     #
-    # The real fix is the multilingual cross-encoder, which gates Urdu at 91% kept /
+    # Raising it back does not work either, and the reason is worth recording: English
+    # and Urdu questions occupy DIFFERENT similarity bands, and neither separates.
+    # Calibrated per language (eval/calibrate.py --lang en|ur):
+    #
+    #   lang  correct top-1 down to   unanswerable up to   best trade available
+    #   en    0.735                   0.887                0.782 keeps 92.5%, blocks 40%
+    #   ur    0.731                   0.796                0.743 keeps 96.3%, blocks 33%
+    #
+    # So per-language thresholds are possible and would buy real abstention. They were
+    # measured and deliberately NOT adopted: the off-topic questions they block are
+    # already declined by the persona's on-topic guardrail in the system prompt, while
+    # the answerable questions they lose are the failure a tester actually records. If
+    # that trade ever changes, those are the numbers to start from.
+    #
+    # The real fix is the multilingual cross-encoder, which gates at 91% kept /
     # 83% blocked — but costs ~340 ms. See the "quality profile" section of
     # README-RAG.md; it is a deployment decision, not a default.
     dense_score_threshold: float = 0.72
@@ -193,8 +205,67 @@ class RagSettings(BaseSettings):
     relative_score_floor: float = 0.10
 
     # Hard ceiling on assembled context. Time-to-first-token on the voice path scales
-    # with prompt length, and past this the LLM starts ignoring the middle anyway.
-    max_context_chars: int = 6000
+    # with prompt length, so this is a real cost — but 6000 was cutting answers the
+    # kiosk had already retrieved correctly.
+    #
+    # The case that moved it: section 4 (Governance) is 9,431 characters over ten
+    # chunks. Asked "give me all their names" after a question about the Board,
+    # retrieval put all eleven directors in front of the assembler and the 6000-char cap
+    # dropped three of them — so the kiosk listed eight and implied that was the lot.
+    # At 8000 all eleven survive, and the section saturates there: raising it further
+    # changes nothing, because assembly runs out of retrieved chunks before it runs out
+    # of budget.
+    #
+    # Measured cost across both question sets: +820 characters of context at p50, with
+    # hit@1/@3/@5, MRR, section recall and context precision all identical to three
+    # significant figures. It buys completeness on the long sections and changes nothing
+    # else.
+    max_context_chars: int = 8000
+
+    # ── section expansion ───────────────────────────────────────────
+    # After gating, complete the section the top chunk came from by appending its
+    # remaining chunks. This exists for a failure that hit@k cannot see and that
+    # dominated the tester's evaluation: retrieval finds the RIGHT section and the
+    # answer is still wrong, because the section's other half never reached the model.
+    #
+    # The corpus is a numbered outline, so a visitor's question and a section are rarely
+    # one-to-one. "What discoveries has Mari Energies made recently?" is answered by all
+    # eleven bullets of section 6, spread over several chunks; top-k returns two of
+    # them and the kiosk names two discoveries out of ten. The tester marked that
+    # Partial, and marked the same shape of answer Partial for the exploration
+    # portfolio, the field development highlights and the production figures. Measured
+    # on the 342-question set: without this, only 62.6% of questions get every chunk of
+    # their answering section, and mean section recall is 79.7%.
+    #
+    # It is deliberately NOT a wider top_k. Raising top_k adds the next best chunks from
+    # anywhere in the corpus, which is how "production, sales and reserves" ended up
+    # padded with the shareholding structure and the vision statement; this adds only
+    # chunks from the section retrieval already chose, so it makes the answer more
+    # complete without making the context less focused.
+    # Measured on the 342-question tester set, everything else held constant: section
+    # recall 79.7% -> 91.0%, and questions whose answering section arrives COMPLETE
+    # 62.6% -> 82.7%. hit@1/@3/@5 and MRR are unchanged to three decimal places, which
+    # is the point — expansion appends, it never reorders, so it cannot cost ranking.
+    # Cost is +1,400 chars of context at p50 and ~3 ms.
+    section_expansion: bool = True
+    # Char budget for the appended chunks, separate from and inside max_context_chars.
+    # Section 1 is twelve chunks (~8,000 chars) and would swallow the entire context on
+    # its own, so completion is best-effort within a bound rather than unconditional.
+    #
+    # Note which of the two limits actually binds: max_context_chars does. Raising this
+    # to 5,000 and the chunk ceiling to 8 moves full coverage only 82.7% -> 85.4% and
+    # p50 context 5,624 -> 5,652 chars, because assembly clips the surplus anyway. Past
+    # roughly this point the stage is doing work that gets thrown away, so this is the
+    # knee rather than the maximum.
+    section_expansion_chars: int = 3500
+    # Ceiling on appended chunks, so one pathologically fragmented section cannot fill
+    # the budget with fragments and crowd out the other retrieved sections.
+    section_expansion_max_chunks: int = 6
+    # How many retrieved sections to complete. Kept as a knob because it is the first
+    # thing anyone will want to raise, and `Retriever._sections_to_complete` records the
+    # measurements showing that raising it trades context precision for section recall
+    # and makes answers worse. Completing only the rank-1 section scores best on both.
+    section_expansion_sections: int = 1
 
     # ── query rewriting ─────────────────────────────────────────────
     # Spoken follow-ups are elliptical ("what about their pricing?"), and embedding one
@@ -202,7 +273,27 @@ class RagSettings(BaseSettings):
     # call in the middle of the latency budget, so it is conditional AND timeout-guarded:
     # on timeout the raw transcript is used and the turn proceeds. Never blocking.
     rewrite_enabled: bool = True
-    rewrite_timeout_ms: int = 150
+    # MEASURED against the deployed LLM, not guessed: 12 rewrites of real elliptical
+    # follow-ups came back at min 547 ms, p50 829 ms, p90 923 ms.
+    #
+    # This was 150 ms, which is below the floor — every rewrite timed out, on every
+    # follow-up, for the whole life of the setting. Nothing showed it, because timing
+    # out is the designed behaviour: the turn proceeds with the raw transcript and
+    # `rewritten=False`, which is indistinguishable from "this query did not need
+    # rewriting". The stage was dead code that still paid its 150 ms.
+    #
+    # What that cost: "Give me all their names", asked straight after a question about
+    # the Board, embedded against "their" and retrieved the company-overview section.
+    # None of the eleven directors were in the context, so the kiosk said it did not
+    # have the list — having just described the Board. Follow-ups are most of a real
+    # kiosk conversation, and this made every one of them retrieve blind.
+    #
+    # 1200 ms clears p90 with headroom. It is a real addition to the turn, but only on
+    # the minority of queries that trip `needs_rewrite`, and the alternative is a
+    # confidently wrong answer rather than a slower right one. If the LLM endpoint is
+    # slower than this, raise it — a rewrite that always times out is strictly worse
+    # than one that is disabled, because it costs the wait and delivers nothing.
+    rewrite_timeout_ms: int = 1200
     # Below this many content words a query is treated as too thin to retrieve on its
     # own, which together with the pronoun trigger is what keeps rewriting rare.
     rewrite_min_content_words: int = 4
@@ -215,6 +306,17 @@ class RagSettings(BaseSettings):
     # ones. See server/services/expansion.py for why a multilingual embedding does not
     # make this redundant.
     expand_urdu_lexical: bool = True
+
+    # Remove "Mari Energies" (and its former names) from the DENSE query before
+    # embedding. Every chunk is about the company, so the name cannot discriminate
+    # between chunks — but a dense embedding has no document-frequency notion to
+    # discount it with, the way the sparse channel's IDF modifier does, so naming the
+    # company drags the query toward the twelve-chunk company overview and section 1
+    # wins on almost any question. Measured on the 342-question tester set: hit@1
+    # 78.4% -> 84.5%, context precision 27.5% -> 29.9%, with the internal English set
+    # unchanged at 81.1% hit@1 and its hit@3 and hit@5 both up. Urdu is untouched and
+    # measured identical. See `strip_corpus_subject` in expansion.py.
+    strip_subject_for_dense: bool = True
 
     # ── caching ─────────────────────────────────────────────────────
     # Kiosk visitors repeat themselves, and several people ask the same question in a
@@ -242,7 +344,12 @@ class RagSettings(BaseSettings):
     # corpus rather than being part of it, and ingesting it puts a chunk about file
     # layout and environment variables into the index — which then legitimately matches
     # questions about "the knowledge base" and displaces real content.
-    corpus_exclude: list[str] = ["README.md"]
+    # sky47_knowledge_base.md is the fuller Sky47 corpus kept here for reference. The
+    # kiosk persona may only state what the Mari knowledge base contains, so the Sky47
+    # material reaches the index only through the summary in §3.1.3 of that file --
+    # ingesting both would also duplicate every Sky47 fact across two sources and split
+    # its retrieval score between them.
+    corpus_exclude: list[str] = ["README.md", "sky47_knowledge_base.md"]
     metadata_db: Path = ROOT / "server" / "data" / ".rag_metadata.sqlite"
     force_reingest: bool = False
     # Ingest embeds in batches; larger is faster but holds more memory. Only touched at

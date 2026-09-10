@@ -202,7 +202,7 @@ const LIGHT_CONFIGS: Record<AvatarState, LightConfig> = {
  *  change takes about a second to land. */
 const LERP_SPEED = 0.04;
 // Where the face spot aims is per-model too (`headTargetY` in ./models.ts):
-// girl15's face centre sits at 1.45 and male1's, on a taller rig, at 1.60.
+// girl15's face centre sits at 1.45 and male2's, on a taller rig, at 1.60.
 
 /**
  * `levelRef` carries this app's smoothed 0..1 amplitude (useVoiceSession's

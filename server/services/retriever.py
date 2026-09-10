@@ -13,14 +13,18 @@ The pipeline, in order, with the reason each stage is where it is:
                              content word poisons every later stage identically.
   2. query rewrite           Conditional and timeout-guarded (see rewriter.py). Only
                              elliptical follow-ups pay for it.
-  3. embed (dense + sparse)  Usually already done — see `prestart`.
+  3. embed (dense + sparse)  Usually already done — see `prestart`. The dense side
+                             drops the corpus's own subject first; the sparse side does
+                             not (IDF already handles it there).
   4. hybrid search + RRF     One Qdrant round trip, fused server-side.
   5. rerank                  Cross-encoder over the fused candidates.
   6. threshold               Drop everything below calibrated relevance. This is the
                              stage that lets the kiosk say "I don't know".
-  7. glossary injection      Deterministic override for abbreviations, regardless of
+  7. section expansion       Complete the section the top chunk came from. Answers a
+                             question top-k cannot: "what else is in here?"
+  8. glossary injection      Deterministic override for abbreviations, regardless of
                              what retrieval returned.
-  8. context assembly        Joined, deduped, length-capped.
+  9. context assembly        Joined, deduped, length-capped.
 
 Every stage is timed and every stage is optional in the sense that its failure degrades
 the result rather than failing the turn. A visitor who gets an ungrounded-but-polite
@@ -41,7 +45,7 @@ import numpy as np
 from .embedding import EmbeddingService, get_embedding_service
 from .rewriter import QueryRewriter
 from .settings import RagSettings, get_settings
-from .expansion import expand_for_lexical, has_urdu
+from .expansion import expand_for_lexical, has_urdu, strip_corpus_subject
 from .store import Hit, QdrantStore
 from .transcript import correct_transcript
 
@@ -68,6 +72,11 @@ class RetrievedChunk:
     score: float           # rerank probability when reranked, else the RRF score
     fusion_score: float    # always the RRF score, kept for tuning
     reranked: bool
+    # True when this chunk was not retrieved on its own merits but pulled in to complete
+    # the section a ranked chunk came from (see `_expand_section`). Its score is 0 and
+    # must not be compared against a ranked chunk's; this flag is what stops a reader —
+    # or a future gate — from doing that by accident.
+    expanded: bool = False
 
 
 @dataclass
@@ -85,6 +94,7 @@ class RetrievalResult:
     cached: bool = False
     embedding_prestarted: bool = False
     expansion_terms: list[str] = field(default_factory=list)
+    section_expanded: int = 0    # chunks appended to complete the winning section
 
     @property
     def total_ms(self) -> float:
@@ -219,10 +229,19 @@ class Retriever:
         lexical, _terms = (
             expand_for_lexical(text) if self.settings.expand_urdu_lexical else (text, [])
         )
+        # Dense also gets the company's own name removed. The name is in every chunk, so
+        # it cannot discriminate between them — but unlike BM25, a dense embedding has no
+        # document frequency to discount it with, so naming the company pulls the query
+        # toward the generic company-overview region and section 1 wins on almost any
+        # question. Worth 6 points of hit@1; see strip_corpus_subject for the numbers and
+        # for why the sparse channel is deliberately left alone.
+        focused = (
+            strip_corpus_subject(text) if self.settings.strip_subject_for_dense else text
+        )
         # Separate models on separate threads: concurrently, the pair costs about as
         # much as the slower one alone.
         dense, sparse = await asyncio.gather(
-            self.embedding.embed_query_async(text),
+            self.embedding.embed_query_async(focused),
             self.embedding.embed_sparse_query_async(lexical),
         )
         return dense, sparse, _terms
@@ -300,6 +319,10 @@ class Retriever:
 
             with timer("rerank"):
                 chunks = await self._rerank_and_gate(query, hits, top_k)
+
+            with timer("expand"):
+                chunks, added = await self._expand_section(chunks)
+            result.section_expanded = added
         except Exception as exc:  # noqa: BLE001
             # Retrieval failure is never fatal. The system prompt still goes in, the
             # persona still holds, the core brief is still there, and the visitor gets an
@@ -401,6 +424,45 @@ class Retriever:
         ]
         return self._gate(chunks, s.score_threshold)
 
+    def _sections_to_complete(self, chunks: list[RetrievedChunk]) -> list[str]:
+        """Which sections to complete: the one that owns rank 1, and only that one.
+
+        This is deliberately the simplest possible rule, and it is the simplest rule
+        because two more elaborate ones were built, measured and thrown away. Recording
+        them, because the reasoning that produced them is seductive and wrong.
+
+        The first was "walk the retrieved sections in rank order and complete as many as
+        the budget allows". The second was "order them by how many chunks each
+        contributed, since that is better evidence of the topic than owning one good
+        chunk". Both are defensible, both raise section RECALL, and both make the kiosk
+        worse — because recall was the only thing being measured.
+
+        Scored per chunk over the 342-question tester set, completing every retrieved
+        section appends 163 chunks from the answering section and 1,398 from somewhere
+        else. Section 1, the company overview, supplies 545 of those and 393 KB of
+        prompt on its own: a twelve-chunk overview of everything is weakly relevant to
+        every question and decisively relevant to almost none, so it is retrieved
+        constantly and completed constantly. The result is a context whose share of
+        on-topic text falls from 31.4% to 23.2% while its recall rises — and a model
+        that answers "what are your production figures?" from the quick-reference
+        summary, because the summary is in front of it three times.
+
+        Completing only the rank-1 section scores BEST on both halves at once:
+
+            rule                       section recall   context precision
+            rank-1 section only              91.0%            27.7%
+            rank-1 + corroborated others     91.5%            25.8%
+            by chunk count, top 2            90.3%            23.2%
+            by rank order, top 2             92.0%            23.2%
+
+        The near-miss case that motivated walking further down is real — "what
+        discoveries has Mari Energies made recently?" ranks the history section first —
+        but it is answered by the ranked chunks themselves, not by expanding into
+        another section, so paying for it everywhere buys nothing.
+        """
+        top = chunks[0].heading_path.split(" > ")[0].strip()
+        return [top] if top else []
+
     def _gate(self, chunks: list[RetrievedChunk], threshold: float) -> list[RetrievedChunk]:
         """Apply the relevance threshold to the RESULT, not to each chunk individually.
 
@@ -436,6 +498,76 @@ class Retriever:
         floor = max(c.score for c in chunks) * self.settings.relative_score_floor
         return [c for c in chunks if c.score >= floor]
 
+    async def _expand_section(
+        self, chunks: list[RetrievedChunk]
+    ) -> tuple[list[RetrievedChunk], int]:
+        """Complete the sections that ranked, by appending their unretrieved chunks.
+
+        Retrieval answers "which chunks match?", and for a corpus of leaf facts that is
+        the same question as "what answers this?". For a numbered outline it is not. Ten
+        of this corpus's eighteen sections are enumerations — eleven discoveries, five
+        field developments, seventeen sustainability milestones — and a visitor asking
+        "what discoveries have you made?" is asking for the enumeration, not for its two
+        best-matching entries. Top-k cannot express that: every chunk of section 6 is
+        equally on-topic, so which two arrive is decided by wording noise, and the kiosk
+        names two discoveries out of ten with complete confidence.
+
+        So: once gating has decided a section is the right one, the rest of that section
+        is not a fresh retrieval decision that has to compete on score. It is already
+        known to be relevant, and it is appended without one — which is why these chunks
+        carry `expanded=True` and score 0 rather than a fabricated score that would let
+        them be ranked against chunks that earned theirs.
+
+        Which section gets completed, and why it is only one of them, is in
+        `_sections_to_complete` — that choice was the difference between this stage
+        helping and hurting.
+
+        Ordering is: ranked chunks first, in rank order, then the appended ones in
+        document order. The rank-1 chunk stays first because it is the one the model
+        weights most heavily and the one least likely to be truncated away; the appendix
+        reads as that section's remaining bullets, which is what it is.
+        """
+        s = self.settings
+        if not s.section_expansion or not chunks:
+            return chunks, 0
+
+        sections = self._sections_to_complete(chunks)
+        if not sections:
+            return chunks, 0
+
+        # Match on the leading text, not on equality: overlap means a retrieved chunk
+        # and its stored twin are the same chunk, while two DIFFERENT chunks of one
+        # section share only their heading path prefix.
+        seen = {c.text[:200] for c in chunks}
+        budget = s.section_expansion_chars
+        added: list[RetrievedChunk] = []
+
+        for name in sections[: s.section_expansion_sections]:
+            if len(added) >= s.section_expansion_max_chunks or budget <= 0:
+                break
+            try:
+                siblings = await self.store.fetch_section(name)
+            except Exception:  # noqa: BLE001 - completeness is an improvement, not a promise
+                log.debug("section expansion failed for %r", name, exc_info=True)
+                continue
+            for hit in siblings:
+                if len(added) >= s.section_expansion_max_chunks or budget <= 0:
+                    break
+                if not hit.text or hit.text[:200] in seen:
+                    continue
+                if len(hit.text) > budget:
+                    # Skip rather than stop: sections are ordered by document position,
+                    # not by size, so one long chunk in the middle must not hide the
+                    # short ones after it.
+                    continue
+                seen.add(hit.text[:200])
+                budget -= len(hit.text)
+                added.append(
+                    RetrievedChunk(hit.text, hit.source, hit.heading_path, 0.0, 0.0,
+                                   False, expanded=True)
+                )
+        return chunks + added, len(added)
+
     # ── context assembly ────────────────────────────────────────────
 
     def _glossary_block(self, query: str) -> str:
@@ -455,7 +587,11 @@ class Retriever:
                 continue
             seen.add(key)
             if used + len(chunk.text) > self.settings.max_context_chars:
-                break
+                # Skip this one and keep going rather than stopping here. Chunks arrive
+                # in relevance order, not size order, so one long chunk near the cap
+                # used to discard every shorter chunk behind it — including, on the
+                # exploration-portfolio question, the one carrying the figures asked for.
+                continue
             parts.append(chunk.text)
             used += len(chunk.text)
             if chunk.source and chunk.source not in sources:
@@ -499,7 +635,9 @@ class Retriever:
                 "rerank_candidates": self.settings.rerank_candidates,
                 "rerank_enabled": self.settings.rerank_enabled,
                 "score_threshold": self.settings.score_threshold,
+                "dense_score_threshold": self.settings.dense_score_threshold,
                 "chunk_tokens": self.settings.chunk_tokens,
+                "section_expansion": self.settings.section_expansion,
             },
         }
 

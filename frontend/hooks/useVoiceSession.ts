@@ -6,7 +6,7 @@
  * This is a port of web/app.js onto React state; the wire protocol is unchanged and
  * the FastAPI side (server/app.py `ws()`) was not modified:
  *
- *   client → {"type":"start","lang"}  ·  <raw 16 kHz mono PCM16 frames>  ·  {"type":"end"}
+ *   client → {"type":"start","lang"}  ·  <raw 16 kHz mono PCM16 frames>  ·  {"type":"end","spoke"}
  *   server → {"partial"|"stt", text} · per sentence {"reply",text} {"tts",mime,clip} <audio bytes>
  *          → {"done", spoken}   (or {"error"|"warn", message})
  *
@@ -33,6 +33,7 @@ import {
   waitForFrames,
 } from "@/lib/blendshapePlayer";
 import type { Lang } from "@/lib/i18n";
+import { DEFAULT_AVATAR, type AvatarId } from "@/components/avatar/models";
 
 export type Mode = "idle" | "listening" | "thinking" | "speaking" | "paused";
 
@@ -49,11 +50,64 @@ const TARGET_SR = 16000;
  * waitForFrames() in lib/blendshapePlayer.ts.
  */
 const CLIP_FRAME_WAIT_MS = 700;
-/** RMS thresholds for endpointing. silenceMs was 600 — short enough that an
+/**
+ * RMS thresholds for endpointing. silenceMs was 600 — short enough that an
  * ordinary mid-sentence breath or thinking pause ended the turn early
  * ("half sentence" cutoffs); 1200ms gives a real pause room without making
- * genuine end-of-turn silence feel laggy. */
-const VAD = { start: 0.025, stop: 0.015, silenceMs: 1200, preSpeechMs: 8000, maxMs: 20000 };
+ * genuine end-of-turn silence feel laggy.
+ *
+ * `start` is how loud the room has to get before the turn counts as speech, and
+ * it is the one number here that can lose a turn outright: below it the VAD never
+ * starts, so preSpeechMs eventually closes the turn with no audio and the visitor
+ * is never heard at all. A kiosk is used at arm's length, in a room with other
+ * people in it, by someone who may not lean in — 0.045 was deaf to a normal
+ * speaking voice at that distance, and turns were dying on the pre-speech timeout
+ * rather than on anything the visitor did. Erring low is the safe direction: a
+ * false start costs a moment of silence at the head of the clip, which STT
+ * discards, while a missed start costs the whole turn.
+ *
+ * `stop` sits below `start` deliberately (hysteresis) — once speech is running,
+ * it takes a quieter room to end it than it took to begin it, so the level
+ * drifting around one threshold cannot chop a sentence in half.
+ */
+/**
+ * `startMs` is how long the level has to stay above `start` before the turn counts as
+ * speech. A single frame over the threshold used to be enough, which is why tapping the
+ * mic in a room that is merely NOT SILENT — a fan, a projector, other visitors, the
+ * kiosk's own hum — marked the turn as spoken, sent no speech to STT, and got the
+ * "sorry, I didn't catch that" apology back. One 4096-sample frame is ~85ms at 48kHz,
+ * so 250ms is roughly three consecutive frames: far too long for a door click or a
+ * chair scrape to fake, and still shorter than the first syllable of a real word.
+ *
+ * `noiseMargin` is the other half of that fix. A fixed threshold cannot be right for
+ * both a silent office and a busy hall, so the first `calibrateMs` of every turn are
+ * used to measure the room instead of being tested against a constant: the effective
+ * start threshold becomes whichever is higher, `start` or the measured floor times this
+ * margin. Speech is several times louder than the noise it sits on, so a voice clears
+ * it comfortably while the noise itself never does.
+ */
+const VAD = {
+  start: 0.02,
+  stop: 0.012,
+  // 1200 cut people off mid-sentence: it is the length of pause tolerated, and an
+  // ordinary one for breath or thought reaches ~1.2s. The cost is symmetric — this is
+  // also how long after a real end-of-turn the kiosk waits before answering — so it
+  // buys ~250ms more thinking room for ~250ms more latency, which is the right trade
+  // at a kiosk where being cut off means repeating the whole question.
+  silenceMs: 1500,
+  preSpeechMs: 8000,
+  maxMs: 20000,
+  startMs: 250,
+  calibrateMs: 300,
+  noiseMargin: 2.2,
+  // Frames louder than this are speech, not room tone, and are excluded from the noise
+  // estimate. Set well above any plausible room and below a normal speaking voice.
+  noiseCeiling: 0.06,
+  // Hard cap on the calibrated start threshold. However loud the room measures, a
+  // normal speaking voice has to be able to cross it — an uncrossable threshold is a
+  // deaf kiosk, which is a far worse failure than an occasional false start.
+  startCeiling: 0.055,
+};
 
 /** Downsample one Float32 frame to 16 kHz and pack as little-endian PCM s16. */
 function frameToPCM16(f: Float32Array, srcRate: number): ArrayBuffer {
@@ -89,7 +143,7 @@ type ReplyQueue = {
 let uid = 0;
 const nextId = () => `m${++uid}`;
 
-export function useVoiceSession(lang: Lang) {
+export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
   const [mode, setMode] = useState<Mode>("idle");
   const [active, setActive] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -101,6 +155,13 @@ export function useVoiceSession(lang: Lang) {
 
   // ---- mutable audio-graph state (never drives rendering directly) ----
   const langRef = useRef(lang);
+  /**
+   * Which presenter is on screen, mirrored out of state for the same reason as
+   * `lang`: the socket callbacks close over their turn, and this has to be the
+   * value at the moment the turn is SENT. It rides along on {start}/{text} and
+   * picks the reply voice server-side (see providers.get_tts_provider).
+   */
+  const avatarRef = useRef(avatar);
   const acRef = useRef<AudioContext | null>(null);
   const mediaRef = useRef<MediaStream | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
@@ -111,6 +172,8 @@ export function useVoiceSession(lang: Lang) {
   const pausedRef = useRef(false);
   const cancelledRef = useRef(false);
   const endPendingRef = useRef(false);
+  /** Whether the turn whose {"end"} is deferred had speech in it. */
+  const endSpokeRef = useRef(false);
   const assistantIdRef = useRef<string | null>(null);
   /** Media elements can only be routed through an AnalyserNode once. */
   const analysedRef = useRef(new WeakSet<HTMLAudioElement>());
@@ -129,6 +192,10 @@ export function useVoiceSession(lang: Lang) {
   useEffect(() => {
     langRef.current = lang;
   }, [lang]);
+
+  useEffect(() => {
+    avatarRef.current = avatar;
+  }, [avatar]);
 
   /** Prior turns, in the shape the server's _history_messages() expects. */
   const historyPayload = useCallback(
@@ -366,13 +433,26 @@ export function useVoiceSession(lang: Lang) {
     };
   }, []);
 
-  const finishTurn = useCallback(() => {
+  /**
+   * End the capture and ask the server to answer.
+   *
+   * `spoke` is whether the VAD ever heard speech in this turn. It has to travel
+   * with the {"end"}, because the two ways a turn can end look identical from the
+   * server side — both arrive as an empty transcript — but mean opposite things:
+   * a turn the visitor spoke into whose transcript was lost deserves "sorry, I
+   * didn't catch that", while the hands-free loop simply timing out on an empty
+   * room must stay silent. Without this flag the kiosk answered its own silence
+   * and then re-opened the mic, which timed out again — talking to nobody, on a
+   * loop, every 8 seconds.
+   */
+  const finishTurn = useCallback((spoke: boolean) => {
     teardownMic();
     setMode("thinking");
+    endSpokeRef.current = spoke;
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
       try {
-        ws.send(JSON.stringify({ type: "end" }));
+        ws.send(JSON.stringify({ type: "end", spoke }));
       } catch {}
     } else {
       endPendingRef.current = true; // socket not open yet — send as soon as it is
@@ -406,7 +486,10 @@ export function useVoiceSession(lang: Lang) {
     // the reply audio plays to the end; an interrupted, paused or stopped queue
     // never gets there.
     assistantIdRef.current = null;
-    const vad = { started: false, silence: 0, elapsed: 0 };
+    // `loud` accumulates consecutive time above the threshold (reset by any quiet
+    // frame), so only SUSTAINED sound starts the turn. `noise` is the running floor
+    // measured during the first calibrateMs; `frames` counts what went into it.
+    const vad = { started: false, silence: 0, elapsed: 0, loud: 0, noise: 0, frames: 0 };
     const queue = createQueue();
     queueRef.current = queue;
 
@@ -421,7 +504,12 @@ export function useVoiceSession(lang: Lang) {
       wsOpen = true;
       try {
         ws.send(
-          JSON.stringify({ type: "start", lang: langRef.current, history: historyPayload() }),
+          JSON.stringify({
+            type: "start",
+            lang: langRef.current,
+            avatar: avatarRef.current,
+            history: historyPayload(),
+          }),
         );
       } catch {}
       for (const b of pending) {
@@ -432,7 +520,7 @@ export function useVoiceSession(lang: Lang) {
       pending.length = 0;
       if (endPendingRef.current) {
         try {
-          ws.send(JSON.stringify({ type: "end" }));
+          ws.send(JSON.stringify({ type: "end", spoke: endSpokeRef.current }));
         } catch {}
         endPendingRef.current = false;
       }
@@ -465,19 +553,54 @@ export function useVoiceSession(lang: Lang) {
       }
 
       vad.elapsed += frameMs;
-      if (rms > VAD.start) {
-        vad.started = true;
-        vad.silence = 0;
-      } else if (vad.started && rms < VAD.stop) {
-        vad.silence += frameMs;
+
+      // Measure the room before judging it. These opening frames are still uploaded —
+      // only the speech DECISION waits, so nothing the visitor says is lost.
+      //
+      // Only QUIET frames feed the estimate. A visitor who starts talking the instant
+      // the mic opens would otherwise have their own voice averaged in as "the room",
+      // and the threshold derived from it lands above their speech: the VAD then never
+      // starts, and the turn dies on the pre-speech timeout having heard every word.
+      // Anything above `noiseCeiling` is a voice, not a room, so it is not sampled.
+      if (vad.elapsed <= VAD.calibrateMs && rms < VAD.noiseCeiling) {
+        vad.noise += rms;
+        vad.frames += 1;
+      }
+      const floor = vad.frames > 0 ? vad.noise / vad.frames : 0;
+      // Never let calibration RAISE the bar beyond what a voice clears comfortably:
+      // the measured floor only lifts the threshold in a genuinely noisy room, and even
+      // then not past `startCeiling`.
+      const startAt = Math.min(
+        VAD.startCeiling,
+        Math.max(VAD.start, floor * VAD.noiseMargin),
+      );
+      // End-of-turn threshold. Must stay BELOW startAt (hysteresis): once speech is
+      // running it takes a quieter room to end it than it took to begin. Deriving this
+      // from the floor directly — rather than from the already-margined startAt — is
+      // what keeps an ordinary between-words dip from reading as silence and cutting
+      // the visitor off mid-sentence.
+      const stopAt = Math.min(startAt * 0.6, Math.max(VAD.stop, floor * 1.1));
+
+      if (rms > startAt) {
+        // Sustained, not instantaneous: a lone loud frame is a noise, not a word.
+        vad.loud += frameMs;
+        if (vad.loud >= VAD.startMs) {
+          vad.started = true;
+          vad.silence = 0;
+        }
+      } else {
+        vad.loud = 0;
+        if (vad.started && rms < stopAt) {
+          vad.silence += frameMs;
+        }
       }
 
       if (vad.started && (vad.silence >= VAD.silenceMs || vad.elapsed >= VAD.maxMs)) {
         proc.onaudioprocess = null;
-        finishTurn();
+        finishTurn(true); // they spoke — a lost transcript is worth apologising for
       } else if (!vad.started && vad.elapsed >= VAD.preSpeechMs) {
         proc.onaudioprocess = null;
-        finishTurn(); // long silence — let the server close the turn out
+        finishTurn(false); // nobody spoke — close the turn out in silence
       }
     };
 
@@ -618,7 +741,15 @@ export function useVoiceSession(lang: Lang) {
       bindReplyStream(ws, queue);
       ws.onopen = () => {
         try {
-          ws.send(JSON.stringify({ type: "text", text: body, lang: langRef.current, history }));
+          ws.send(
+            JSON.stringify({
+              type: "text",
+              text: body,
+              lang: langRef.current,
+              avatar: avatarRef.current,
+              history,
+            }),
+          );
         } catch {
           setError("chat-failed");
         }

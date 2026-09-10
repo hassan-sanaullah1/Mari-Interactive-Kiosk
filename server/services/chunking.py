@@ -69,7 +69,40 @@ _TABLE_SEP_RE = re.compile(r"^\s*\|?[\s:|-]*-{2,}[\s:|-]*\|?\s*$")
 # Sentence end used when a single paragraph is itself over the limit. Includes the Urdu
 # full stop (۔) and the Arabic question mark (؟) — the corpus is English, but prompts,
 # READMEs and any future Urdu source document are chunked by this same code.
-_SENTENCE_END_RE = re.compile(r"(?<=[.!?۔؟])\s+")
+# Abbreviations whose trailing period is NOT a sentence end. Without this the splitter
+# cuts inside a name: "Lt. Gen. Anwar Ali Hyder" breaks after "Lt." and again after
+# "Gen.", and the corpus's Board Chairman entry was emitted as a chunk whose body began
+# with the single word "Gen." — a fragment that embeds as noise and takes the chairman's
+# name out of the chunk that gives his role. Ranks, honorifics and corporate suffixes
+# are what this corpus actually contains.
+#
+# Written as an alternation matched BEFORE the sentence break rather than as a negative
+# lookbehind, because `re` only allows fixed-width lookbehind and these are not the same
+# length. The first branch consumes "Lt. " and yields no split point; the second is the
+# real boundary. Only the second branch has a group, so `re.split` on this pattern emits
+# the abbreviation as part of the surrounding sentence.
+_ABBREV = (
+    r"Lt|Gen|Col|Brig|Maj|Capt|Sgt|Hon|Dr|Mr|Mrs|Ms|Prof|St"
+    r"|No|Nos|Rs|approx|est|etc|vs|viz"
+    r"|Inc|Ltd|Pvt|Co|Corp|Bros|Jr|Sr"
+    r"|e\.g|i\.e|cf|Fig|Sec|Vol|Ch|pp"
+)
+_SENTENCE_SPLIT_RE = re.compile(rf"(?:\b(?:{_ABBREV})\.\s+)|(?<=[.!?۔؟])(\s+)")
+
+
+def split_sentences(text: str) -> list[str]:
+    """Split on sentence ends, treating a known abbreviation's period as internal."""
+    parts: list[str] = []
+    last = 0
+    for m in _SENTENCE_SPLIT_RE.finditer(text):
+        if m.group(1) is None:
+            continue  # an abbreviation, not a boundary
+        parts.append(text[last:m.start(1)])
+        last = m.end(1)
+    parts.append(text[last:])
+    return [p for p in parts if p]
+
+
 _TOP_HEADING_RE = re.compile(r"^#\s+.+$", re.MULTILINE)
 
 
@@ -200,7 +233,7 @@ def _sections(md: str) -> list[tuple[str, str]]:
 
 def _split_oversized(text: str, limit: int, count: CountTokens) -> list[str]:
     """Break a single over-limit paragraph at sentence boundaries, never mid-sentence."""
-    sentences = _SENTENCE_END_RE.split(text)
+    sentences = split_sentences(text)
     parts: list[str] = []
     buf: list[str] = []
     size = 0
@@ -228,7 +261,7 @@ def _overlap_tail(text: str, overlap: int, count: CountTokens) -> str:
     """
     if overlap <= 0:
         return ""
-    sentences = _SENTENCE_END_RE.split(text)
+    sentences = split_sentences(text)
     tail: list[str] = []
     size = 0
     for sentence in reversed(sentences):

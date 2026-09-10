@@ -61,3 +61,7 @@ secrets.json
 # scripts/rag_ingest.py. Committing it would make every checkout think the corpus
 # was already ingested against whatever index happens to be running.
 server/data/.rag_metadata.sqlite*
+
+# Scratch prompt drafts, kept locally but not shared — the live copies are in
+# voice_config/prompts/.
+/prompt related/

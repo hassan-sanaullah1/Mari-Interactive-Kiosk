@@ -112,15 +112,17 @@ def _generator() -> GenerationService:
     return _generation
 
 
-def _build(result: RetrievalResult, lang: str, text: str) -> str:
+def _build(result: RetrievalResult, lang: str, text: str, avatar: str = "female") -> str:
     return _generator().build_prompt(
         result, lang,
         core_brief=knowledge.CORE_BRIEF,
         greeting=knowledge.is_greeting(text),
+        avatar=avatar,
     ).system
 
 
-async def system_prompt(lang: str, text: str = "", history: list[dict] | None = None) -> str:
+async def system_prompt(lang: str, text: str = "", history: list[dict] | None = None,
+                        avatar: str = "female") -> str:
     """The full system prompt for one turn.
 
     When retrieval is unavailable or fails, this returns the same prompt minus the
@@ -129,12 +131,14 @@ async def system_prompt(lang: str, text: str = "", history: list[dict] | None = 
     answer; `/healthz` and the logs carry the reason.
     """
     if _retriever is None:
-        return _build(RetrievalResult(degraded=_status.get("state", "unavailable")), lang, text)
+        return _build(
+            RetrievalResult(degraded=_status.get("state", "unavailable")), lang, text, avatar
+        )
     try:
-        return _build(await retrieve(text, lang, history), lang, text)
+        return _build(await retrieve(text, lang, history), lang, text, avatar)
     except Exception as exc:  # noqa: BLE001
         log.exception("prompt assembly failed; serving this turn with no retrieved context")
-        return _build(RetrievalResult(degraded=f"{type(exc).__name__}: {exc}"), lang, text)
+        return _build(RetrievalResult(degraded=f"{type(exc).__name__}: {exc}"), lang, text, avatar)
 
 
 async def health() -> dict:

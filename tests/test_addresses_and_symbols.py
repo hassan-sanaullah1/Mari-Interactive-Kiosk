@@ -24,15 +24,29 @@ from voice_config.addresses import spoken_addresses  # noqa: E402
 # ── chemical formulae ───────────────────────────────────────────────
 
 @pytest.mark.parametrize("written", ["CO₂", "CO2"])
-def test_co2_is_said_c_o_two(written: str) -> None:
-    """"CO₂" was heard as "seagull dough"; "CO2" became "COtwo"."""
+def test_co2_is_named_not_spelled(written: str) -> None:
+    """"CO₂" was heard as "seagull dough"; "CO2" became "COtwo". Spacing it to
+    "C O two" fixed both but is not what anyone says out loud — a formula is a
+    compound with a name, so it is named."""
     said = _spoken(f"We produce food-grade {written}.", "en")
-    assert "C O two" in said
-    assert "COtwo" not in said and "₂" not in said
+    assert "carbon dioxide" in said
+    assert "COtwo" not in said and "₂" not in said and "C O two" not in said
 
 
-def test_co2_in_urdu_too() -> None:
-    assert "C O 2" in spoken_addresses("ہم food-grade CO₂ بناتے ہیں۔", "ur")
+def test_co2_in_urdu_is_urdu() -> None:
+    """"C O 2" was the worst reading of all: the Latin letters were said in English
+    and the digit in Urdu, giving "C-O-do"."""
+    said = spoken_addresses("ہم food-grade CO₂ بناتے ہیں۔", "ur")
+    assert "کاربن ڈائی آکسائیڈ" in said
+    assert "C O" not in said
+
+
+@pytest.mark.parametrize(
+    "written,expected",
+    [("CH4", "methane"), ("H2S", "hydrogen sulphide"), ("SO2", "sulphur dioxide")],
+)
+def test_other_formulae_are_named_too(written: str, expected: str) -> None:
+    assert expected in _spoken(f"We monitor {written} levels.", "en")
 
 
 # ── ampersand initialisms ───────────────────────────────────────────
@@ -62,8 +76,12 @@ def test_title_pairs_are_separated_in_english(written: str) -> None:
 
 
 def test_title_pairs_are_separated_in_urdu() -> None:
+    """The hyphenation above is an ENGLISH fix — it makes an English voice read the
+    letters apart. In Urdu the pair is written in Urdu script instead, which needs no
+    such trick: Latin letters in an Urdu sentence were the problem, not the cure."""
     said = _spoken("MD/CEO فہیم حیدر ہیں۔", "ur")
-    assert "M-D اور C-E-O" in said
+    assert "ایم ڈی اور سی ای او" in said
+    assert "M-D" not in said
 
 
 def test_a_doubled_title_pair_stays_short() -> None:
@@ -107,6 +125,54 @@ def test_postcode_is_digits_not_a_quantity() -> None:
 def test_postcode_in_urdu() -> None:
     said = spoken_addresses("اسلام آباد – 44000", "ur")
     assert "پوسٹل کوڈ چار چار صفر صفر صفر" in said
+
+
+def test_a_city_is_required_before_a_postcode() -> None:
+    """The bug: any 5-digit run was announced as a postcode.
+
+    Every ISO certification in the knowledge base is five digits, so the kiosk said
+    "ISO postal code one four zero zero one" out loud for ISO 14001.
+    """
+    said = _spoken("We hold ISO 14001 certification.", "en")
+    assert "postal code" not in said
+    assert "fourteen thousand one" in said
+
+
+@pytest.mark.parametrize("standard", ["ISO 9001", "ISO 14001", "ISO 26000", "ISO 27001",
+                                      "ISO 45001", "OHSAS 18001"])
+def test_no_standard_in_the_corpus_is_read_as_a_postcode(standard: str) -> None:
+    assert "postal code" not in _spoken(f"Certified to {standard}.", "en")
+
+
+def test_the_urdu_voice_does_not_announce_a_postcode_either() -> None:
+    assert "پوسٹل کوڈ" not in spoken_addresses("ہم ISO 14001 سرٹیفائیڈ ہیں۔", "ur")
+
+
+@pytest.mark.parametrize(
+    "text,city",
+    [
+        ("Islamabad – 44000, Pakistan", "Islamabad"),
+        ("Karachi – 75600; Tel (+92) 21 111-410-410", "Karachi"),
+        ("Islamabad 44000", "Islamabad"),          # separator is optional
+        ("Islamabad, 44000", "Islamabad"),
+    ],
+)
+def test_a_real_postcode_still_gets_its_label(text: str, city: str) -> None:
+    said = _spoken(text, "en")
+    # The city itself is respelled by the places table; what this test guards is that
+    # the postcode still gets its label and is read digit by digit.
+    assert "postal code" in said
+
+
+def test_the_edition_year_of_a_standard_is_not_run_into_its_number() -> None:
+    """"ISO 45001:2018" left the colon in, so the two numbers ran together."""
+    said = _spoken("Certified to ISO 45001:2018.", "en")
+    assert "forty five thousand one, twenty eighteen" in said
+    assert ":" not in said
+
+
+def test_the_edition_year_uses_an_urdu_comma_in_urdu_mode() -> None:
+    assert "، 2018" in spoken_addresses("ISO 45001:2018 سرٹیفائیڈ۔", "ur")
 
 
 # ── ordinals, contact details ───────────────────────────────────────

@@ -6,8 +6,9 @@ independently testable — most prompt regressions on this kiosk have been perso
 to do with retrieval, and debugging them through a retrieval stack is miserable.
 
 The rule that matters most here: **the system prompt is always injected, even when
-retrieval returns nothing or fails outright.** Maryam's persona, her language, her gender
-agreement and her refusal behaviour must not depend on whether Qdrant answered. An
+retrieval returns nothing or fails outright.** The presenter's persona, language, gender
+agreement and refusal behaviour must not depend on whether Qdrant answered — and that
+holds for the inline fallbacks too, which are keyed by presenter for the same reason. An
 empty index should produce a polite "I don't have that information", not a personality
 collapse into a generic assistant.
 """
@@ -30,21 +31,51 @@ log = logging.getLogger(__name__)
 # exist so a missing or unreadable prompt file degrades to a usable kiosk rather than
 # stopping it from starting. Deliberately short — they are a safety net, not a copy.
 _FALLBACK_RULES = {
-    "en": (
-        "You are Maryam, a representative for Mari Energies at the kiosk in its Islamabad "
-        "head office. You are a real member of the team — never say or imply you are an AI. "
-        "Ground every factual claim in the knowledge below and never invent figures, dates "
-        "or names. If the knowledge does not cover the question, say so briefly and point "
-        "the visitor to marienergies.com.pk. Your reply is spoken aloud, so keep it to "
-        "one to three natural sentences with no markdown."
-    ),
-    "ur": (
-        "آپ مریم ہیں — Mari Energies کے kiosk پر موجود نمائندہ، ٹیم کی ایک حقیقی رکن (کبھی نہ "
-        "کہیں کہ آپ AI ہیں)۔ ہر حقیقت نیچے دی گئی معلومات سے لیں، خود سے اعداد یا نام مت "
-        "گھڑیں۔ اگر جواب موجود نہ ہو تو مختصراً بتا دیں اور marienergies.com.pk کا حوالہ "
-        "دیں۔ جواب مختصر، مؤنث صیغے میں، اور بولنے کے قابل ہو۔"
-    ),
+    "female": {
+        "en": (
+            "You are Maryam, a representative for Mari Energies at the kiosk in its Islamabad "
+            "head office. You are a real member of the team — never say or imply you are an AI. "
+            "Ground every factual claim in the knowledge below and never invent figures, dates "
+            "or names. If the knowledge does not cover the question, say so briefly and point "
+            "the visitor to marienergies.com.pk. Your reply is spoken aloud, so keep it to "
+            "one to three natural sentences with no markdown."
+        ),
+        "ur": (
+            "آپ مریم ہیں — Mari Energies کے kiosk پر موجود نمائندہ، ٹیم کی ایک حقیقی رکن (کبھی نہ "
+            "کہیں کہ آپ AI ہیں)۔ ہر حقیقت نیچے دی گئی معلومات سے لیں، خود سے اعداد یا نام مت "
+            "گھڑیں۔ اگر جواب موجود نہ ہو تو مختصراً بتا دیں اور marienergies.com.pk کا حوالہ "
+            "دیں۔ جواب مختصر، مؤنث صیغے میں، اور بولنے کے قابل ہو۔"
+        ),
+    },
+    "male": {
+        "en": (
+            "You are Hamza, a representative for Mari Energies at the kiosk in its Islamabad "
+            "head office. You are a real member of the team — never say or imply you are an AI. "
+            "Ground every factual claim in the knowledge below and never invent figures, dates "
+            "or names. If the knowledge does not cover the question, say so briefly and point "
+            "the visitor to marienergies.com.pk. Your reply is spoken aloud, so keep it to "
+            "one to three natural sentences with no markdown."
+        ),
+        "ur": (
+            "آپ حمزہ ہیں — Mari Energies کے kiosk پر موجود نمائندہ، ٹیم کے ایک حقیقی رکن (کبھی نہ "
+            "کہیں کہ آپ AI ہیں)۔ ہر حقیقت نیچے دی گئی معلومات سے لیں، خود سے اعداد یا نام مت "
+            "گھڑیں۔ اگر جواب موجود نہ ہو تو مختصراً بتا دیں اور marienergies.com.pk کا حوالہ "
+            "دیں۔ جواب مختصر، مذکر صیغے میں، اور بولنے کے قابل ہو۔"
+        ),
+    },
 }
+
+
+def _fallback_rules(persona: str, lang: str) -> str:
+    """The inline stub for one presenter and language.
+
+    Keyed by persona because the stub names the presenter and, in Urdu, fixes the
+    gender of every sentence after it — a male rig falling back to Maryam's stub would
+    introduce exactly the disagreement the persona prompts exist to prevent.
+    """
+    rules = _FALLBACK_RULES.get(persona) or _FALLBACK_RULES["female"]
+    return rules.get(lang) or rules["en"]
+
 
 # Appended only when retrieval returned nothing. Without an explicit instruction the
 # model treats an empty context as licence to answer from its own memory, which is the
@@ -73,10 +104,19 @@ class Prompt:
 class GenerationService:
     """Builds prompts from a RetrievalResult and talks to the OpenAI-compatible LLM."""
 
+    # The presenters, and the filename suffix each one's prompts carry. The female
+    # files are unsuffixed because they were the only ones for the kiosk's whole life
+    # so far; renaming them would break every deployment mid-flight for no gain.
+    # Order matters: the default persona is loaded first so a missing male file can
+    # fall back to text that is already in the dict.
+    PERSONAS = {"female": "", "male": "_male"}
+    DEFAULT_PERSONA = "female"
+
     def __init__(self, settings: RagSettings | None = None) -> None:
         self.settings = settings or get_settings()
-        self._templates: dict[str, str] = {}
-        self._greetings: dict[str, str] = {}
+        # Keyed (persona, lang) — one entry per presenter per language.
+        self._templates: dict[tuple[str, str], str] = {}
+        self._greetings: dict[tuple[str, str], str] = {}
 
     # ── templates ───────────────────────────────────────────────────
 
@@ -91,20 +131,54 @@ class GenerationService:
             from voice_config import load_prompt
         except ImportError:  # pragma: no cover
             log.warning("voice_config unavailable; using inline fallback prompts")
-            self._templates = dict(_FALLBACK_RULES)
+            self._templates = {
+                (p, lang): _fallback_rules(p, lang)
+                for p in self.PERSONAS
+                for lang in ("en", "ur")
+            }
             return
 
-        for lang, name in (("en", "system_prompt_english"), ("ur", "system_prompt_urdu")):
-            self._templates[lang] = load_prompt(name) or _FALLBACK_RULES[lang]
-        for lang, name in (("en", "greeting_english"), ("ur", "greeting_urdu")):
-            if text := load_prompt(name):
-                self._greetings[lang] = text
+        stems = {"en": ("system_prompt_english", "greeting_english"),
+                 "ur": ("system_prompt_urdu", "greeting_urdu")}
+        for persona, suffix in self.PERSONAS.items():
+            for lang, (rules_stem, greet_stem) in stems.items():
+                rules = load_prompt(f"{rules_stem}{suffix}")
+                if rules is None and suffix:
+                    # Fall back to this persona's own inline stub, NOT to the female
+                    # persona's full text. The stub is shorter on guardrails but names
+                    # the right presenter and fixes the right gender on every sentence
+                    # after it; borrowing Maryam's text would make the male rig introduce
+                    # itself as a woman on every single turn, which is the louder failure.
+                    log.warning("no %s%s prompt; male turns fall back to the inline stub",
+                                rules_stem, suffix)
+                self._templates[(persona, lang)] = rules or _fallback_rules(persona, lang)
+                # No cross-persona fallback here on purpose. The greeting file's whole
+                # job is to say "you are Maryam" / "you are Hamza" by name, so borrowing
+                # the other presenter's copy would introduce the rig under the wrong name
+                # and the wrong gender in the very first thing a visitor hears. Dropping
+                # it instead costs the scripted opener; the base rules still carry the
+                # persona, and force_salam still supplies the salam.
+                # A missing greeting file is expected for Urdu's female persona: that
+                # prompt carries its own opening-turn section, so appending anything
+                # here would duplicate the introduction it already spells out.
+                greeting = load_prompt(f"{greet_stem}{suffix}")
+                if greeting is None and suffix:
+                    log.warning("no %s%s prompt; male greetings fall back to the base rules",
+                                greet_stem, suffix)
+                if greeting:
+                    self._greetings[(persona, lang)] = greeting
         log.info("loaded prompt templates for %s", sorted(self._templates))
 
-    def rules(self, lang: str) -> str:
+    def rules(self, lang: str, avatar: str = DEFAULT_PERSONA) -> str:
         if not self._templates:
             self.load_templates()
-        return self._templates.get(lang) or self._templates.get("en") or _FALLBACK_RULES["en"]
+        persona = avatar if avatar in self.PERSONAS else self.DEFAULT_PERSONA
+        return (
+            self._templates.get((persona, lang))
+            or self._templates.get((persona, "en"))
+            or self._templates.get((self.DEFAULT_PERSONA, lang))
+            or _fallback_rules(persona, lang)
+        )
 
     # ── prompt assembly ─────────────────────────────────────────────
 
@@ -115,16 +189,23 @@ class GenerationService:
         *,
         core_brief: str = "",
         greeting: bool = False,
+        avatar: str = DEFAULT_PERSONA,
     ) -> Prompt:
-        """Assemble the system prompt for one turn."""
+        """Assemble the system prompt for one turn.
+
+        ``avatar`` is the presenter on screen, and picks the persona: which name the
+        kiosk introduces itself by, and — in Urdu, where gender is marked on the verb
+        and the possessive — which agreement every sentence uses.
+        """
         lang = lang if lang in ("en", "ur") else "en"
-        parts: list[str] = [self.rules(lang)]
+        persona = avatar if avatar in self.PERSONAS else self.DEFAULT_PERSONA
+        parts: list[str] = [self.rules(lang, persona)]
 
         # Greeting is opt-in per turn. Each turn is a fresh stateless call, so a
         # "greet at the start of the conversation" instruction in the base rules fires
         # on every turn; the server deciding it from what the visitor actually said is
         # the only signal available.
-        if greeting and (text := self._greetings.get(lang)):
+        if greeting and (text := self._greetings.get((persona, lang))):
             parts.append(text)
 
         # The core brief is always present, so the avatar can introduce herself and
