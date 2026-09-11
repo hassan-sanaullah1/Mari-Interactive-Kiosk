@@ -44,9 +44,7 @@ def test_loaded_prompts_are_the_ones_actually_used() -> None:
     assert knowledge.RULES["en"] == load_prompt("system_prompt_english")
     assert knowledge.RULES["ur"] == load_prompt("system_prompt_urdu")
     assert knowledge.GREETINGS["en"] == load_prompt("greeting_english")
-    # Urdu has no separate greeting file: its opening turn is a section of the system
-    # prompt, so there is deliberately nothing to append for that language.
-    assert "ur" not in knowledge.GREETINGS
+    assert knowledge.GREETINGS["ur"] == load_prompt("greeting_urdu")
 
 
 def test_in_code_fallbacks_still_match_the_files_byte_for_byte() -> None:
@@ -58,6 +56,7 @@ def test_in_code_fallbacks_still_match_the_files_byte_for_byte() -> None:
     assert knowledge._RULES_EN == load_prompt("system_prompt_english")
     assert knowledge._RULES_UR == load_prompt("system_prompt_urdu")
     assert knowledge._GREETING_EN == load_prompt("greeting_english")
+    assert knowledge._GREETING_UR == load_prompt("greeting_urdu")
 
 
 def test_persona_and_tone_rules_survived_the_move_to_files() -> None:
@@ -74,10 +73,25 @@ def test_persona_and_tone_rules_survived_the_move_to_files() -> None:
 
 def test_the_greeting_prompts_demand_the_salam_and_the_name() -> None:
     """The kiosk's one hard promise: the first reply opens with the salam and her name."""
-    en, ur = knowledge.GREETINGS["en"], knowledge.RULES["ur"]
+    en, ur = knowledge.GREETINGS["en"], knowledge.GREETINGS["ur"]
     assert "Assalamualaikum" in en and "Maryam" in en
     assert "السلام علیکم" in ur and "مریم" in ur
     assert "وعلیکم السلام" in ur         # named explicitly so it is never returned instead
+
+
+def test_the_greeting_is_not_baked_into_the_urdu_rules() -> None:
+    """The introduction must reach the model ONLY on a greeting turn.
+
+    Each turn is a stateless call, so anything in RULES is in the system prompt every
+    time. While the opening-turn script lived inside system_prompt_urdu.md, Urdu answers
+    opened with "السلام علیکم، میرا نام مریم ہے ..." and "بتائیے، میں آپ کی کیا مدد کر
+    سکتی ہوں؟" before every answer, however far into the conversation the visitor was.
+    """
+    ur = knowledge.RULES["ur"]
+    assert "وعلیکم السلام" not in ur              # the opening script, not the base rules
+    assert "میں آپ کی کیا مدد کر سکتی ہوں؟" not in ur   # the invitation it ended on
+    # ...and the rules still tell her to stay silent about it until told otherwise.
+    assert "سیدھا سوال کا جواب دیں" in ur
 
 
 # ── abbreviation glossary ───────────────────────────────────────────

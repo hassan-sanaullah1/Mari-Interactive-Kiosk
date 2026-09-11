@@ -754,9 +754,16 @@ class UpliftTTS(TTSProvider):
         self.voice = voice or C.UPLIFT_VOICE
         self.output_format = output_format or C.UPLIFT_FORMAT
         # 1.0 is the signature default, so "caller did not ask" means "use the
-        # configured rate" (C.UPLIFT_SPEED); an explicit speed still wins.
-        self.speed = speed if speed != 1.0 else C.UPLIFT_SPEED
+        # configured rate"; an explicit speed still wins. The configured rate is
+        # per-language: English runs slower than Urdu (C.UPLIFT_SPEED_EN vs
+        # C.UPLIFT_SPEED) because the receptionist persona reads English prose at a
+        # brisk clip that lands as rushed. Resolved here rather than at the call site
+        # so every entrypoint — server/app.py and the s2s handler — gets the right
+        # default from the language it already passes.
         self.lang = lang
+        self.speed = speed if speed != 1.0 else (
+            C.UPLIFT_SPEED_EN if lang == "en" else C.UPLIFT_SPEED
+        )
 
     async def synthesize(self, text: str) -> tuple[bytes, str]:
         text = (text or "").strip()

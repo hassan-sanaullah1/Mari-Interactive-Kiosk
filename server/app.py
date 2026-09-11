@@ -107,6 +107,35 @@ NO_SPEECH_REPLY = {
 # an id it has no voice for.
 AVATARS = frozenset({"female", "male"})
 
+# ── DEMO PITCH — temporary, for a recording ─────────────────────────
+# While MARI_PITCH_ONLY=1, every Urdu turn on the female rig answers with this one
+# fixed line, whatever the visitor said, and without calling the LLM at all. It is a
+# recording aid, NOT a product behaviour: the kiosk stops answering questions while
+# it is on. Unset the env var (or set it to 0) to hand Urdu back to the model.
+#
+# Deliberately checked at request time rather than at import, so the flag can be
+# flipped without a code change; the server still needs a restart to re-read .env.
+PITCH_ONLY_UR = (
+    "Assalamualaikum میں Maryam ہوں، اور میں Mari Energies کی ایک representative ہوں۔ "
+    "Sky47، جو Mari Energies کا Data Center اور AI کلاؤڈ Infrastructure Vertical ہے، "
+    "پاکستان کا سب سے بڑا کلاؤڈ AI Farm چلاتا ہے۔ یہ Huawei Ascend NPU اور NVIDIA GPU "
+    "clusters کی مدد سے GPU-as-a-Service فراہم کرتا ہے۔ اس میں liquid-cooled racks "
+    "استعمال ہوتے ہیں جو فی rack پچاس Kilo Watts تک handle کر سکتے ہیں۔"
+)
+
+
+def _pitch_override(lang: str, avatar_id: str) -> str | None:
+    """The fixed pitch line when MARI_PITCH_ONLY is on, else None.
+
+    Scoped to Urdu on the female rig only — the language and presenter being recorded —
+    so an English turn or the male rig still behaves normally if one gets used by mistake.
+    """
+    if C.ENV.get("MARI_PITCH_ONLY", "0") not in ("1", "true", "yes", "on"):
+        return None
+    if lang == "ur" and avatar_id == "female":
+        return PITCH_ONLY_UR
+    return None
+
 
 def _canned(table: dict, lang: str, avatar_id: str = "female") -> str:
     """Pick a canned line for the presenter on screen and the turn's language.
@@ -416,6 +445,8 @@ async def chat(body: ChatIn) -> dict:
     avatar_id = body.avatar if body.avatar in AVATARS else "female"
     if not text:
         return {"reply": "", "demo": not C.llm_ready()}
+    if (pitch := _pitch_override(lang, avatar_id)) is not None:
+        return {"reply": pitch, "demo": False}
     if not C.llm_ready():
         return {"reply": _canned(DEMO_REPLY, lang, avatar_id), "demo": True}
     try:
@@ -445,7 +476,9 @@ async def voice(request: Request, lang: str = "en", avatar: str = "female") -> d
         return out
 
     # 2) LLM reply (falls back to a spoken demo line if vLLM is unreachable)
-    if C.llm_ready():
+    if (pitch := _pitch_override(lang, avatar_id)) is not None:
+        out["reply"] = pitch
+    elif C.llm_ready():
         try:
             # single-shot: no history
             out["reply"] = await run_llm(out["transcript"], lang, None, avatar_id)
@@ -503,6 +536,10 @@ async def llm_stream_sentences(text: str, lang: str, history: list | None = None
     ``avatar_id`` picks the persona (Maryam or Hamza), which decides both the prompt and
     which way the Urdu gender agreement below is corrected.
     Falls back to the demo line (also sentence-split) if vLLM is unreachable."""
+    if (pitch := _pitch_override(lang, avatar_id)) is not None:
+        for s in _split_sentences(pitch):
+            yield s, True
+        return
     if not C.llm_ready():
         for s in _split_sentences(_canned(DEMO_REPLY, lang, avatar_id)):
             yield s, True

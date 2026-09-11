@@ -158,9 +158,6 @@ class GenerationService:
                 # and the wrong gender in the very first thing a visitor hears. Dropping
                 # it instead costs the scripted opener; the base rules still carry the
                 # persona, and force_salam still supplies the salam.
-                # A missing greeting file is expected for Urdu's female persona: that
-                # prompt carries its own opening-turn section, so appending anything
-                # here would duplicate the introduction it already spells out.
                 greeting = load_prompt(f"{greet_stem}{suffix}")
                 if greeting is None and suffix:
                     log.warning("no %s%s prompt; male greetings fall back to the base rules",

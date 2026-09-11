@@ -87,6 +87,23 @@ try:
 except ValueError:  # a typo in the env must not take the kiosk's voice down
     UPLIFT_SPEED = 0.9
 
+# English gets its OWN rate. The 0.9 above was measured against Urdu, where it fixes
+# clipped unstressed words; English needed something different for a different reason.
+# The English persona is a receptionist, and the helpdesk-agent voice reads English
+# prose at a brisk customer-service clip that lands as rushed rather than attentive —
+# a pacing complaint, not a clipping one. Slowing the SHARED knob to fix it would drag
+# Urdu down with it, off a rate that was measured on a curve the comment above notes is
+# not monotonic, so the two are separate numbers instead.
+#
+# Deliberately NOT paired with inserted commas/full stops to space the speech out:
+# server/providers/tts.py measured that on this voice and every inserted pause both
+# opened an unnatural hole AND mispronounced the words around it ("rare earth" became
+# "wear, birth"). Rate is the only lever that slows this voice without corrupting it.
+try:
+    UPLIFT_SPEED_EN = float(env("APP_UPLIFT_SPEED_EN", "0.78"))
+except ValueError:
+    UPLIFT_SPEED_EN = 0.85
+
 # ── English STT/TTS. STT runs LOCALLY by default (the s2s built-in faster-whisper).
 #    English TTS defaults to Uplift — the same provider (and voice) as Urdu, reading
 #    English text — because no Kokoro instance is deployed right now. Point APP_EN_TTS
