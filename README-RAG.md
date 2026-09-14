@@ -1,8 +1,8 @@
 # Retrieval layer
 
 Hybrid (dense + sparse) retrieval over Qdrant for the MARI kiosk. It replaced a
-stdlib BM25 index that used to live in `server/knowledge.py`; that code has since been
-removed, and this is now the only retrieval path in the system.
+stdlib BM25 index that has since been removed; this is now the only retrieval path in
+the system. The measurements behind the settings are in `docs/retrieval_tuning_notes.md`.
 
 This document exists because every number in `server/services/settings.py` is a trade,
 and a parameter whose reason is not written down is a parameter nobody dares change.
@@ -268,7 +268,7 @@ currency, and RRF needs no per-corpus weight to tune.
 **The dense model beats the old BM25 retriever on English by 6 points of hit@5 and loses
 to it on Urdu by 15.**
 
-`server/knowledge.py` carries a hand-built, corpus-specific Urdu layer that no
+`server/services/expansion.py` (tables in `expansion_tables.py`) carries a hand-built, corpus-specific Urdu layer that no
 general-purpose multilingual embedding reproduces: a curated topic glossary, phrase maps
 for acronyms Urdu spells out letter by letter (`پی ایس ایکس` = P-S-X, three tokens that
 individually mean nothing), and a phonetic index matching proper nouns across scripts on

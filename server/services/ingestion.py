@@ -1,10 +1,8 @@
 """Startup ingestion — idempotent, hash-based, and safe to run on every boot.
 
-The contract: after this runs, the index contains exactly the chunks of exactly the
-files currently in the corpus directory, and running it again changes nothing. That
-matters more than it sounds. The container restarts on every deploy, health check
-failure and config change; an ingest that is not idempotent either duplicates the corpus
-or spends 40 seconds re-embedding it, on every one of those.
+After it runs, the index holds exactly the chunks of the files in the corpus directory,
+and running it again changes nothing, so container restarts neither duplicate the
+corpus nor re-embed it.
 """
 
 from __future__ import annotations
@@ -68,17 +66,8 @@ class IngestionService:
 
         for path in files:
             digest = await asyncio.to_thread(documents.file_hash, path)
-            # Two conditions, not one. The hash record says "this file was ingested";
-            # the point count says "and it is still in the index". Trusting the record
-            # alone means a metadata DB that outlives the index it describes silently
-            # produces an empty, healthy-looking kiosk that answers everything
-            # ungrounded — no error, no failed ingest, just no knowledge.
-            #
-            # That is not hypothetical. The DB defaults to a path inside the corpus
-            # directory, the Dockerfile COPYs that directory into the image, and a
-            # developer who had run the server on the host baked their own "ready, 89
-            # chunks" record into the build. Every container from that image then
-            # skipped ingestion against a fresh, empty Qdrant volume.
+            # The hash record alone is not enough: a metadata DB can outlive its index
+            # (e.g. baked into an image), which would leave an empty, healthy-looking kiosk.
             if not force and self.metadata.is_unchanged(path.name, digest):
                 if await self.store.count_by_source(path.name) > 0:
                     report.skipped.append(path.name)
@@ -131,10 +120,7 @@ class IngestionService:
             self.metadata.mark_ready(path.name, digest, file_type, size, 0)
             return 0
 
-        # Delete before insert, not after. If the process dies between the two, an empty
-        # slot for this document is recoverable on the next boot (the hash check will
-        # not match a `processing` row, so it re-ingests); a duplicated document is not
-        # detectable at all.
+        # Delete before insert: a crash in between leaves a recoverable gap, not duplicates.
         await self.store.delete_by_source(path.name)
 
         ingested_at = time.time()
@@ -150,11 +136,7 @@ class IngestionService:
                     "text": c.text,
                     "source": c.source,
                     "heading_path": c.heading_path,
-                    # The top-level section this chunk belongs to, denormalised out of
-                    # the heading path so retrieval can look it up by exact keyword
-                    # match. Derived here rather than at query time because the split
-                    # rule then lives in one place: a chunk's section is decided once,
-                    # at ingest, and every reader agrees about it.
+                    # Top-level section, stored for exact keyword lookup at retrieval.
                     "section": c.heading_path.split(" > ")[0] if c.heading_path else "",
                     "chunk_index": c.chunk_index,
                     "token_count": c.token_count,

@@ -9,15 +9,10 @@ so it is normalised in code instead of being left to the model.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from server import knowledge  # noqa: E402
-from voice_config.greetings import force_salam  # noqa: E402
+from server.agent.greeting import is_greeting, said_salam
+from server.agent.reply_fixes import feminine_agreement, force_salam
 
 
 @pytest.mark.parametrize(
@@ -85,25 +80,74 @@ def test_an_empty_reply_is_not_turned_into_a_bare_salam() -> None:
     assert force_salam("وعلیکم السلام", "ur") == "وعلیکم السلام"
 
 
+# ── returning a visitor's salam ─────────────────────────────────────
+
+@pytest.mark.parametrize(
+    "reply",
+    ["Assalamualaikum! Welcome to Mari Energies, I am Maryam.",
+     "Walaikum assalam, I am Maryam.", "Hello! I am Maryam."],
+)
+def test_a_visitors_salam_is_returned_in_english(reply: str) -> None:
+    said = force_salam(reply, "en", returning=True)
+    assert said.startswith("Walaikum Assalam! ")
+    assert "Assalamualaikum" not in said and said.lower().count("assalam") == 1
+
+
+@pytest.mark.parametrize(
+    "reply",
+    ["السلام علیکم! میں مریم ہوں۔", "وعلیکم السلام، میں مریم ہوں۔",
+     "آپ کا خیر مقدم ہے، میں مریم ہوں۔"],
+)
+def test_a_visitors_salam_is_returned_in_urdu(reply: str) -> None:
+    said = force_salam(reply, "ur", returning=True)
+    assert said.startswith("وعلیکم السلام، ")
+    assert "السلام علیکم" not in said.replace("وعلیکم السلام", "")
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["Assalamualaikum", "Assalam o Alaikum, who are you?", "As-salamu alaykum", "salam",
+     "Hi, assalamualaikum", "Asalamualaikum wa rahmatullahi wa barakatuh",
+     "السلام علیکم", "اسلام علیکم، آپ کون ہیں؟", "السلام و علیکم ورحمۃ اللہ وبرکاتہ", "سلام"],
+)
+def test_every_salam_the_visitor_says_is_detected(text: str) -> None:
+    assert said_salam(text)
+    assert is_greeting(text)
+
+
+@pytest.mark.parametrize(
+    "text", ["hello", "who are you", "Walaikum assalam", "وعلیکم السلام", "what does salam mean"]
+)
+def test_no_salam_to_return(text: str) -> None:
+    assert not said_salam(text)
+
+
+def test_the_greeting_prompts_tell_the_model_to_return_a_salam() -> None:
+    from server.prompts import get_prompts
+
+    for (persona, lang), text in get_prompts().greeting.items():
+        assert ("Walaikum Assalam" if lang == "en" else "وعلیکم السلام") in text, persona
+
+
 # ── which turns count as a greeting ──────────────────────────────────
 
 @pytest.mark.parametrize(
     "text", ["السلام علیکم", "ہیلو", "آپ کون ہیں؟", "آپ کون ہیں", "اپنا تعارف کرائیں؟", "hi"]
 )
 def test_greeting_turns_are_detected(text: str) -> None:
-    assert knowledge.is_greeting(text)
+    assert is_greeting(text)
 
 
 def test_urdu_question_mark_is_recognised() -> None:
     """"؟" is U+061F, not ASCII "?" — with only the ASCII form in the pattern,
     "آپ کون ہیں؟" was never detected and an identity question got no introduction."""
-    assert knowledge.is_greeting("آپ کون ہیں؟")
+    assert is_greeting("آپ کون ہیں؟")
 
 
 @pytest.mark.parametrize("text", ["منافع کتنا ہے؟", "ماری کا منافع؟", "who is the CEO"])
 def test_ordinary_questions_are_not_greetings(text: str) -> None:
     """The base prompt forbids a salam on these turns, so they must not be normalised."""
-    assert not knowledge.is_greeting(text)
+    assert not is_greeting(text)
 
 
 @pytest.mark.parametrize("text", [
@@ -117,7 +161,7 @@ def test_ordinary_questions_are_not_greetings(text: str) -> None:
     "Hi, introduce yourself and tell me about the verticals",
 ])
 def test_a_greeting_followed_by_a_real_question_still_greets(text: str) -> None:
-    assert knowledge.is_greeting(text)
+    assert is_greeting(text)
 
 
 @pytest.mark.parametrize("text", [
@@ -127,7 +171,7 @@ def test_a_greeting_followed_by_a_real_question_still_greets(text: str) -> None:
     "کمپنی کی تاریخ بتائیں",
 ])
 def test_the_same_question_without_a_greeting_does_not_greet(text: str) -> None:
-    assert not knowledge.is_greeting(text)
+    assert not is_greeting(text)
 
 
 # ── feminine agreement ──────────────────────────────────────────────
@@ -145,16 +189,12 @@ def test_the_same_question_without_a_greeting_does_not_greet(text: str) -> None:
     ],
 )
 def test_self_description_becomes_feminine(reply: str) -> None:
-    from voice_config.greetings import feminine_agreement
-
     said = feminine_agreement(reply, "ur")
     assert "کی" in said                       # feminine possessive
     assert "کا" not in said and "کے" not in said
 
 
 def test_an_already_feminine_self_description_is_unchanged() -> None:
-    from voice_config.greetings import feminine_agreement
-
     text = "میں Mari Energies کی AI Representative ہوں۔"
     assert feminine_agreement(text, "ur") == text
 
@@ -173,13 +213,9 @@ def test_an_already_feminine_self_description_is_unchanged() -> None:
     ],
 )
 def test_possessives_that_are_not_about_mari_are_left_alone(text: str) -> None:
-    from voice_config.greetings import feminine_agreement
-
     assert feminine_agreement(text, "ur") == text
 
 
 def test_english_replies_are_not_touched_by_agreement() -> None:
-    from voice_config.greetings import feminine_agreement
-
     text = "I am the AI Representative for Mari Energies."
     assert feminine_agreement(text, "en") == text

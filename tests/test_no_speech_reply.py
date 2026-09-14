@@ -14,7 +14,8 @@ import asyncio
 
 import pytest
 
-from server import app as A
+from server.agent.replies import canned
+from server.agent.turn import run_reply
 
 
 class _Sock:
@@ -32,7 +33,7 @@ class _Sock:
 
 def _run(spoke: bool, lang: str = "ur") -> list[dict]:
     sock = _Sock()
-    asyncio.run(A.run_reply(sock, "", lang, echo_transcript=True, spoke=spoke))
+    asyncio.run(run_reply(sock, "", lang, echo_transcript=True, spoke=spoke))
     return sock.sent
 
 
@@ -51,14 +52,14 @@ def test_a_lost_transcript_is_apologised_for(lang: str) -> None:
     replies = [m for m in _run(spoke=True, lang=lang) if m.get("type") == "reply"]
     assert len(replies) == 1
     assert replies[0]["demo"] is True
-    assert replies[0]["text"] == A.NO_SPEECH_REPLY["female"][lang]
+    assert replies[0]["text"] == canned("no_speech", lang, "female")
 
 
 def test_the_apology_is_the_default_for_an_older_browser() -> None:
     """A client that sends a bare {"end"} with no ``spoke`` keeps the behaviour it
     had rather than falling silent — the flag defaults to True server-side."""
     sock = _Sock()
-    asyncio.run(A.run_reply(sock, "", "ur", echo_transcript=True))
+    asyncio.run(run_reply(sock, "", "ur", echo_transcript=True))
     assert [m for m in sock.sent if m.get("type") == "reply"]
 
 
@@ -66,6 +67,6 @@ def test_the_male_presenter_apologises_in_his_own_gender() -> None:
     """The Urdu verb carries the speaker's gender, and this line bypasses the LLM,
     so it has to be picked per persona rather than left to the agreement pass."""
     sock = _Sock()
-    asyncio.run(A.run_reply(sock, "", "ur", avatar_id="male", spoke=True))
+    asyncio.run(run_reply(sock, "", "ur", avatar_id="male", spoke=True))
     said = [m for m in sock.sent if m.get("type") == "reply"][0]["text"]
     assert "سکا" in said and "سکی" not in said

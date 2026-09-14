@@ -11,14 +11,9 @@ Run: python -m pytest tests/ -q
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from server.providers.stt import _fix_misheard_mari  # noqa: E402
+from server.providers.stt import _fix_misheard_mari
 
 
 # ── followed by a word from the company's own name ──────────────────

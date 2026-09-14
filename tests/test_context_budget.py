@@ -16,7 +16,8 @@ Latin, so the same conversation that fit in English did not fit in Urdu.
 
 from __future__ import annotations
 
-from server import app as A
+from server.agent import context_budget as A
+from server.services.generation import CONTEXT_HEADER
 
 
 def _msgs(n: int, chars: int) -> list[dict]:
@@ -31,7 +32,7 @@ def test_history_is_trimmed_until_the_request_fits() -> None:
     budget = (A.LLM_CONTEXT_TOKENS - 420 - A.LLM_CONTEXT_SAFETY_TOKENS) * A.LLM_CHARS_PER_TOKEN
     system = "s" * int(budget - 3_000)
     history = _msgs(20, 400)       # far more than the 3k of room left for it
-    kept = A._fit_history(system, "q" * 60, history, reply_tokens=420)
+    kept = A.fit_history(system, "q" * 60, history, reply_tokens=420)
     assert len(kept) < len(history)
     budget = (A.LLM_CONTEXT_TOKENS - 420 - A.LLM_CONTEXT_SAFETY_TOKENS) * A.LLM_CHARS_PER_TOKEN
     used = len(system) + 60 + sum(len(m["content"]) + 8 for m in kept)
@@ -45,7 +46,7 @@ def test_the_newest_exchange_is_the_one_kept() -> None:
     system = "s" * int(budget - 3_000)
     history = _msgs(20, 400)
     history[-1] = {"role": "user", "content": "NEWEST"}
-    kept = A._fit_history(system, "q", history, reply_tokens=420)
+    kept = A.fit_history(system, "q", history, reply_tokens=420)
     assert kept, "at least the newest message should survive"
     assert kept[-1]["content"] == "NEWEST"
 
@@ -53,7 +54,7 @@ def test_the_newest_exchange_is_the_one_kept() -> None:
 def test_order_is_preserved() -> None:
     system = "s" * 10_000
     history = [{"role": "user", "content": f"m{i}"} for i in range(6)]
-    kept = A._fit_history(system, "q", history, reply_tokens=420)
+    kept = A.fit_history(system, "q", history, reply_tokens=420)
     assert [m["content"] for m in kept] == sorted(
         (m["content"] for m in kept), key=lambda c: int(c[1:])
     )
@@ -64,14 +65,14 @@ def test_a_short_conversation_is_left_alone() -> None:
     the model context it was entitled to."""
     system = "s" * 2_000  # small enough to fit under any sane ratio
     history = _msgs(4, 200)
-    assert A._fit_history(system, "q", history, reply_tokens=420) == history
+    assert A.fit_history(system, "q", history, reply_tokens=420) == history
 
 
 def test_an_oversized_system_prompt_drops_all_history() -> None:
     """If the prompt alone overflows there is no history left to drop. Returning
     empty (rather than raising) lets the request go out and the upstream error
     surface, instead of hiding the real problem behind a truncated prompt."""
-    assert A._fit_history("s" * 100_000, "q", _msgs(4, 200), reply_tokens=420) == []
+    assert A.fit_history("s" * 100_000, "q", _msgs(4, 200), reply_tokens=420) == []
 
 
 def test_an_upstream_error_frame_is_not_swallowed(monkeypatch) -> None:
@@ -82,8 +83,11 @@ def test_an_upstream_error_frame_is_not_swallowed(monkeypatch) -> None:
     generator finished having yielded nothing, and the turn went silent with
     nothing logged. It must raise instead, so the retry/demo path can see it.
     """
-    import asyncio, json
-    import server.app as app_mod
+    import asyncio
+
+    from server import config as C
+    from server.agent import responder
+    from server.providers import llm
 
     frames = [
         'data: {"error": {"message": "This model\'s maximum context length is 8192 tokens."}}',
@@ -106,11 +110,11 @@ def test_an_upstream_error_frame_is_not_swallowed(monkeypatch) -> None:
         async def __aexit__(self, *a): return False
         def stream(self, *a, **k): return _Resp()
 
-    monkeypatch.setattr(app_mod.httpx, "AsyncClient", _Client)
-    monkeypatch.setattr(app_mod.C, "llm_ready", lambda: True)
+    monkeypatch.setattr(llm.httpx, "AsyncClient", _Client)
+    monkeypatch.setattr(C, "llm_ready", lambda: True)
 
     async def _collect():
-        return [s async for s, _ in app_mod.llm_stream_sentences("سوال", "ur", [], "female")]
+        return [s async for s, _ in responder.respond_sentences("سوال", "ur", [], "female")]
 
     out = asyncio.run(_collect())
     # It must not come back empty and silent. The demo line is the visible
@@ -126,10 +130,10 @@ def test_retrieved_context_is_trimmed_before_the_reply_is_shortened() -> None:
     visitor hears. Dropping the tail of the retrieved context costs at most the
     least-relevant section, since they arrive ranked best-first.
     """
-    marker = A._CONTEXT_MARKERS[0]
+    marker = CONTEXT_HEADER
     head = "PERSONA AND CORE BRIEF\n\n"
     prompt = head + marker + "\n" + ("ک " * 20_000)
-    out = A._fit_system_prompt(prompt, "سوال", reply_tokens=420)
+    out = A.fit_system_prompt(prompt, "سوال", reply_tokens=420)
     assert len(out) < len(prompt)
     # Everything above the marker is persona/core brief and must survive intact.
     assert out.startswith(head + marker)
@@ -140,12 +144,12 @@ def test_retrieved_context_is_trimmed_before_the_reply_is_shortened() -> None:
 def test_a_prompt_that_already_fits_is_untouched() -> None:
     """Trimming a prompt that fits would silently cost the model retrieved context
     it was entitled to."""
-    prompt = "PERSONA\n\n" + A._CONTEXT_MARKERS[0] + "\nshort context"
-    assert A._fit_system_prompt(prompt, "q", reply_tokens=420) == prompt
+    prompt = "PERSONA\n\n" + CONTEXT_HEADER + "\nshort context"
+    assert A.fit_system_prompt(prompt, "q", reply_tokens=420) == prompt
 
 
 def test_a_prompt_with_no_retrieved_context_is_never_cut() -> None:
     """With no retrieved section there is only persona and core brief left, and
     cutting those costs the kiosk its identity. Send it and let the error show."""
     prompt = "PERSONA AND CORE BRIEF " * 5_000   # no context marker at all
-    assert A._fit_system_prompt(prompt, "q", reply_tokens=420) == prompt
+    assert A.fit_system_prompt(prompt, "q", reply_tokens=420) == prompt

@@ -1,4 +1,4 @@
-"""The voice_config layer: prompt files, abbreviation glossary, Uplift spoken-form fixes.
+"""Prompt files, the abbreviation glossary, and the Uplift spoken-form fixes.
 
 The normalizer cases here are the ones a round trip through the real Uplift voice
 (TTS → Soniox STT) got wrong before the fix and right after it; the rest of what the
@@ -8,60 +8,40 @@ phone numbers — Uplift already pronounces correctly and is deliberately left a
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from server import knowledge  # noqa: E402
-from voice_config import load_prompt  # noqa: E402
-from voice_config.glossary import (  # noqa: E402
+from server import config as C
+from server.normalization import normalise_for_uplift, normalize_for_tts, spoken_urls
+from server.prompts import get_prompts, load_prompt, load_prompts
+from server.services.glossary import (
     extract_glossary,
     find_glossary_matches,
     format_glossary_block,
 )
-from server.providers.tts import _spoken  # noqa: E402
-from voice_config.urdu_normalise import normalise_for_uplift, spoken_urls  # noqa: E402
+
+ABBREVIATIONS = extract_glossary(C.KNOWLEDGE_FILE.read_text(encoding="utf-8"))
 
 
 # ── prompt files ────────────────────────────────────────────────────
 
-@pytest.mark.parametrize(
-    "name", ["system_prompt_english", "system_prompt_urdu", "greeting_english"]
-)
-def test_prompt_files_load(name: str) -> None:
-    assert load_prompt(name)
+def test_every_prompt_file_loads() -> None:
+    prompts = load_prompts()
+    assert set(prompts.system) == set(prompts.greeting) == {
+        (p, lang) for p in ("female", "male") for lang in ("en", "ur")
+    }
+    assert all(prompts.system.values()) and all(prompts.greeting.values())
+    assert prompts.core_brief and prompts.query_rewriter and all(prompts.no_context.values())
 
 
-def test_missing_prompt_falls_back_to_none() -> None:
-    """A bad filename must not raise — callers rely on the in-code fallback."""
-    assert load_prompt("no_such_prompt") is None
+def test_a_missing_prompt_file_fails_loudly() -> None:
+    """No silent fallback: a bad deploy must stop at startup."""
+    with pytest.raises(FileNotFoundError):
+        load_prompt("system/nobody_english.md")
 
 
-def test_loaded_prompts_are_the_ones_actually_used() -> None:
-    assert knowledge.RULES["en"] == load_prompt("system_prompt_english")
-    assert knowledge.RULES["ur"] == load_prompt("system_prompt_urdu")
-    assert knowledge.GREETINGS["en"] == load_prompt("greeting_english")
-    assert knowledge.GREETINGS["ur"] == load_prompt("greeting_urdu")
-
-
-def test_in_code_fallbacks_still_match_the_files_byte_for_byte() -> None:
-    """The literals in knowledge.py are the fallback when a prompt file is unreadable.
-
-    A fallback that has drifted from the file is worse than no fallback: the kiosk would
-    keep answering, in a persona nobody edited.
-    """
-    assert knowledge._RULES_EN == load_prompt("system_prompt_english")
-    assert knowledge._RULES_UR == load_prompt("system_prompt_urdu")
-    assert knowledge._GREETING_EN == load_prompt("greeting_english")
-    assert knowledge._GREETING_UR == load_prompt("greeting_urdu")
-
-
-def test_persona_and_tone_rules_survived_the_move_to_files() -> None:
-    """The .md files were extracted verbatim; these are the rules we most rely on."""
-    en, ur = knowledge.RULES["en"], knowledge.RULES["ur"]
+def test_persona_and_tone_rules_are_in_the_files() -> None:
+    system = get_prompts().system
+    en, ur = system[("female", "en")], system[("female", "ur")]
     assert "Maryam" in en and "مریم" in ur           # she has a name, and uses it
     assert "Mari Energies" in en and "Mari Energies" in ur   # brand stays in Latin script
     assert "کر سکتی ہوں" in ur          # feminine verb forms
@@ -73,7 +53,8 @@ def test_persona_and_tone_rules_survived_the_move_to_files() -> None:
 
 def test_the_greeting_prompts_demand_the_salam_and_the_name() -> None:
     """The kiosk's one hard promise: the first reply opens with the salam and her name."""
-    en, ur = knowledge.GREETINGS["en"], knowledge.GREETINGS["ur"]
+    greeting = get_prompts().greeting
+    en, ur = greeting[("female", "en")], greeting[("female", "ur")]
     assert "Assalamualaikum" in en and "Maryam" in en
     assert "السلام علیکم" in ur and "مریم" in ur
     assert "وعلیکم السلام" in ur         # named explicitly so it is never returned instead
@@ -87,7 +68,7 @@ def test_the_greeting_is_not_baked_into_the_urdu_rules() -> None:
     opened with "السلام علیکم، میرا نام مریم ہے ..." and "بتائیے، میں آپ کی کیا مدد کر
     سکتی ہوں؟" before every answer, however far into the conversation the visitor was.
     """
-    ur = knowledge.RULES["ur"]
+    ur = get_prompts().system[("female", "ur")]
     assert "وعلیکم السلام" not in ur              # the opening script, not the base rules
     assert "میں آپ کی کیا مدد کر سکتی ہوں؟" not in ur   # the invitation it ended on
     # ...and the rules still tell her to stay silent about it until told otherwise.
@@ -129,10 +110,10 @@ def test_comma_stops_the_backward_scan() -> None:
 
 
 def test_the_live_knowledge_base_yields_clean_entries() -> None:
-    assert knowledge.ABBREVIATIONS["MPCL"] == "Mari Petroleum Company Limited"
+    assert ABBREVIATIONS["MPCL"] == "Mari Petroleum Company Limited"
     # the noisy ones the tightened filter exists to reject
     for bogus in ("EPS", "GJ", "MT"):
-        assert bogus not in knowledge.ABBREVIATIONS
+        assert bogus not in ABBREVIATIONS
 
 
 def test_matches_are_whole_word_only() -> None:
@@ -145,20 +126,18 @@ def test_glossary_block_is_empty_without_matches() -> None:
     assert format_glossary_block({}) == ""
 
 
-# The prompt is assembled by the generation service now, from a RetrievalResult, rather
-# than by knowledge.system_prompt building its own context. These two tests take the
-# same path the server does, minus the retrieval step: the glossary block is computed
-# from the query and carried on the result, so it survives an empty or failed retrieval.
+# The same path the server takes, minus retrieval: the glossary block rides on the
+# RetrievalResult, so it survives an empty or failed retrieval.
 
 
 def _prompt_for(query: str) -> str:
     from server.services.generation import GenerationService
     from server.services.retriever import RetrievalResult
 
-    matches = find_glossary_matches(query, knowledge.ABBREVIATIONS)
+    matches = find_glossary_matches(query, ABBREVIATIONS)
     result = RetrievalResult(query=query, glossary_block=format_glossary_block(matches))
     return GenerationService().build_prompt(
-        result, "en", core_brief=knowledge.CORE_BRIEF
+        result, "en", core_brief=get_prompts().core_brief
     ).system
 
 
@@ -237,19 +216,19 @@ def test_www_prefix_is_spoken() -> None:
 
 
 def test_domain_is_matched_before_the_sky47_rule_rewrites_its_label() -> None:
-    """_spoken() must see "sky47.com.pk" whole, or the dots are left behind unsaid."""
-    said = _spoken("Visit sky47.com.pk today.", "en")
+    """normalize_for_tts() must see "sky47.com.pk" whole, or the dots are left behind unsaid."""
+    said = normalize_for_tts("Visit sky47.com.pk today.", "en")
     assert "Sky Forty Seven dot com dot P K" in said
     assert ".com.pk" not in said
 
 
 def test_bare_brand_without_a_domain_is_untouched_by_the_url_rule() -> None:
-    assert _spoken("Sky47 is our data centre arm.", "en").startswith("Sky Forty Seven is")
+    assert normalize_for_tts("Sky47 is our data centre arm.", "en").startswith("Sky Forty Seven is")
 
 
 def test_domains_are_fixed_in_english_mode_too() -> None:
     """The original fix only ran in Urdu mode, leaving English broken."""
-    assert "dot com dot P K" in _spoken("Visit marienergies.com.pk.", "en")
+    assert "dot com dot P K" in normalize_for_tts("Visit marienergies.com.pk.", "en")
 
 
 @pytest.mark.parametrize(
@@ -259,7 +238,7 @@ def test_domains_are_fixed_in_english_mode_too() -> None:
         "یہ 2024 میں ہوا۔",            # 20xx years — the cardinal reading is the year
         # 18xx/19xx years are NOT in this list: Uplift reads "1954" as the cardinal
         # "ایک ہزار نو سو چون" where the year is "انیس سو چون", which is why
-        # urdu_normalise.spoken_years exists. See tests/test_tts_spoken.py.
+        # normalization.spoken_years exists. See tests/test_tts_spoken.py.
         "یہ 99.98% ہے۔",              # percentages
         "ہم AI استعمال کرتے ہیں۔",     # acronyms
     ],
@@ -281,10 +260,10 @@ def test_latin_only_urdu_mode_text_is_left_alone() -> None:
 @pytest.mark.parametrize(
     "prompt_name",
     [
-        "system_prompt_english",
-        "system_prompt_english_male",
-        "system_prompt_urdu",
-        "system_prompt_urdu_male",
+        "system/female_english.md",
+        "system/male_english.md",
+        "system/female_urdu.md",
+        "system/male_urdu.md",
     ],
 )
 def test_gpuaas_answers_must_name_both_vendors(prompt_name: str) -> None:
@@ -299,7 +278,7 @@ def test_gpuaas_answers_must_name_both_vendors(prompt_name: str) -> None:
 def test_the_core_brief_carries_the_sky47_ai_hardware() -> None:
     """The brief is injected even when the index is empty, so the fact has to be here
     too — not only in the retrieved section."""
-    brief = knowledge.CORE_BRIEF
+    brief = get_prompts().core_brief
     assert "GPU as a Service" in brief
     assert "Huawei Ascend NPU" in brief
     assert "NVIDIA-compatible GPU clusters" in brief

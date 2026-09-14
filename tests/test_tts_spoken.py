@@ -7,14 +7,9 @@ their numbers out; Urdu replies must keep the digits, where that reading is righ
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from server.providers.tts import _say_int, _spoken  # noqa: E402
+from server.normalization import _say_int, normalize_for_tts
 
 
 @pytest.mark.parametrize(
@@ -30,12 +25,12 @@ from server.providers.tts import _say_int, _spoken  # noqa: E402
     ],
 )
 def test_english_numbers_are_spelled_out(text: str, expected: str) -> None:
-    assert expected in _spoken(text, "en")
+    assert expected in normalize_for_tts(text, "en")
 
 
 def test_english_leaves_no_bare_digits() -> None:
     """Any digit reaching the Urdu-first voice would be read in Urdu."""
-    said = _spoken("Net profit PKR 65.14 billion, 1,760 staff, founded 1954.", "en")
+    said = normalize_for_tts("Net profit PKR 65.14 billion, 1,760 staff, founded 1954.", "en")
     assert not any(ch.isdigit() for ch in said), said
 
 
@@ -48,7 +43,7 @@ def test_english_leaves_no_bare_digits() -> None:
 )
 def test_urdu_digits_are_left_alone(text: str) -> None:
     """Urdu mode wants the Urdu reading, so the digits must survive untouched."""
-    assert _spoken(text, "ur") == text
+    assert normalize_for_tts(text, "ur") == text
 
 
 @pytest.mark.parametrize(
@@ -65,7 +60,7 @@ def test_urdu_digits_are_left_alone(text: str) -> None:
 )
 def test_urdu_years_are_said_as_century_pairs(text: str, expected: str) -> None:
     """A year is "انیس سو چون", not the cardinal count of one thousand nine hundred."""
-    said = _spoken(text, "ur")
+    said = normalize_for_tts(text, "ur")
     assert expected in said
     assert "ہزار" not in said
 
@@ -81,12 +76,12 @@ def test_urdu_years_are_said_as_century_pairs(text: str, expected: str) -> None:
 )
 def test_the_urdu_year_rule_leaves_the_other_shapes_alone(text: str) -> None:
     """Fiscal pairs, ranges, dates and 20xx years keep the reading they already had."""
-    assert "سو" not in _spoken(text, "ur")
+    assert "سو" not in normalize_for_tts(text, "ur")
 
 
 def test_phone_numbers_are_read_digit_by_digit() -> None:
     """A dialling code is an identifier, not a quantity."""
-    said = _spoken("Call 051-111 410 410.", "en")
+    said = normalize_for_tts("Call 051-111 410 410.", "en")
     assert "one hundred and eleven" not in said
     assert "zero five one" in said
 
@@ -95,18 +90,18 @@ def test_acronyms_apply_in_both_languages() -> None:
     """Each language gets its own spoken form. Letter-spacing is an English fix; an
     Urdu reply needs Urdu script, because handing Latin to the Urdu-first voice is
     what broke these in the first place."""
-    assert "M P C L" in _spoken("MPCL results", "en")
-    assert "ایم پی سی ایل" in _spoken("MPCL کی رپورٹ", "ur")
+    assert "M P C L" in normalize_for_tts("MPCL results", "en")
+    assert "ایم پی سی ایل" in normalize_for_tts("MPCL کی رپورٹ", "ur")
 
 
 def test_mari_is_said_with_the_retroflex_flap() -> None:
     """"Mari" is spelled with ر in both scripts, but said with ڑ, not a tapped ر."""
-    assert "ماڑی" in _spoken("MARI welcomes you to Mari Energies.", "en")
-    assert "ماڑی" in _spoken("آپ ماری ہیں — Mari Energies کی نمائندگی کرتی ہیں۔", "ur")
+    assert "ماڑی" in normalize_for_tts("MARI welcomes you to Mari Energies.", "en")
+    assert "ماڑی" in normalize_for_tts("آپ ماری ہیں — Mari Energies کی نمائندگی کرتی ہیں۔", "ur")
 
 
 def test_mari_respelling_does_not_touch_unrelated_words() -> None:
-    assert _spoken("مریم آج نہیں آئیں۔", "ur") == "مریم آج نہیں آئیں۔"
+    assert normalize_for_tts("مریم آج نہیں آئیں۔", "ur") == "مریم آج نہیں آئیں۔"
 
 
 @pytest.mark.parametrize(
@@ -119,7 +114,7 @@ def test_say_int(n: int, said: str) -> None:
 
 
 # ── report formats and symbols ──────────────────────────────────────
-# voice_config.urdu_normalise.spoken_formats — measured against the shapes that occur
+# normalization.spoken_formats, measured against the shapes that occur
 # in server/data/mari_energies_knowledge_base.md. These run in BOTH languages.
 
 @pytest.mark.parametrize(
@@ -141,7 +136,7 @@ def test_say_int(n: int, said: str) -> None:
     ],
 )
 def test_report_formats_are_spoken(text: str, expected: str) -> None:
-    assert expected in _spoken(text, "en")
+    assert expected in normalize_for_tts(text, "en")
 
 
 @pytest.mark.parametrize(
@@ -158,7 +153,7 @@ def test_report_formats_are_spoken(text: str, expected: str) -> None:
     ],
 )
 def test_well_identifiers_are_read_digit_by_digit(text: str, expected: str) -> None:
-    assert expected in _spoken(text, "en")
+    assert expected in normalize_for_tts(text, "en")
 
 
 @pytest.mark.parametrize(
@@ -177,7 +172,7 @@ def test_well_identifiers_are_read_digit_by_digit(text: str, expected: str) -> N
     ],
 )
 def test_units_and_scale_words_are_expanded(text: str, expected: str) -> None:
-    assert expected in _spoken(text, "en")
+    assert expected in normalize_for_tts(text, "en")
 
 
 @pytest.mark.parametrize(
@@ -191,7 +186,7 @@ def test_units_and_scale_words_are_expanded(text: str, expected: str) -> None:
 def test_report_formats_apply_in_urdu_too(text: str, expected: str) -> None:
     """These are structural, not phonetic, so unlike the number spell-out they are
     not English-only. Urdu keeps its digits, which Uplift reads correctly."""
-    assert expected in _spoken(text, "ur")
+    assert expected in normalize_for_tts(text, "ur")
 
 
 @pytest.mark.parametrize(
@@ -211,15 +206,15 @@ def test_formats_do_not_touch_what_already_reads_correctly(
 ) -> None:
     """The rules are anchored to their own shapes. A digit before the hyphen is a
     measurement, not an identifier, and a numeric slash is a ratio, not a date."""
-    assert must_keep in _spoken(text, lang)
+    assert must_keep in normalize_for_tts(text, lang)
 
 
 def test_an_acronym_beside_its_own_expansion_is_not_said_twice() -> None:
     """The model habitually writes the full title then the acronym in brackets —
     "سپلائی چین مینجمنٹ (SCM)". Expanding the bracket said the same three words twice
     in a breath. The bracket is there to be read as letters, which is what a speaker
-    does; the same reasoning as the MD/CEO pair in voice_config/addresses.py."""
-    said = _spoken("سپلائی چین مینجمنٹ (SCM) ٹیم کو بھیجیں۔", "ur")
+    does; the same reasoning as the MD/CEO pair in the addresses section."""
+    said = normalize_for_tts("سپلائی چین مینجمنٹ (SCM) ٹیم کو بھیجیں۔", "ur")
     assert said.count("سپلائی چین مینجمنٹ") == 1
     assert "ایس سی ایم" in said
 
@@ -228,7 +223,7 @@ def test_a_respelled_loanword_beside_its_own_gloss_is_not_said_twice() -> None:
     """The model also writes an Urdu-script loanword then its own Latin spelling in
     brackets — "ورٹیکلز (verticals)". Respelling the Urdu word to Latin and leaving the
     bracket alone said "verticals (verticals)" — the same word twice."""
-    said = _spoken("ہمارے چار ورٹیکلز (verticals) ہیں۔", "ur")
+    said = normalize_for_tts("ہمارے چار ورٹیکلز (verticals) ہیں۔", "ur")
     assert said.count("verticals") == 1
 
 
@@ -242,7 +237,7 @@ def test_methane_mitigation_is_said_in_one_script(text: str) -> None:
     """Fixing the two words separately left the phrase half Latin ("methayn") and half
     Urdu ("مٹی گیشن"). Uplift takes its vowels from the script it is reading, and the
     change mid-phrase turned the second word into "matigation"."""
-    said = _spoken(text, "ur")
+    said = normalize_for_tts(text, "ur")
     assert "methayn mitigation" in said
     assert "مٹی گیشن" not in said
 
@@ -262,7 +257,7 @@ def test_english_phrases_are_left_unpunctuated(text: str) -> None:
     ("way, Earth's elements", 0.64s), while "methane mitigation" is identical either
     way and merely gained a 0.9s hole. The unnatural gaps a visitor hears were these
     rules, so the phrases now reach the voice exactly as written."""
-    said = _spoken(text, "en")
+    said = normalize_for_tts(text, "en")
     assert ". Mitigation" not in said
     assert "rare. Earth" not in said
     assert "food. Grade" not in said
@@ -276,7 +271,7 @@ def test_food_grade_keeps_its_space_and_gains_no_stop(text: str) -> None:
     """The voice says "grade" as "great" whatever punctuation it is given, so the stop
     bought nothing and only widened the gap. The corpus's hyphen is still normalised to
     a space, because a hyphen mid-word does read as a break."""
-    said = _spoken(text, "en")
+    said = normalize_for_tts(text, "en")
     assert "food grade" in said
     assert "food. Grade" not in said
     assert "food-grade" not in said
@@ -285,7 +280,7 @@ def test_food_grade_keeps_its_space_and_gains_no_stop(text: str) -> None:
 def test_the_english_phrase_rules_leave_urdu_alone() -> None:
     """Urdu keeps its own methane rule, which has the harder job of holding one script
     across the phrase and so cannot use a stop."""
-    said = _spoken("GEM Energy جو میتھین مٹیگیشن میں ماہر ہے۔", "ur")
+    said = normalize_for_tts("GEM Energy جو میتھین مٹیگیشن میں ماہر ہے۔", "ur")
     assert "methayn mitigation" in said
     assert "methane. Mitigation" not in said
 
@@ -298,7 +293,7 @@ def test_huawei_is_respelled_for_the_english_voice(text: str) -> None:
     """English runs through the same Uplift Urdu-first voice, which gives Latin
     "Huawei" English letter values ("hoo-AH-way"). Urdu script is what that voice
     reads correctly — the same trick "Maryam" and "Hamza" use in both languages."""
-    said = _spoken(text, "en")
+    said = normalize_for_tts(text, "en")
     assert "ہواوے" in said
     assert "Huawei" not in said
 
@@ -306,7 +301,7 @@ def test_huawei_is_respelled_for_the_english_voice(text: str) -> None:
 def test_huawei_in_urdu_script_is_left_alone() -> None:
     """The Urdu-first voice already reads ہواوے correctly — only the Latin spelling is
     the problem, so the Urdu-script form must not be rewritten to Latin."""
-    said = _spoken("ہواوے کے ساتھ شراکت داری۔", "ur")
+    said = normalize_for_tts("ہواوے کے ساتھ شراکت داری۔", "ur")
     assert "ہواوے" in said
 
 
@@ -317,7 +312,7 @@ def test_huawei_in_urdu_script_is_left_alone() -> None:
 def test_liquid_cooled_hyphen_is_not_swallowed_in_english(text: str) -> None:
     """The hyphen carries no sound but the voice ran the compound into one non-word.
     A space is what it needs; the visitor still reads the written form."""
-    said = _spoken(text, "en")
+    said = normalize_for_tts(text, "en")
     assert "liquid cooled" in said
     assert "liquid-cooled" not in said
 
@@ -325,7 +320,7 @@ def test_liquid_cooled_hyphen_is_not_swallowed_in_english(text: str) -> None:
 def test_kw_is_spoken_as_a_unit_in_english() -> None:
     """"50kW" is closed up against its number, so the \\b-anchored acronym table could
     never match it and the unit was dropped: the voice said "fifty" and moved on."""
-    said = _spoken("up to 50kW per rack density", "en")
+    said = normalize_for_tts("up to 50kW per rack density", "en")
     assert "fifty kilowatts" in said
     assert "kW" not in said
 
@@ -333,14 +328,14 @@ def test_kw_is_spoken_as_a_unit_in_english() -> None:
 def test_kw_keeps_its_unit_in_urdu() -> None:
     """The regression this rule exists for: with the unit dropped, the Urdu voice read
     the bare number as "پچاس" and a rack density became a plain count."""
-    said = _spoken("50kW فی ریک کثافت۔", "ur")
+    said = normalize_for_tts("50kW فی ریک کثافت۔", "ur")
     assert "کلو واٹ" in said
     assert "kW" not in said
 
 
 def test_kw_matches_the_spaced_form_too() -> None:
     """The corpus writes it closed up; a reply may not."""
-    assert "kilowatts" in _spoken("up to 50 kW per rack", "en")
+    assert "kilowatts" in normalize_for_tts("up to 50 kW per rack", "en")
 
 
 def test_kw_number_is_said_in_english_not_urdu() -> None:
@@ -349,7 +344,7 @@ def test_kw_number_is_said_in_english_not_urdu() -> None:
     spell-out cannot see them, and Uplift's Urdu-first voice reads the bare "50" as
     "پچاس" in the middle of an English sentence — the same failure as "65"/"پینسٹھ"
     that _spell_numbers exists for."""
-    said = _spoken("up to 50kW per rack density", "en")
+    said = normalize_for_tts("up to 50kW per rack density", "en")
     assert "fifty kilowatts" in said
     assert "50" not in said
 
@@ -363,7 +358,7 @@ def test_npu_is_letter_named_in_english(text: str, expected: str) -> None:
     read spaced Latin capitals as letter NAMES: "N P U" was three separate tokens and
     the plural "N P Us" left a trailing "Us" heard as the English word "us". Urdu
     script spells the letter names themselves — the same fix "Huawei" uses."""
-    assert expected in _spoken(text, "en")
+    assert expected in normalize_for_tts(text, "en")
 
 
 def test_npu_is_one_token_in_english() -> None:
@@ -371,14 +366,14 @@ def test_npu_is_one_token_in_english() -> None:
     "NP ... U" with an audible pause before the last letter. The letterforms are
     joined into a single token to close it. Urdu keeps the spaced form — see
     test_npu_is_urdu_script_in_urdu."""
-    assert "این پی یو" not in _spoken("Ascend NPU clusters", "en")
+    assert "این پی یو" not in normalize_for_tts("Ascend NPU clusters", "en")
 
 
 def test_npu_plural_is_matched_before_the_singular() -> None:
     """The acronym rules are \\b-anchored on both sides, so a bare "NPU" entry cannot
     reach inside "NPUs": the trailing "s" leaves no boundary after the "U". The plural
     needs its own entry, listed first because the table applies in insertion order."""
-    said = _spoken("Ascend NPUs and NPU clusters", "en")
+    said = normalize_for_tts("Ascend NPUs and NPU clusters", "en")
     assert "اینپیوز" in said
     assert "NPUs" not in said
 
@@ -386,7 +381,7 @@ def test_npu_plural_is_matched_before_the_singular() -> None:
 def test_gpu_plural_is_spaced_too() -> None:
     """Same boundary gap, found while fixing NPU: "GPU" was in the table but "GPUs"
     fell straight through it."""
-    assert "G P Us" in _spoken("GPUs are fast", "en")
+    assert "G P Us" in normalize_for_tts("GPUs are fast", "en")
 
 
 @pytest.mark.parametrize("text,expected", [
@@ -397,7 +392,7 @@ def test_npu_is_urdu_script_in_urdu(text: str, expected: str) -> None:
     """Latin letters handed to the Urdu-first voice are read with English letter names
     dropped into an Urdu sentence — the failure the Urdu column of this table exists
     for."""
-    assert expected in _spoken(text, "ur")
+    assert expected in normalize_for_tts(text, "ur")
 
 
 @pytest.mark.parametrize("text", [
@@ -413,7 +408,7 @@ def test_liquid_cooled_is_said_in_english_in_urdu_too(text: str) -> None:
     "-ed", so "liquid cooled" was heard as "liquid cold". The term is wanted in English,
     so it maps to a Latin phonetic respelling — the doubled vowel forces the "oo" and
     the final "-d" keeps the participle."""
-    said = _spoken(text, "ur")
+    said = normalize_for_tts(text, "ur")
     assert "likwid koold" in said
     # No spelling that reads as "cold" survives.
     assert "کولڈ" not in said
@@ -431,7 +426,7 @@ def test_subsidiary_is_respelled_for_the_urdu_voice(spelling: str) -> None:
     sometimes malforms it with a repeated tail — matching only the well-formed prefix
     rewrote the head and left the garbage attached ("سب سِڈی ریاری"), making the word
     worse rather than skipping it. The rule must consume the whole thing."""
-    said = _spoken(f"یہ ماری کی {spelling} ہے۔", "ur")
+    said = normalize_for_tts(f"یہ ماری کی {spelling} ہے۔", "ur")
     assert "سب سِڈی ری" in said
     assert spelling not in said
 
@@ -443,7 +438,7 @@ def test_subsidiary_is_respelled_for_the_urdu_voice(spelling: str) -> None:
 def test_nvidia_is_urdu_script_in_urdu(text: str) -> None:
     """Latin in an otherwise-Urdu sentence is read letter-wise and loses the initial
     "en-"; the corpus's all-caps "NVIDIA-compatible" is worse still."""
-    said = _spoken(text, "ur")
+    said = normalize_for_tts(text, "ur")
     assert "اینویڈیا" in said
     assert "NVIDIA" not in said and "Nvidia" not in said
 
@@ -451,7 +446,7 @@ def test_nvidia_is_urdu_script_in_urdu(text: str) -> None:
 def test_nvidia_compatible_stays_in_one_script() -> None:
     """Leaving "compatible" in Latin beside the Urdu-script vendor name puts a script
     change mid-modifier, which is what mis-vowels the voice."""
-    said = _spoken("NVIDIA-compatible GPU کلسٹرز", "ur")
+    said = normalize_for_tts("NVIDIA-compatible GPU کلسٹرز", "ur")
     assert "اینویڈیا کمپیٹیبل" in said
     assert "compatible" not in said
 
@@ -461,7 +456,7 @@ def test_nvidia_is_respelled_in_english_too() -> None:
     corpus's all-caps "NVIDIA" as an initialism. The respelling must be ONE word: a
     spaced form is read as separate tokens, which is spelling it out again. Each
     language gets its own form; the Urdu one must not leak into an English reply."""
-    said = _spoken("NVIDIA-compatible GPU clusters", "en")
+    said = normalize_for_tts("NVIDIA-compatible GPU clusters", "en")
     assert "Envidia" in said
     assert "NVIDIA" not in said
     assert "اینویڈیا" not in said
@@ -472,8 +467,8 @@ def test_huawei_is_urdu_script_in_both_languages() -> None:
     respellings were tried and all failed: "Wah-way" split at the hyphen, "Wah way"
     was two tokens and dropped the H, "Hwahway" spelled a cluster the voice cannot
     read. ad-hoc English phonetics is the wrong tool for a voice not reading English."""
-    assert "ہواوے" in _spoken("Huawei Ascend NPUs", "en")
-    assert "ہواوے" in _spoken("Huawei Ascend NPU", "ur")
+    assert "ہواوے" in normalize_for_tts("Huawei Ascend NPUs", "en")
+    assert "ہواوے" in normalize_for_tts("Huawei Ascend NPU", "ur")
 
 
 def test_english_respellings_use_no_hyphen() -> None:
@@ -481,7 +476,7 @@ def test_english_respellings_use_no_hyphen() -> None:
     (APP_EN_TTS=uplift), which reads a hyphen as a break rather than a syllable join —
     "Wah-way" was said as two clipped pieces, and the spaced "Wah way" then lost the
     leading H. One unbroken word is what this voice says whole."""
-    said = _spoken("Huawei and NVIDIA build the AI Farm.", "en")
+    said = normalize_for_tts("Huawei and NVIDIA build the AI Farm.", "en")
     assert "Wah-way" not in said
     assert "Envidia" in said
 
@@ -490,7 +485,7 @@ def test_nvidia_respelling_is_a_single_token() -> None:
     """The regression this guards: "en VID ee uh" is four tokens, so the voice read the
     pieces one after another instead of saying the name — spelling it out by another
     route. The replacement must contain no space and no hyphen."""
-    said = _spoken("NVIDIA clusters", "en")
+    said = normalize_for_tts("NVIDIA clusters", "en")
     nvidia = next(w for w in said.split() if "vidia" in w.lower())
     assert nvidia == "Envidia"
 
@@ -510,7 +505,7 @@ def test_clusters_is_said_in_english_in_urdu_too(text: str, expected: str) -> No
     """"Clusters" is a technical term and is wanted in English, said the English way.
     Neither Urdu spelling can produce the English short "u", so both map out to a Latin
     phonetic respelling — the same trick as "kaeosk" and "methayn"."""
-    said = _spoken(text, "ur")
+    said = normalize_for_tts(text, "ur")
     assert expected in said
     # No Urdu-script spelling of the word survives, in either form.
     assert "کلسٹر" not in said
@@ -520,14 +515,14 @@ def test_clusters_is_said_in_english_in_urdu_too(text: str, expected: str) -> No
 def test_clusters_plural_is_matched_before_the_singular() -> None:
     """The singular pattern would otherwise match inside the plural and leave the
     trailing ز stranded — the same trap _SUBSIDIARY_RE hit on a malformed spelling."""
-    said = _spoken("GPU کلسٹرز", "ur")
+    said = normalize_for_tts("GPU کلسٹرز", "ur")
     assert "klusturz" in said
     assert "klusturz" == said.split()[-1]
 
 
 def test_clusters_is_left_alone_in_english() -> None:
     """English mode already reads the English word correctly, so it is not respelled."""
-    said = _spoken("GPU clusters", "en")
+    said = normalize_for_tts("GPU clusters", "en")
     assert "clusters" in said
     assert "کلاسٹر" not in said
     assert "klustur" not in said
@@ -540,13 +535,13 @@ def test_clusters_is_left_alone_in_english() -> None:
 def test_ai_ml_names_both_acronyms(lang: str, expected: str) -> None:
     """The slash rules split "AI/ML", but only "AI" had an acronym entry — "ML" fell
     through as bare Latin and the Urdu-first voice read it as a non-word."""
-    said = _spoken("AI/ML training and inference", lang)
+    said = normalize_for_tts("AI/ML training and inference", lang)
     assert expected in said
     assert "AI/ML" not in said
 
 
 def test_ml_is_not_left_as_bare_latin_in_urdu() -> None:
     """A bare Latin two-letter token mid-Urdu-sentence is the shape that mis-reads."""
-    said = _spoken("یہ ML training کے لیے ہے۔", "ur")
+    said = normalize_for_tts("یہ ML training کے لیے ہے۔", "ur")
     assert "ایم ایل" in said
     assert "ML" not in said

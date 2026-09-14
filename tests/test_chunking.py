@@ -7,12 +7,9 @@ edited, and a test suite that needs a model download is a test suite nobody runs
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from server.services.chunking import (  # noqa: E402
+from server.services.chunking import (
     approx_token_count,
     chunk_markdown,
     chunk_text,

@@ -63,5 +63,9 @@ secrets.json
 server/data/.rag_metadata.sqlite*
 
 # Scratch prompt drafts, kept locally but not shared — the live copies are in
-# voice_config/prompts/.
+# server/prompts/.
 /prompt related/
+CODE_CLEANLINESS_REPORT.md
+
+# Claude-generated reports, kept locally
+/claude_reports/

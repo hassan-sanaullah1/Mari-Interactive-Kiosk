@@ -12,22 +12,17 @@ exactly as it always did is deliberate, not redundant.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from server.providers.tts import _spoken  # noqa: E402
-from server.services.generation import GenerationService  # noqa: E402
-from server.services.retriever import RetrievalResult  # noqa: E402
-from voice_config import load_prompt  # noqa: E402
-from voice_config.greetings import (  # noqa: E402
+from server.normalization import normalize_for_tts
+from server.services.generation import GenerationService
+from server.services.retriever import RetrievalResult
+from server.agent.reply_fixes import (
     feminine_agreement,
     gender_agreement,
     masculine_agreement,
 )
+from server.prompts import load_prompt
 
 
 @pytest.fixture(scope="module")
@@ -40,8 +35,8 @@ def gen() -> GenerationService:
 # ── the prompt files exist and name the right person ─────────────────
 
 @pytest.mark.parametrize(
-    "name", ["system_prompt_english_male", "system_prompt_urdu_male",
-             "greeting_english_male", "greeting_urdu_male"]
+    "name", ["system/male_english.md", "system/male_urdu.md",
+             "greeting/male_english.md", "greeting/male_urdu.md"]
 )
 def test_the_male_prompt_files_load(name: str) -> None:
     assert load_prompt(name)
@@ -50,20 +45,20 @@ def test_the_male_prompt_files_load(name: str) -> None:
 def test_each_persona_prompt_names_only_its_own_presenter() -> None:
     """A name leaking across would make the kiosk introduce itself as the other rig."""
     for lang in ("english", "urdu"):
-        her, him = load_prompt(f"system_prompt_{lang}"), load_prompt(f"system_prompt_{lang}_male")
+        her, him = load_prompt(f"system/female_{lang}.md"), load_prompt(f"system/male_{lang}.md")
         me, him_name = ("Maryam", "Hamza") if lang == "english" else ("مریم", "حمزہ")
         assert me in her and him_name not in her
         assert him_name in him and me not in him
 
 
 def test_the_male_greeting_still_demands_the_salam_and_a_name() -> None:
-    en, ur = load_prompt("greeting_english_male"), load_prompt("greeting_urdu_male")
+    en, ur = load_prompt("greeting/male_english.md"), load_prompt("greeting/male_urdu.md")
     assert "Assalamualaikum" in en and "Hamza" in en
     assert "السلام علیکم" in ur and "حمزہ" in ur
 
 
 def test_the_urdu_male_prompt_asks_for_masculine_agreement() -> None:
-    ur = load_prompt("system_prompt_urdu_male")
+    ur = load_prompt("system/male_urdu.md")
     assert "کر سکتا ہوں" in ur          # the form it wants
     assert "مذکر صیغہ استعمال کریں" in ur
 
@@ -168,11 +163,11 @@ def test_english_replies_are_untouched_by_either_agreement() -> None:
     "written,spoken", [("Maryam", "مریم"), ("Hamza", "حمزہ"), ("Hamzah", "حمزہ")]
 )
 def test_both_names_are_said_in_urdu_in_english_mode(written: str, spoken: str) -> None:
-    said = _spoken(f"Assalamualaikum! I'm {written} from Mari Energies.", "en")
+    said = normalize_for_tts(f"Assalamualaikum! I'm {written} from Mari Energies.", "en")
     assert spoken in said and written not in said
 
 
 def test_a_word_that_merely_starts_like_the_male_name_is_untouched() -> None:
     # "Lahore" is now respelled by the places table, so the filler here is a word no
     # table owns; the point of the test is the name boundary, not the sentence.
-    assert _spoken("The Hamzas gathered.", "en") == "The Hamzas gathered."
+    assert normalize_for_tts("The Hamzas gathered.", "en") == "The Hamzas gathered."

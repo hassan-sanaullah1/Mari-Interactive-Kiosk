@@ -13,15 +13,10 @@ names absent from the table are pinned here as deliberately absent.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from server.providers.tts import _spoken  # noqa: E402
-from voice_config.names import spoken_names_and_ranks  # noqa: E402
+from server.normalization import normalize_for_tts
+from server.normalization import spoken_names_and_ranks
 
 
 # ── names ───────────────────────────────────────────────────────────
@@ -60,16 +55,6 @@ def test_every_person_is_respelled_in_english(name: str) -> None:
     said = spoken_names_and_ranks(f"The director is {name}.", "en")
     assert name not in said
     assert any(ord(c) > 0x600 for c in said)
-
-
-def test_every_person_in_the_knowledge_base_was_measured() -> None:
-    """The table is a measured list, not a guess: each name is either respelled or
-    explicitly kept Latin. A new name in the corpus should be round-tripped, not added
-    on assumption."""
-    from voice_config.names import _NAMES_FOR_ENGLISH, _NAMES_FOR_URDU
-
-    assert set(_NAMES_FOR_ENGLISH) <= set(_NAMES_FOR_URDU)
-    assert len(_NAMES_FOR_URDU) >= 26
 
 
 def test_urdu_mode_respells_latin_names() -> None:
@@ -112,10 +97,8 @@ def test_every_retired_spelling_the_model_writes(suffix: str) -> None:
 
 def test_md_ampersand_ceo_is_separated() -> None:
     """The model writes "MD & CEO" as well as "MD/CEO"; both go through the hyphenated
-    form in voice_config.addresses — "the MD and CEO" collided ("ESDM didn't see EO")."""
-    from server.providers.tts import _spoken
-
-    assert "M-D and C-E-O" in _spoken("serves as MD & CEO", "en")
+    form in the addresses section — "the MD and CEO" collided ("ESDM didn't see EO")."""
+    assert "M-D and C-E-O" in normalize_for_tts("serves as MD & CEO", "en")
 
 
 def test_late_moves_in_front_of_the_rank() -> None:
@@ -132,17 +115,51 @@ def test_ranks_are_urdu_script_in_urdu_mode() -> None:
 
 # ── honours and slashed titles ──────────────────────────────────────
 
+HILAL = "ہلالے امتیاز ملٹری"
+
+
 @pytest.mark.parametrize("lang", ["en", "ur"])
-def test_honour_is_dropped_from_speech(lang: str) -> None:
-    """"HI(M)" is read as "HIV" / "a type M", and the spelled-out form is no better."""
+def test_honour_is_said_in_full(lang: str) -> None:
+    """Latin "HI(M)" is read as "HIV" and Latin "Hilal-e-Imtiaz" is garbled; the Urdu
+    spelling with the izafat written as ے round-trips as "Hilal-e-Imtiaz Military"."""
     said = spoken_names_and_ranks("Anwar Ali Hyder, HI(M), is the Chairman.", lang)
+    assert HILAL in said
     assert "HI(M)" not in said and "HI" not in said
 
 
-def test_dropping_the_honour_leaves_no_stray_comma() -> None:
+def test_the_honour_follows_the_name_and_retired_moves_to_the_front() -> None:
     said = spoken_names_and_ranks("Lt. Gen. Anwar Ali Hyder, HI(M), (Retd) is Chairman.", "en")
-    assert said.startswith("Retired Lieutenant General")
-    assert ", ," not in said and " ," not in said
+    assert said.startswith("Retired Lieutenant General انور علی حیدر, " + HILAL)
+    assert ", ," not in said and " ," not in said and "(Retd)" not in said
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "چیئرمین Lt. Gen. Anwar Ali Hyder, HI(M), (Retd) ہیں۔",
+        # The model also writes the whole line in Urdu script. "(ریٹائرڈ)" after an Urdu
+        # honour used to be dropped outright, and the honour letters were left in.
+        "چیئرمین لیفٹیننٹ جنرل انور علی حیدر، ایچ آئی (ایم)، (ریٹائرڈ) ہیں۔",
+        "چیئرمین لیفٹیننٹ جنرل (ر) انور علی حیدر، ہلال امتیاز (ملٹری) ہیں۔",
+        "چیئرمین Lt Gen Anwar Ali Hyder, Hilal-e-Imtiaz (Military), (Retd) ہیں۔",
+    ],
+)
+def test_urdu_chairman_line_in_every_form_the_model_writes(text: str) -> None:
+    said = normalize_for_tts(text, "ur")
+    assert f"ریٹائرڈ لیفٹیننٹ جنرل انور علی حیدر، {HILAL} ہیں۔" in said
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [("Dr. Seema Adil", "ڈاکٹر سیما عادل"), ("Engr. Zafar Abbas", "انجینئر ظفر عباس"),
+     ("Mr. Faheem Haider", "مسٹر فہیم حیدر")],
+)
+def test_honorifics_are_urdu_script_in_urdu_mode(text: str, expected: str) -> None:
+    assert expected in normalize_for_tts(f"{text} ہیں۔", "ur")
+
+
+def test_drive_is_not_mistaken_for_doctor() -> None:
+    assert "ڈاکٹر" not in normalize_for_tts("دفتر Jinnah Dr. پر ہے۔", "ur")
 
 
 @pytest.mark.parametrize(
@@ -154,9 +171,7 @@ def test_dropping_the_honour_leaves_no_stray_comma() -> None:
 def test_md_slash_ceo_is_separated(lang: str, expected: str) -> None:
     """"MD/CEO" is read as one run-on token ("MD/C8 August"), and a plain "MD and CEO"
     still collides across the "and". Hyphenating the letters separates them."""
-    from server.providers.tts import _spoken
-
-    assert expected in _spoken("The MD/CEO is here.", lang)
+    assert expected in normalize_for_tts("The MD/CEO is here.", lang)
 
 
 # ── the full pipeline ───────────────────────────────────────────────
@@ -164,11 +179,11 @@ def test_md_slash_ceo_is_separated(lang: str, expected: str) -> None:
 def test_chairman_line_from_the_knowledge_base() -> None:
     """The worst case found: the raw line came back as "Lifting in general and more
     early hike spread is the chairman"."""
-    said = _spoken("Board Chairman: Lt. Gen. Anwar Ali Hyder, HI(M), (Retd)", "en")
-    # Every part of the line is now rewritten: the rank spelled out, the honour dropped,
-    # the suffix moved in front, and the name itself respelled in Urdu script.
+    said = normalize_for_tts("Board Chairman: Lt. Gen. Anwar Ali Hyder, HI(M), (Retd)", "en")
+    # Every part of the line is now rewritten: the rank spelled out, the honour said in
+    # full, the suffix moved in front, and the name itself respelled in Urdu script.
     assert said.startswith("Board Chairman: Retired Lieutenant General ")
-    assert "انور علی حیدر" in said
+    assert "انور علی حیدر" in said and HILAL in said
     assert "HI(M)" not in said and "(Retd)" not in said
 
 
@@ -189,7 +204,7 @@ def test_chairman_line_from_the_knowledge_base() -> None:
     ],
 )
 def test_the_salam_and_her_name_are_said_in_urdu_in_english_mode(reply: str) -> None:
-    said = _spoken(reply, "en")
+    said = normalize_for_tts(reply, "en")
     assert "السلام علیکم" in said
     assert "مریم" in said
     assert "Maryam" not in said and "alaikum" not in said.lower()
@@ -197,44 +212,44 @@ def test_the_salam_and_her_name_are_said_in_urdu_in_english_mode(reply: str) -> 
 
 def test_a_returned_salam_is_not_split_across_the_two_rules() -> None:
     """"Walaikum assalam" overlaps _SALAM on the word "salam"; it must match as one."""
-    said = _spoken("Walaikum assalam, I'm Maryam.", "en")
+    said = normalize_for_tts("Walaikum assalam, I'm Maryam.", "en")
     assert "وعلیکم السلام" in said and "السلام علیکم" not in said
 
 
 def test_urdu_mode_leaves_an_already_urdu_salam_alone() -> None:
-    said = _spoken("السلام علیکم! میں مریم ہوں۔", "ur")
+    said = normalize_for_tts("السلام علیکم! میں مریم ہوں۔", "ur")
     assert said.count("السلام علیکم") == 1 and "مریم" in said
 
 
 def test_urdu_mode_still_respells_a_latin_name_the_model_left_behind() -> None:
     """The Urdu prompt asks for Latin-script names, and sometimes catches her own."""
-    assert "مریم" in _spoken("میں Maryam ہوں۔", "ur")
+    assert "مریم" in normalize_for_tts("میں Maryam ہوں۔", "ur")
 
 
 @pytest.mark.parametrize("reply", ["The marina is in Marietta.", "Mary and Sam arrived.",
                                    "Salamanders live there."])
 def test_words_that_merely_look_like_the_persona_phrases_are_untouched(reply: str) -> None:
-    assert _spoken(reply, "en") == reply
+    assert normalize_for_tts(reply, "en") == reply
 
 
 def test_credit_rating_a1_is_not_glued_into_a_non_word() -> None:
     """The number spell-out turned "A1" into "Aone"; the voice said "Aon"."""
-    assert "A one" in _spoken("Credit rating AAA long term, A1 short term.", "en")
+    assert "A one" in normalize_for_tts("Credit rating AAA long term, A1 short term.", "en")
 
 
 def test_hr_and_r_committee() -> None:
     """"HR&R" is run together into "H9R" by the voice."""
-    assert "H R and R" in _spoken("The HR&R Committee met.", "en")
+    assert "H R and R" in normalize_for_tts("The HR&R Committee met.", "en")
 
 
 def test_existing_english_number_spellout_still_works() -> None:
     """The names pass runs before the number pass; neither may break the other."""
-    said = _spoken("Net profit was PKR 65.14 billion in 1954.", "en")
+    said = normalize_for_tts("Net profit was PKR 65.14 billion in 1954.", "en")
     assert "sixty five point one four" in said and "nineteen fifty four" in said
 
 
 def test_urdu_digits_still_survive_the_names_pass() -> None:
-    assert "65.14" in _spoken("منافع 65.14 ارب روپے۔", "ur")
+    assert "65.14" in normalize_for_tts("منافع 65.14 ارب روپے۔", "ur")
 
 
 def test_urdu_letter_retired_suffix() -> None:
@@ -246,7 +261,7 @@ def test_urdu_letter_retired_suffix() -> None:
 # ── ranks that had no Urdu form ─────────────────────────────────────
 # "Col", "Capt", "Maj" and a bare "Lt" were in the English table only, so in Urdu mode
 # they stayed Latin — a two- or three-letter abbreviation in an Urdu sentence, which is
-# the same failure the acronym table in server/providers/tts.py exists to fix.
+# the same failure the acronym table in server/normalization.py exists to fix.
 
 @pytest.mark.parametrize(
     "text,expected",
@@ -260,7 +275,7 @@ def test_urdu_letter_retired_suffix() -> None:
     ],
 )
 def test_every_rank_has_an_urdu_form(text: str, expected: str) -> None:
-    said = _spoken(f"{text} ہیں۔", "ur")
+    said = normalize_for_tts(f"{text} ہیں۔", "ur")
     assert expected in said
     assert text.split()[0] not in said
 
@@ -271,7 +286,7 @@ def test_every_rank_has_an_urdu_form(text: str, expected: str) -> None:
      ("Lt Col Bilal", "Lieutenant Colonel"), ("Brig Gen Asif", "Brigadier General")],
 )
 def test_the_new_ranks_are_spelled_out_in_english_too(text: str, expected: str) -> None:
-    assert expected in _spoken(text, "en")
+    assert expected in normalize_for_tts(text, "en")
 
 
 @pytest.mark.parametrize(
@@ -286,13 +301,13 @@ def test_the_new_ranks_are_spelled_out_in_english_too(text: str, expected: str) 
 def test_the_suffix_reattaches_to_the_new_ranks(lang: str, text: str, expected: str) -> None:
     """The "(Retd)" lift-and-reattach reads from the rank-name alternation, so a rank
     added to the tables above must be added there too or its suffix is simply dropped."""
-    assert expected in _spoken(text, lang)
+    assert expected in normalize_for_tts(text, lang)
 
 
 def test_a_two_word_rank_beats_its_own_first_half() -> None:
     """"Lt Gen" must match whole: the bare "Lt" rule would otherwise claim its first
     half and strand "Gen"."""
-    said = _spoken("Lt Gen Nadeem Ahmed (Retd)", "en")
+    said = normalize_for_tts("Lt Gen Nadeem Ahmed (Retd)", "en")
     assert "Retired Lieutenant General" in said
     assert "Gen" not in said.replace("General", "")
 
@@ -303,13 +318,11 @@ def test_a_two_word_rank_beats_its_own_first_half() -> None:
 # that said "Kazmi" or "Faheem" on its own went through untouched, and the same person
 # was said correctly in one sentence and mangled in the next.
 
-def test_every_person_in_the_corpus_is_covered_in_both_languages() -> None:
-    """The English table is no longer a subset. "Which names" was a judgement call
-    that got the wrong answer; every person in the corpus is respelled now."""
-    from voice_config.names import _NAMES_FOR_ENGLISH, _NAMES_FOR_URDU
+def test_every_person_in_the_corpus_is_covered() -> None:
+    """One table serves both languages; every person in the corpus is respelled."""
+    from server.normalization import _PERSON_NAMES
 
-    assert set(_NAMES_FOR_ENGLISH) == set(_NAMES_FOR_URDU)
-    assert len(_NAMES_FOR_ENGLISH) >= 26
+    assert len(_PERSON_NAMES) >= 26
 
 
 @pytest.mark.parametrize(
@@ -321,14 +334,14 @@ def test_every_person_in_the_corpus_is_covered_in_both_languages() -> None:
 )
 def test_a_name_on_its_own_is_respelled(word: str, urdu: str) -> None:
     """A conversational answer rarely repeats the full name."""
-    assert urdu in _spoken(f"Ask {word} about it.", "en")
+    assert urdu in normalize_for_tts(f"Ask {word} about it.", "en")
 
 
 @pytest.mark.parametrize("lang", ["en", "ur"])
 def test_partial_and_full_mentions_agree(lang: str) -> None:
     """The whole point: the surname must be said the same way in both sentences."""
-    full = _spoken("Syed Bakhtiyar Kazmi chairs it.", lang)
-    part = _spoken("Kazmi chairs it.", lang)
+    full = normalize_for_tts("Syed Bakhtiyar Kazmi chairs it.", lang)
+    part = normalize_for_tts("Kazmi chairs it.", lang)
     assert "کاظمی" in full and "کاظمی" in part
 
 
@@ -340,13 +353,13 @@ def test_name_words_that_are_also_ordinary_words_do_not_fire(text: str) -> None:
     """"Ali", "Khan" and "Malik" are blocklisted from the per-word pass: they appear
     outside a person's name often enough that matching them would fire on sentences
     that have nothing to do with anyone. The full-name pass still covers them."""
-    assert _spoken(text, "en") == text
+    assert normalize_for_tts(text, "en") == text
 
 
 def test_the_word_pass_is_built_from_the_name_tables() -> None:
     """One source of truth: a word is only respelled if it occurs in a name the kiosk
     actually knows, so adding a person covers their name parts automatically."""
-    from voice_config.names import _KNOWN_WORDS, _NAMES_FOR_URDU
+    from server.normalization import _KNOWN_WORDS, _PERSON_NAMES
 
-    every_word = {w for full in _NAMES_FOR_URDU for w in full.split()}
+    every_word = {w for full in _PERSON_NAMES for w in full.split()}
     assert set(_KNOWN_WORDS) <= every_word

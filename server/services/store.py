@@ -1,9 +1,7 @@
 """Qdrant collection management and the hybrid query itself.
 
-Split out from the retriever so that ingestion and retrieval talk to the index through
-exactly one piece of code. When the write path and the read path each own their own
-client, they drift — different collection names, different vector names, one of them
-missing the payload index — and the failure is silent until a query returns nothing.
+Ingestion and retrieval both go through this one module, so collection names, vector
+names and payload indexes cannot drift apart.
 """
 
 from __future__ import annotations
@@ -48,10 +46,7 @@ class Hit:
     chunk_index: int
     score: float          # the fused RRF score
     payload: dict
-    # Cosine similarity between the query and this chunk's dense vector. RRF scores are
-    # rank-based, so they say nothing about whether the top result is any good — rank 1
-    # exists no matter how irrelevant everything is. This is the calibrated number the
-    # relevance gate needs when the cross-encoder is not run (see retriever.py).
+    # Query-to-chunk cosine. RRF scores are rank-based, so the relevance gate uses this.
     dense_similarity: float = 0.0
 
 
@@ -69,12 +64,7 @@ class QdrantStore:
                 port=s.qdrant_port,
                 api_key=s.qdrant_api_key or None,
                 timeout=s.qdrant_timeout_s,
-                # qdrant-client flips to HTTPS the moment api_key is set. Inside a
-                # compose or Coolify network Qdrant speaks plaintext on 6333, so that
-                # flip attempts a TLS handshake against an HTTP port and surfaces as a
-                # generic connection error that points nowhere near the real cause.
-                # Passing it explicitly is the whole fix, and it costs nothing when the
-                # deployment genuinely is behind TLS (set MARI_RAG_QDRANT_HTTPS=true).
+                # Explicit: qdrant-client otherwise switches to HTTPS when api_key is set.
                 https=s.qdrant_https,
             )
         return self._client
@@ -87,24 +77,11 @@ class QdrantStore:
     # ── collection ──────────────────────────────────────────────────
 
     def _sparse_params(self) -> models.SparseVectorParams:
-        """Sparse index config — and the IDF half of BM25 lives here, not in the model.
+        """Sparse index config. The IDF half of BM25 lives here, not in the model.
 
-        FastEmbed's ``Qdrant/bm25`` deliberately emits only the term-frequency half of
-        BM25: document vectors carry the saturated tf component and QUERY vectors are a
-        plain indicator vector of 1.0 per term. The inverse-document-frequency half is
-        Qdrant's job, and Qdrant only does it when the sparse index is created with
-        ``modifier=IDF``. Omit it and nothing errors — the collection builds, queries
-        return results, and the whole channel silently degrades to "sum of term
-        frequencies over whatever words the query happened to share".
-
-        On a single-subject corpus that is close to useless, because the words every
-        chunk repeats are the ones the query is guaranteed to contain. Measured here:
-        the top BM25 hit for "How does Mari Energies use artificial intelligence?" was
-        section 1.1, which does not mention AI at all and won on the count of "Mari",
-        "Energies" and "company"; section 9.2, titled "Artificial Intelligence", did not
-        make the top ten. With the modifier set, 9.2 is rank 1 by a factor of two, and
-        the fused result moves from rank 7 to rank 1. Across the 342-question tester
-        evaluation this is worth +4.1 points of hit@1 and +3.0 of hit@5.
+        FastEmbed's ``Qdrant/bm25`` emits only term frequencies; Qdrant applies IDF only
+        when the index has ``modifier=IDF``. Without it nothing errors, but the channel
+        ranks on the words every chunk repeats (+4.1 hit@1 with it).
         """
         return models.SparseVectorParams(modifier=models.Modifier.IDF)
 
@@ -127,11 +104,8 @@ class QdrantStore:
             )
             log.info("created Qdrant collection %s", name)
         elif await self._sparse_modifier_missing(name):
-            # A collection built before the modifier was set cannot be fixed in place —
-            # Qdrant applies IDF from the index configuration, so the index has to be
-            # rebuilt. Dropping the collection is the migration: ingestion re-embeds the
-            # corpus on this same boot, because `count_by_source` now returns 0 for
-            # every file regardless of what the metadata DB remembers.
+            # Cannot be fixed in place. Ingestion re-embeds on this boot, since every
+            # file's point count is now 0.
             log.warning(
                 "collection %s has no IDF modifier on its sparse index; recreating it "
                 "so BM25 scores are IDF-weighted (the corpus re-ingests on this boot)",
@@ -139,12 +113,7 @@ class QdrantStore:
             )
             await self.recreate_collection()
 
-        # KEYWORD indexes. Without the one on `source`, the filtered delete that
-        # re-ingest performs is a full scan of every point, and so is counting a
-        # document's chunks. `section` is read on the retrieval path by
-        # `fetch_section`, which is inside the per-turn latency budget. On this corpus
-        # either would survive a scan; on any real one neither would, and the cost of
-        # the indexes is negligible in both cases.
+        # `source` for re-ingest deletes and counts; `section` for fetch_section per turn.
         for field in ("source", "section"):
             try:
                 await self.client.create_payload_index(
@@ -158,10 +127,8 @@ class QdrantStore:
     async def _sparse_modifier_missing(self, name: str) -> bool:
         """True when an existing collection's sparse index predates the IDF modifier.
 
-        Read defensively. This runs on every boot ahead of ingestion, and the cost of a
-        false positive is dropping and re-embedding the corpus — so anything unexpected
-        in the config response (a client version that shapes it differently, a vector
-        name that is not there) is treated as "leave it alone" rather than "rebuild it".
+        Anything unexpected in the config response means "leave it alone": a false
+        positive drops and re-embeds the corpus.
         """
         try:
             config = (await self.client.get_collection(name)).config.params
@@ -247,13 +214,8 @@ class QdrantStore:
     async def fetch_section(self, section: str, limit: int = 32) -> list[Hit]:
         """Every chunk of one top-level section, in document order.
 
-        The retriever uses this to complete a section it has already decided is the
-        right one (see `Retriever._expand_section`). It filters on the `section` payload
-        field rather than on a prefix of `heading_path`, because an exact keyword match
-        is an index lookup at any corpus size while a prefix match is a scan.
-
-        Scores are left at zero: nothing here was ranked or gated, and giving these
-        chunks a fabricated score would let them be compared against ones that were.
+        Filters on the indexed `section` field (a heading-path prefix match would be a
+        scan). Scores stay zero: these chunks were not ranked.
         """
         points, _ = await self.client.scroll(
             collection_name=self.settings.qdrant_collection,

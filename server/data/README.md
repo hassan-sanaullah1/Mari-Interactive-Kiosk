@@ -1,6 +1,6 @@
 # server/data
 
-Grounding corpus for the kiosk assistant, loaded by [`server/knowledge.py`](../knowledge.py).
+Grounding corpus for the kiosk assistant, ingested by the retrieval layer ([`server/services/`](../services/)).
 
 - `mari_energies_knowledge_base.md` — Mari Energies Limited knowledge base, converted from
   the source `MariEnergies_RAG_Knowledge_Base_V2.docx`. Retrieval keys off `##`/`###`

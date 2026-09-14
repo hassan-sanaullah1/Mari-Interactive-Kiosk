@@ -1,93 +1,12 @@
-# voice_config
+# Pronunciation notes
 
-Everything that shapes **what the avatar says** — persona, abbreviation definitions, and
-pronunciation fixes — kept in one place instead of scattered through the pipeline code
-that decides *when* it says it.
+The evidence behind the rules in `server/normalization.py`: what the Uplift voice said
+before each rule, and what was tried and rejected. The code keeps a one-line *why*; the
+measurements live here.
 
-```
-voice_config/
-  prompts/
-    system_prompt_english.md        Maryam, English mode
-    system_prompt_urdu.md           Maryam, Urdu mode (carries its own greeting section)
-    greeting_english.md             opt-in introduction, added only on a greeting turn
-    system_prompt_english_male.md   Hamza, English mode
-    system_prompt_urdu_male.md      Hamza, Urdu mode
-    greeting_english_male.md
-    greeting_urdu_male.md
-  addresses.py                 addresses, contact lines, formulae, symbol abbreviations
-  glossary.py                  ABBR → full-form pairs mined from the knowledge base
-  names.py                     people's names, military ranks and honours
-  places.py                    Urdu/Pashto place, field and programme names
-  urdu_normalise.py            spoken-form fixes for what the Uplift voice gets wrong
-  english_normalise.py         percent, slashes, times, Latin abbreviations (English only)
-```
-
-## How it is wired in
-
-| Piece | Hook | Where |
-|---|---|---|
-| Prompts | `RULES` / `GREETINGS` load from `prompts/*.md` | `server/knowledge.py` |
-| Glossary | the retriever matches definitions and `build_prompt()` injects them ahead of retrieved context | `server/services/retriever.py`, `server/services/generation.py` |
-| Names/ranks | `_spoken()` applies it in both languages | `server/providers/tts.py` |
-| Places | `_spoken()` applies it in both languages, after formats | `server/providers/tts.py` |
-| Addresses | `_spoken()`, before the number spell-out | `server/providers/tts.py` |
-| Formats | `_spoken()` applies it in both languages, after addresses | `server/providers/tts.py` |
-| English | `_spoken()` applies it to English replies only | `server/providers/tts.py` |
-| Normalizer | `_spoken()` runs it last, before the Uplift request | `server/providers/tts.py` |
-
-Each import is wrapped in `try/except ImportError` with a working fallback, so deleting
-this folder degrades the kiosk to its previous behaviour rather than breaking startup.
-
-## The two personas
-
-The kiosk has two presenters, and the browser sends which one is on screen with every
-turn (`avatar`, mirroring `AvatarId` in `frontend/components/avatar/models.ts`). That id
-picks the voice, and now the persona too:
-
-| Rig | Speaks as | Prompts |
-|---|---|---|
-| `female` | **Maryam** (مریم) | `system_prompt_*.md`, `greeting_*.md` |
-| `male` | **Hamza** (حمزہ) | `*_male.md` |
-
-The female files are unsuffixed because she was the kiosk's only presenter for its whole
-life so far; renaming them would break every deployment mid-flight for no gain. An
-`avatar` the server does not recognise falls back to Maryam, so a bad id on the wire
-degrades to the persona the kiosk has always had rather than to no persona at all.
-
-Both stand at the kiosk in the Islamabad head office, present as members of the team
-(never as an AI), and share one brief: Mari Energies only, nothing invented, spoken
-sentences rather than written ones. Any change to that framing belongs in **all four**
-`system_prompt_*.md` files.
-
-Urdu marks gender on the verb and on the possessive, so the two prompts are not a name
-swap — «کر سکتی ہوں» / «کی نمائندہ» for her, «کر سکتا ہوں» / «کا نمائندہ» for him. The
-model slips on this intermittently either way, so `greetings.gender_agreement()` corrects
-it per turn in whichever direction the presenter needs. `feminine_agreement()` is
-unchanged and still does exactly what it did; `masculine_agreement()` is its mirror, plus
-the first-person verb endings (`تی ہوں` → `تا ہوں`, `رہی ہوں` → `رہا ہوں`) that only the
-male rig needs.
-
-The first reply of every conversation is the one hard promise: it opens with the salam
-and the presenter's name — "Assalamualaikum! I'm Maryam…" / "السلام علیکم! میں حمزہ ہوں…". That is
-enforced twice over. `greeting_*.md` is added to the system prompt only on a turn that
-`knowledge.is_greeting()` classified as a greeting, and `greetings.force_salam()` then
-rewrites whatever opener the model actually produced back to the required one, in both
-languages. The name itself is left to the prompt — splicing it in deterministically
-would collide with the introduction the model already wrote.
-
-Both of those phrases are then respelled in Urdu script for the voice — `Maryam` → مریم,
-`Hamza` → حمزہ, `Assalamualaikum` → السلام علیکم — in `server/providers/tts.py`, the same trick as `ماڑی`
-and the names table below. The Uplift voice is Urdu-first and applies English phonetics
-to Latin script, so in English mode her own name and her salam would otherwise be said in
-an English accent. Only the TTS payload changes; the kiosk still displays the Latin
-spelling the model wrote.
-
-## Editing the prompts
-
-The `.md` files are the source of truth at runtime; the string literals still in
-`server/knowledge.py` are the fallback and are kept byte-for-byte identical to these
-files (`tests/test_voice_config.py` asserts it). Edit the `.md` file, mirror it into the
-literal, and restart the backend — `./mari.sh restart`.
+Before adding a rule, check the engine actually needs it: synthesize the phrase and
+transcribe it back (Uplift TTS → Soniox STT). Re-normalising something Uplift already
+says correctly is how this kind of module regresses.
 
 ## Why the normalizer is so short
 
@@ -99,10 +18,10 @@ Urdu words.
 shows it already handles digits, decimals, percentages, `24/7`, years and phone numbers
 — `127` and `ایک سو ستائیس` synthesise to the same audio. Porting the converter would
 have duplicated the engine and fought the English number spell-out in
-`server/providers/tts.py`, which exists for the opposite reason.
+`server/normalization.py`, which exists for the opposite reason.
 
 The same round trip found three things Uplift genuinely gets wrong, all present in the
-knowledge base. Those, and only those, are what `urdu_normalise.py` fixes:
+knowledge base. Those, and only those, are what the Urdu-only section fixes:
 
 | Input | Uplift says | After the fix |
 |---|---|---|
@@ -116,7 +35,7 @@ kind of module regresses.
 
 ## Report formats and symbols
 
-`spoken_formats()` is the second half of `urdu_normalise.py`, and unlike the three fixes
+The *Report formats, dates and symbols* section, unlike the three fixes
 above it runs in **both** languages: these are structural failures, not phonetic ones,
 so they break the same way in either voice. Each was reproduced against the shapes that
 actually occur in `server/data/mari_energies_knowledge_base.md`:
@@ -148,7 +67,7 @@ hyphen is a measurement (`20-year`, `18-inch`), a numeric slash is a ratio (`24/
 
 ## What only English gets wrong
 
-`english_normalise.py` is the mirror of the Urdu-only pass: shapes an Urdu reply never
+The *English-only* section is the mirror of the Urdu-only pass: shapes an Urdu reply never
 contains, plus the ones Uplift already reads correctly in Urdu and would only be made
 worse by touching. All measured against the same corpus:
 
@@ -182,13 +101,13 @@ would be exactly the regression this file keeps warning about. `ISO 9001:2015`, 
 and `2C` reserves, `&` in company names and the em-dash were all checked and left: they
 already read acceptably, and no rule earns its place without a failure behind it.
 
-### Why this is not the old `prompt related/urdu_normalised.py`
+### Why this is not `prompt related/urdu_normalised.py`
 
 That file is **not** an earlier, richer version of this one. It belonged to the Sky47
 kiosk and targeted MMS-TTS/ElevenLabs, and most of its 1,246 lines do not apply here:
 
 - **~200 lines** convert digits to Urdu words, which Uplift does not need and which
-  would fight the English number spell-out in `server/providers/tts.py`.
+  would fight the English number spell-out in `server/normalization.py`.
 - **~100 abbreviations** cover NVIDIA, Kubernetes, SaaS/DRaaS, DCIM and colocation.
   Sky47 is a Mari subsidiary, but **none of those terms occur in this knowledge base**,
   and the persona may only state what the knowledge base contains.
@@ -232,7 +151,7 @@ right.
 This was originally a *measured subset*: only names a round trip proved broken were
 listed, and ten people were pinned as deliberately absent because Latin had come out
 closer for them. **Listening to the deployed kiosk showed that was the wrong call** —
-those ten were exactly the names still being mispronounced in English. `names.py` now
+those ten were exactly the names still being mispronounced in English. The names table now
 covers **every person in the corpus in both languages**, so which names get respelled
 is no longer a judgement call that can be got wrong, and adding a person to the corpus
 means adding one row.
@@ -255,16 +174,28 @@ would fire on unrelated sentences, and the full-name pass still covers them.
 
 Ranks and honours are rules rather than a table, because there the failure is
 abbreviation, not phonetics: `Lt. Gen.` → "Leftenant"/"Eldeej" and `(Retd)` → "Grade",
-but the spelled-out words are said correctly. `HI(M)` is dropped from speech — it reads
-as "HIV" or "a type M", and the expanded "Hilal-e-Imtiaz" fares no better ("Hello team,
-here's Mummy Tree"). It is a decoration, not a fact, and only the audio is affected.
+but the spelled-out words are said correctly. `HI(M)` reads as "HIV" or "a type M", and
+the Latin "Hilal-e-Imtiaz" fares no better ("Hello team, here's Mummy Tree"), so it was
+once dropped from speech. It is now said in full, because the Urdu spelling works:
+
+| Written | Round trip |
+|---|---|
+| `ہلال امتیاز ملٹری` | "Hilal Imtiaz Military" — the izafat is lost |
+| `ہلالِ امتیاز ملٹری` | "Hilal M. Tayyaz" — the zer diacritic breaks the word |
+| `ہلالے امتیاز ملٹری` | **"Hilal-e-Imtiaz Military"**, in both voices |
+
+`SI`, `TI` and `NI` follow the same pattern. The honour sits between the name and
+`(Retd)` in the corpus, so the suffix is lifted in front of it first and the rank rules
+still see "name (Retd)". The model also writes the whole line in Urdu script —
+`ایچ آئی (ایم)، (ریٹائرڈ)` — which used to lose the "retired" entirely.
 
 ### What was tried and rejected
 
 Letter-spacing the other initialisms (`SECP`, `ICAP`, `SNGPL`, `HSE`) made the voice
-**worse**, not better — `S N G P L` is heard as "S and GPL". They are left alone. Only
-`HR&R` (run together as "H9R") and the credit rating `A1` (glued into the non-word
-"Aone" by the number spell-out) were changed.
+**worse**, not better — `S N G P L` is heard as "S and GPL". `HR&R` (run together as
+"H9R") and the credit rating `A1` (glued into the non-word "Aone" by the number
+spell-out) were changed. Leaving the rest in Latin turned out to be wrong too; see
+*Every other initialism* below.
 
 ## Initialisms, formulae and ranks in Urdu
 
@@ -284,7 +215,7 @@ English reading at the same time (nobody says "C O two" out loud either):
 | `CO₂` | "C-O-do" | carbon dioxide | کاربن ڈائی آکسائیڈ |
 | `CH4`, `H2S`, `SO2`, `N2`, `N2O` | letters + digit | methane, hydrogen sulphide … | میتھین، ہائیڈروجن سلفائیڈ … |
 
-`_ACRONYMS` in `server/providers/tts.py` is now a **per-language table** for the same
+`_ACRONYMS` is now a **per-language table** for the same
 reason. The English column is unchanged — every measured English finding is preserved
 verbatim, including the decision to leave `SNGPL`, `SECP`, `ICAP` and `HSE` alone,
 which was a finding about the *English* reading. The Urdu column is Urdu script
@@ -321,7 +252,7 @@ silently dropped.
 
 ## Places, fields and programme names
 
-`names.py` covers the people. Everything else Urdu- or Pashto-origin in the corpus —
+The people table covers the people. Everything else Urdu- or Pashto-origin in the corpus —
 gas fields, districts, formations, wells and the CSR programme names — had **no
 coverage at all**, in either language, and the corpus is 100% Latin script, so the
 Urdu-first voice read every one of them with English phonetics:
@@ -335,7 +266,7 @@ Urdu-first voice read every one of them with English phonetics:
 | `Spinwam`, `Sui` | 5× each | سپین وام, سوئی |
 | `Kissan Dost`, `Dastarkhwan`, `Roshan Mustaqbil` | CSR programmes | کسان دوست, دسترخوان, روشن مستقبل |
 
-Unlike `names.py`, this is **one table applied in both languages**. A person's name
+Unlike the names table originally, this is **one table applied in both languages**. A person's name
 needed a per-language split because the round trip found some better in Latin; a
 toponym has no such split — the Urdu spelling is what the word *is*, and it is right in
 an English sentence and an Urdu one alike. `Dastarkhwan` is spelled two ways in the
@@ -379,7 +310,7 @@ different name, not an accent. See the table below.
 The test for everything in this section, `Pakistan` included, is **what the entry
 actually does**: change how a name sounds — never translate it into a different name,
 and never respell an ordinary word for no reason beyond "it could be." Measured
-intent wins over a blanket rule, which is the lesson `names.py` records.
+intent wins over a blanket rule, which is the lesson the names table records.
 
 Two further entries were removed as outright errors rather than style calls, because
 they replaced a name with a *different word*:
@@ -421,7 +352,7 @@ substring of "industry" and "industrial", which occur far more often than the ba
 > the corpus rather than from Uplift → Soniox verification, after the kiosk was
 > reported mispronouncing English-mode names. The spellings are conventional, so the
 > risk is a wrong vowel rather than a wrong word — but anything a round trip shows was
-> already correct in Latin should be deleted, exactly as `names.py` says.
+> already correct in Latin should be deleted, exactly as the names notes above say.
 
 ## Addresses, formulae and symbol abbreviations
 
@@ -442,7 +373,7 @@ Three principles hold this together:
 
 1. **Identifiers are not quantities.** A postcode, a sector, a box number, an extension
    and the "2" in CO2 are all read digit-by-digit or letter-by-letter. This is why
-   `spoken_addresses` must run *before* the number spell-out in `tts.py` — that pass
+   `spoken_addresses` must run *before* the number spell-out — that pass
    would otherwise turn each of them into a number.
 2. **Scope narrowly.** The sector rule fires only on the sector shape, so `24/7` and
    `2024/25` keep their own handling. The postcode rule refuses a five-digit run
@@ -461,3 +392,117 @@ Three principles hold this together:
 "اینٹی کرپشن" correctly and spacing it made it worse ("این ڈی کرپشن"). Letter-spacing
 `M D and C E O` also failed ("PSD, MDA, and CTO"), which is what forced the full-title
 approach.
+
+## Loanword and brand respellings
+
+The Uplift voice takes its phonemes from the script, so an English loanword written in
+Urdu letters is read wrong, and Latin text in an Urdu sentence is read with English
+letter values. Measured findings behind `_SAY_AS` and `_respell_by_language`:
+
+| Term | What happened | Fix |
+|---|---|---|
+| `Sky47` | English: one mangled word ("SkySitalis"); Urdu: `اسکائی ۴۷` said "sentaalees" | "Sky Forty Seven" in both |
+| `Mari`, `MARI` | tapped ر instead of the retroflex flap; the all-caps ticker was letter-spelled | ماڑی |
+| `Maryam`, `Hamza`, the salam | English phonetics ("Mary-am", a flat "assa-lamu-a-LAY-kum") | مریم، حمزہ، السلام علیکم |
+| `Huawei` | "hoo-AH-way" | ہواوے, in both languages |
+| `NVIDIA` | all caps letter-spelled as an initialism | "Envidia" (en), اینویڈیا (ur) |
+| `50kW` | the `\b`-anchored acronym rule never matched a unit glued to its number; English said "fifty", Urdu read a bare count | lookbehind for the digit: kilowatts / کلو واٹ |
+| `NPU`/`NPUs` | "N P U" read as separate tokens; "N P Us" ended in the English word "us" | Urdu letter names; joined into one token in English so the voice does not pause |
+| `subsidiary` (سبسڈیری) | middle syllable dropped; malformed tails like سبسیڈیریاری were made worse by matching only the prefix | سب سِڈی ری, swallowing any repeated tail |
+
+**Huawei.** Three Latin respellings failed before the Urdu one: "Wah-way" was split at
+the hyphen into two clipped pieces, "Wah way" was two tokens and dropped the H, and
+"Hwahway" spelled a consonant cluster the voice cannot read. ہواوے is how an Urdu speaker
+writes the name, and the voice already said it correctly in Urdu replies.
+
+**liquid cooled (Urdu).** Both Urdu-script attempts said "liquid cold": کولڈ is how Urdu
+writes "cold", and the diacritic form لِکوئڈ کُولڈ was not read reliably. The Latin
+respelling "likwid koold" doubles the vowel to force the "oo" and keeps the "-d".
+
+**cluster(s) (Urdu).** کلسٹر is a bare consonant run the voice ran together; کلاسٹر added
+the vowel in the wrong place ("klaaster"). "klustur"/"klusturz" spells the English
+short "u". Plural rules run first so a stray ز or s is not left behind.
+
+**methane mitigation (Urdu).** Fixed one word at a time, the phrase reached the voice as
+"methayn مٹی گیشن", a script change mid-phrase that turned the second word into
+"matigation". The pair is rewritten in one step, both halves Latin.
+
+**Inserted pauses make things worse.** Re-measured against the live voice (synthesise,
+transcribe, read the word timings back):
+
+| Input | Heard | Longest internal gap |
+|---|---|---|
+| `rare earth elements and copper` | correct | 0.00s |
+| `rare, earth elements and copper` | "wear, birth, elements" | 0.56s |
+| `rare. Earth elements and copper` | "way, Earth's elements" | 0.64s |
+
+"methane mitigation" was said identically with and without an inserted stop, which only
+added a 0.9s hole. "food grade" is mispronounced ("great") however it is punctuated, so
+only the corpus hyphen is normalised. Rate (`APP_UPLIFT_SPEED`) is the only lever that
+slows this voice without corrupting it.
+
+## Speaking rate
+
+`APP_UPLIFT_SPEED` defaults to 0.9: at 1.0 the voice clips short unstressed words
+("about us" lost the "us": 0.18s at 1.0, 0.26s at 0.9). The curve is not monotonic
+(0.95 measured worse than 1.0, at 0.14s), so retune by measuring. English has its own
+rate, `APP_UPLIFT_SPEED_EN` (0.78), because the English prose read at a rushed clip,
+which is a pacing complaint, not a clipping one.
+
+## Every other initialism
+
+The acronym table held about sixty entries; the knowledge base has some 150 more
+(`UET`, `NTN`, `UBL`, `ACCA`, `PPL`, `GHPL` …). Round-tripped in a sentence, plain Latin
+capitals failed in both voices:
+
+| Written | English voice | Urdu voice |
+|---|---|---|
+| `UBL` | "above" | "ابل" |
+| `IBA` | "Eber" | "ایبا" |
+| `NTN` | "MTN" | "ایم ٹی آئی این" |
+| `ACCA` | "a care" | dropped |
+| `PPL` | "TPL" | ✓ |
+| `SNGPL`, `SECP` | "SNDPO", "SEPI type" | — |
+
+`spoken_initialisms` runs after every pass that owns a capitalised shape:
+
+- **English: hyphenated letters.** `U-E-T`, `S-E-C-P`, `S-N-G-P-L` all read back as the
+  initialism — the same trick as `M-D and C-E-O`. Spaces fail ("S and GPL"); hyphens do
+  not. Tokens already measured fine in Latin (`AI`, `HR`, `CEO`, `MD`, `ISO`, `UK` …) are
+  left alone.
+- **Urdu: Urdu letter names** (`یو ای ٹی`), as the acronym table's Urdu column already does.
+- **Said as a word, not letters:** `LUMS` → لمز (Latin lost the S: "لم"), `PARCO` → پارکو,
+  `GEM` → جیم (Latin was spelled "جی ای ایم"). English keeps these in Latin, except
+  `PACRA`: Latin came back "Petra", hyphenated letters "PECRA".
+- `AAA` is "triple A" / "ٹرپل اے", as a rating is said aloud.
+- Capitalised English words (`THIS IS NOT`) and Roman numerals are not initialisms.
+
+A spaced `&` in an Urdu reply (`ایم ڈی & سی ای او`) came back "ایم ڈی ایم پسند سی ای او";
+it is now «اور».
+
+## Returning the salam
+
+A visitor who says "Assalamualaikum" is answered "Walaikum Assalam" / «وعلیکم السلام», as
+a Pakistani receptionist would; any other greeting still gets the kiosk's own
+"Assalamualaikum". `said_salam` in `server/agent/greeting.py` recognises every spelling
+Soniox writes (`اسلام علیکم`, `السلام و علیکم`, `Asalam o alaikum`, with or without the
+blessing), and `force_salam(..., returning=True)` enforces the opener. The TTS pass already
+respells "Walaikum Assalam" as «وعلیکم السلام», which round-trips correctly in both voices.
+
+## Units
+
+Unit symbols were read as letters: `kW` as "K W", and `MW`, `TB` and `GB` were spelled
+by the initialism pass. The old rule only caught `50kW`/`50 kW`, so a bare "kW per rack",
+a "50-kW rack", an uppercase `KW`, or the model's Urdu letters «50 کے ڈبلیو» all slipped
+through. `spoken_units` says every symbol by name, and runs before the acronym table.
+
+Round-tripped, the names came back as the symbol in both voices: "fifty kilowatts" →
+"50 kW", «گیارہ کلو وولٹ» → "11 kV", «پچیس ڈگری سینٹی گریڈ» → "25°C".
+
+| Case | Handling |
+|---|---|
+| `1 kW`, `a 50-kW rack`, `a 100 MW plant` | singular in English: a count of one, or an adjective |
+| `30 kW/rack` | "kilowatts per rack" / «کلو واٹ فی» — otherwise the slash rule says "and" |
+| `500 TB` (Urdu) | **Latin** "terabyte": «500 ٹیرا بائٹ» and «ٹیرابائٹ» were both heard as "513 بائٹ", with «سو» run into «ٹیرا» |
+| `m`, `g`, `t`, `W`, `V` | left alone: "5m" is as often money as metres, and "4G" is a network |
+| `TB`, `GB`, `m³`, `psi` | only after a number: "TB" alone is tuberculosis in the CSR section |

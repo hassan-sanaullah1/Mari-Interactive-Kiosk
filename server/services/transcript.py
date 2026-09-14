@@ -1,15 +1,7 @@
-"""STT domain-term correction, applied before retrieval.
+"""STT domain-term correction for the retrieval query.
 
-Whisper and Soniox are trained on general speech and have never seen this company's
-vocabulary. They transcribe confidently and wrongly: "Daharki" becomes "the har key",
-"Fauji" becomes "Foji", "Sky47" becomes "sky forty seven". Each of those is a *content
-word* — the one word in the sentence that decides which section should be retrieved — so
-a single substitution here can be the whole difference between the right answer and "I
-don't have that information".
-
-Correcting the transcript is worth more than it looks because it fixes two problems at
-once: retrieval embeds the right term, and the LLM sees the right term in the user's
-message rather than being asked to answer a question about "the har key field".
+General-purpose STT mishears the corpus's content words ("Daharki" → "the har key",
+"Fauji" → "Foji"), and that one word decides which section is retrieved.
 
 Two rules for adding entries:
 

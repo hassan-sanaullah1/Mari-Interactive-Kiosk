@@ -1,27 +1,24 @@
-"""Urdu- and Pashto-origin proper nouns — voice_config/places.py.
+"""Urdu- and Pashto-origin proper nouns (the places section of server/normalization.py).
 
-names.py covers the people in the knowledge base; this covers everything else that is
+The names section covers the people in the knowledge base; this covers everything else that is
 Urdu-origin and written in Latin script — gas fields, districts, formations, wells and
 the CSR programme names. The corpus is 100% Latin, so before this table the Urdu-first
 voice read every one of them with English phonetics in both languages.
 
 The negative cases carry as much weight as the positive ones: respelling a name the
-voice already says correctly makes it worse, which is the lesson names.py records.
+voice already says correctly makes it worse, which is the lesson the names table records.
 
 Run: python -m pytest tests/ -q
 """
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from server.providers.tts import _spoken  # noqa: E402
-from voice_config.places import _ALL, spoken_places  # noqa: E402
+from server.normalization import normalize_for_tts
+from server.normalization import _ALL_PLACES, spoken_places
 
 
 @pytest.mark.parametrize(
@@ -39,7 +36,7 @@ from voice_config.places import _ALL, spoken_places  # noqa: E402
     ],
 )
 def test_fields_and_places_are_respelled(text: str, expected: str) -> None:
-    assert expected in _spoken(text, "en")
+    assert expected in normalize_for_tts(text, "en")
 
 
 @pytest.mark.parametrize(
@@ -55,27 +52,27 @@ def test_fields_and_places_are_respelled(text: str, expected: str) -> None:
     ],
 )
 def test_programme_and_group_names_are_respelled(text: str, expected: str) -> None:
-    assert expected in _spoken(text, "en")
+    assert expected in normalize_for_tts(text, "en")
 
 
 def test_places_apply_in_urdu_too() -> None:
     """The corpus is Latin-only, so an Urdu reply carries these names in Latin script
     as well, and the voice mangles them there for the same reason."""
-    assert "ڈھرکی" in _spoken("ہمارا Daharki فیلڈ ہے۔", "ur")
+    assert "ڈھرکی" in normalize_for_tts("ہمارا Daharki فیلڈ ہے۔", "ur")
 
 
 def test_a_well_identifier_keeps_its_number(sample: None = None) -> None:
     """Ordering guard: the formats pass splits "Spinwam-1" into "Spinwam 1" first,
     and its rule needs a Latin letter before the hyphen. If places ran earlier the
     name would already be Urdu script and the hyphen would survive unspoken."""
-    said = _spoken("Spinwam-1 in Waziristan.", "en")
+    said = normalize_for_tts("Spinwam-1 in Waziristan.", "en")
     assert "سپین وام one" in said
     assert "-" not in said
 
 
 def test_the_brand_still_wins_over_a_place() -> None:
-    """"Mari" is handled in providers/tts.py and is deliberately not in this table."""
-    assert "ماڑی غازیج" in _spoken("Mari Ghazij-1 well.", "en")
+    """"Mari" has its own brand rule and is deliberately not in this table."""
+    assert "ماڑی غازیج" in normalize_for_tts("Mari Ghazij-1 well.", "en")
 
 
 @pytest.mark.parametrize(
@@ -89,7 +86,7 @@ def test_familiar_names_are_respelled_too(name: str, urdu: str) -> None:
     hole in the table. Familiarity to a READER is not pronunciation to a VOICE: the
     engine applies English phonetics to Latin script whether or not the word is famous,
     so "Karakoram" was mangled exactly like "Sujawal". Script is the test, not fame."""
-    said = _spoken(f"We operate in {name} today.", "en")
+    said = normalize_for_tts(f"We operate in {name} today.", "en")
     assert urdu in said and name not in said
 
 
@@ -102,7 +99,7 @@ def test_pakistan_gets_its_accent_without_urdu_script() -> None:
     Latin respelling lengthens the two /aː/ vowels the way a Pakistani speaker does
     while staying in the alphabet this voice reads reliably.
     """
-    said = _spoken("We operate across Pakistan today.", "en")
+    said = normalize_for_tts("We operate across Pakistan today.", "en")
     assert "Paakistaan" in said
     # The failure mode this replaced: no Urdu script for this word, ever.
     assert "پاکستان" not in said
@@ -122,7 +119,7 @@ def test_the_derived_forms_get_the_accent_too(text: str, expected: str) -> None:
     """"Pakistani" was missed by the bare "Pakistan" entry: the trailing "i" is a word
     character, so the \\b boundary never lands after "Pakistan". Longest-first matching
     is what lets the adjective and plural win over the shorter key."""
-    assert expected in _spoken(text, "en")
+    assert expected in normalize_for_tts(text, "en")
 
 
 @pytest.mark.parametrize(
@@ -138,20 +135,20 @@ def test_genuinely_foreign_names_are_left_alone(name: str) -> None:
     """The narrow, and correct, ground for exclusion: these are not Urdu words at all,
     so the voice should say them in English. "Lockhart" is a formation named after a
     Briton, not a Pakistani place."""
-    assert name in _spoken(f"We reached the {name} level today.", "en")
-    assert name not in _ALL
+    assert name in normalize_for_tts(f"We reached the {name} level today.", "en")
+    assert name not in _ALL_PLACES
 
 
 def test_indus_does_not_fire_inside_industry() -> None:
     """"Indus" is a substring of "industry"/"industrial", which occur far more often
     than the basin does. Whole-word anchoring is what keeps them apart."""
-    said = _spoken("The industry and industrial output grew.", "en")
+    said = normalize_for_tts("The industry and industrial output grew.", "en")
     assert "industry" in said and "industrial" in said
 
 
 def test_longest_key_wins() -> None:
     """"Mughal Kot" must not be broken up by a shorter overlapping key."""
-    assert "مغل کوٹ" in _spoken("The Mughal Kot Sst formation.", "en")
+    assert "مغل کوٹ" in normalize_for_tts("The Mughal Kot Sst formation.", "en")
 
 
 def test_unknown_text_is_untouched() -> None:
@@ -175,8 +172,8 @@ def test_unknown_text_is_untouched() -> None:
 def test_a_phrase_and_its_parts_both_work(
     phrase: str, part: str, phrase_urdu: str, part_urdu: str
 ) -> None:
-    assert phrase_urdu in _spoken(phrase, "en")
-    assert part_urdu in _spoken(part, "en")
+    assert phrase_urdu in normalize_for_tts(phrase, "en")
+    assert part_urdu in normalize_for_tts(part, "en")
 
 
 @pytest.mark.parametrize(
@@ -190,7 +187,7 @@ def test_a_phrase_and_its_parts_both_work(
     ],
 )
 def test_partner_and_locality_names_are_respelled(text: str, expected: str) -> None:
-    assert expected in _spoken(text, "en")
+    assert expected in normalize_for_tts(text, "en")
 
 
 def test_no_local_origin_word_in_the_corpus_is_left_in_latin() -> None:
@@ -230,7 +227,7 @@ def test_no_local_origin_word_in_the_corpus_is_left_in_latin() -> None:
     missed = [
         w for w in words
         if w not in english and w not in allowed
-        and not any(ord(c) > 0x600 for c in _spoken(f"About {w} today.", "en"))
+        and not any(ord(c) > 0x600 for c in normalize_for_tts(f"About {w} today.", "en"))
     ]
     assert not missed, f"still read as English: {sorted(missed)}"
 
@@ -246,7 +243,7 @@ def test_urdu_spelling_variants_are_normalised(written: str, expected: str) -> N
     in Latin, and it does not always pick the spelling that reads correctly: "ڈہرکی"
     loses the aspiration of ڈھ. The same place must sound the same whichever spelling
     the model happened to produce."""
-    assert expected in _spoken(written, "ur")
+    assert expected in normalize_for_tts(written, "ur")
 
 
 def test_a_reordered_urdu_acronym_is_corrected() -> None:
@@ -254,4 +251,4 @@ def test_a_reordered_urdu_acronym_is_corrected() -> None:
     anyway — and sometimes reorders the letters, writing "این جی ایل" (N-G-L) for LNG.
     A wrong acronym is a wrong fact, so every spelling converges on the right one."""
     for written in ("این جی ایل", "ایل این جی", "LNG"):
-        assert "ایل این جی" in _spoken(f"GEM Energy {written} بناتی ہے۔", "ur")
+        assert "ایل این جی" in normalize_for_tts(f"GEM Energy {written} بناتی ہے۔", "ur")

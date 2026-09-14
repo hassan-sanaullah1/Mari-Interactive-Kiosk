@@ -1,26 +1,10 @@
-"""ABBR → full-form glossary built from the Mari Energies knowledge base.
+"""ABBR → full-form glossary mined from the knowledge base.
 
-Retrieval (``server/services/retriever.py``) ranks whole chunks. An abbreviation like
-"MSPC" or "CDRS" can be *used* in a dozen chunks but *spelled out* in only one, so the
-chunks a question actually surfaces may never contain the definition — leaving the model
-to guess. That is true of hybrid search as much as it was of the BM25 index this
-replaced: the sparse channel matches the token either way, and the dense channel has no
-concept of "this is the chunk that defines the term". This module scans the whole
-corpus once at import time for "ABBR (Full Form)" / "Full Form (ABBR)" pairs, so the
-definition can be force-injected whenever a visitor asks about the abbreviation,
-independent of what retrieval returned.
-
-Adapted from a reference implementation written for a cybersecurity corpus. The
-extraction mechanism is unchanged; the filtering is not. This knowledge base is an
-annual-report export, where parentheses are used far more often for asides than for
-definitions:
-
-    "EPS 54.25 (restated)"                 → EPS = "restated"
-    "OGDCL (20%)"                          → OGDCL = "20%"
-    "energy use 4,344,223 GJ (2024: ...)"  → GJ  = "2024: 4,344,223 GJ"
-
-Injected as authoritative definitions, those would actively produce wrong answers — the
-opposite of what this module is for. ``_is_plausible_definition`` rejects them.
+Retrieval ranks whole chunks, so an abbreviation used in many chunks but defined in one
+may never reach the model with its definition. The retriever scans the corpus for
+"ABBR (Full Form)" / "Full Form (ABBR)" pairs and injects the matching definitions.
+The corpus is an annual report, where most parentheses are asides ("EPS 54.25
+(restated)", "OGDCL (20%)"); ``_is_plausible_definition`` rejects those.
 """
 
 from __future__ import annotations
@@ -67,13 +51,7 @@ def _clean_full_form(full_form: str) -> str:
 
 
 def _is_plausible_definition(abbr: str, full_form: str) -> bool:
-    """Reject parenthetical asides that are not definitions at all.
-
-    The corpus is an annual report, so "(20%)", "(restated)" and "(2024: 728 ML)" sit in
-    exactly the same syntactic position a real definition does. Three cheap signals
-    separate them: definitions contain no digits, run to more than one word, and their
-    initials line up with the abbreviation they define.
-    """
+    """Definitions contain no digits, run to 2-10 words, and start with the abbreviation's letter."""
     if not full_form or len(full_form) < 3:
         return False
     if _MOSTLY_NUMERIC_RE.match(full_form) or _HAS_DIGIT_RE.search(full_form):
@@ -84,10 +62,7 @@ def _is_plausible_definition(abbr: str, full_form: str) -> bool:
     if not 2 <= len(words) <= 10:
         return False
 
-    # The initials should broadly match the abbreviation. Requiring an exact match is
-    # too strict — real forms drop connectives ("Health Safety & Environment" = HSE) and
-    # keep plural/compound heads — so this only asks that the first letters agree, which
-    # is enough to throw out "EPS = restated" while keeping the genuine entries.
+    # Only the first initial is compared: real forms drop connectives and keep plural heads.
     initials = [w[0].upper() for w in words if w[0].isalpha() and w.lower() not in _CONNECTIVE_WORDS]
     return bool(initials) and initials[0] == abbr[0].upper()
 
@@ -116,11 +91,7 @@ def extract_glossary(text: str) -> dict[str, str]:
                     break
                 if clean[0].isupper() or clean.lower() in _CONNECTIVE_WORDS:
                     candidate.insert(0, clean)
-                    # A comma ends the phrase. This corpus lists subsidiaries and
-                    # employers comma-separated ("... Fauji Meat Limited, Pakistan
-                    # Maroc Phosphate (FFBL)"), and without this the scan walks
-                    # straight through the separators and glues several list items
-                    # into one bogus "full form".
+                    # A comma ends the phrase, or a comma-separated list is glued into one.
                     if w.rstrip().endswith(","):
                         break
                 else:

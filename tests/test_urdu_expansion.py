@@ -19,16 +19,11 @@ Run: python -m pytest tests/ -q
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from server import knowledge as K  # noqa: E402
-from server.services import expansion  # noqa: E402
-from tests.retrieval_cases import CASES  # noqa: E402
+from server.services import expansion
+from server.services import expansion as K
+from tests.retrieval_cases import CASES
 
 
 @pytest.mark.parametrize("query", [q for q, _ in CASES], ids=lambda q: q[:40])
@@ -88,8 +83,7 @@ def test_spelled_out_acronyms_are_rebuilt() -> None:
 def test_names_are_matched_by_sound(urdu: str, expected: str) -> None:
     """Proper nouns are unbounded, so they are matched phonetically, not from a list.
 
-    The index behind this is built from the corpus vocabulary at import, which is the
-    only reason server/knowledge.py still reads the knowledge base at all.
+    The index behind this is built from the corpus vocabulary at import.
     """
     assert expected in K._sounds_like(urdu)
 

@@ -28,7 +28,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from server import config as C          # noqa: E402
 from server import providers as P       # noqa: E402
-from server.app import run_llm          # noqa: E402
+from server.agent.responder import respond  # noqa: E402
+from server.agent import speech         # noqa: E402
 
 OK, BAD, WARN = "\033[92m✓\033[0m", "\033[91m✗\033[0m", "\033[93m!\033[0m"
 
@@ -63,7 +64,7 @@ async def test_llm():
     if not C.llm_ready():
         return WARN, "not configured (APP_VLLM_*)"
     try:
-        reply, ms = await _timed(run_llm("Reply with exactly one word: pong.", "en"))
+        reply, ms = await _timed(respond("Reply with exactly one word: pong.", "en"))
         return OK, f"{ms:6.0f} ms · {reply[:60]!r}"
     except Exception as exc:
         return BAD, f"{type(exc).__name__}: {exc}"
@@ -73,7 +74,7 @@ async def test_roundtrip(lang, text):
     tts_name = "uplift" if lang == "ur" else "kokoro"
     stt_name = "soniox" if lang == "ur" else "whisper"
     try:
-        (mp3, _), t_tts = await _timed(P.tts(text, lang))
+        (mp3, _), t_tts = await _timed(speech.speak(text, lang))
         if not mp3:
             return BAD, f"{tts_name} returned no audio"
         wav = _mp3_to_wav16k(mp3)

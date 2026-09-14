@@ -1,11 +1,11 @@
-"""STT adapters — each implements :class:`server.providers.base.STTProvider`.
+"""STT adapters, each implementing :class:`server.providers.base.STTProvider`.
 
-  SonioxSTT       Urdu (and any language Soniox supports) — realtime websocket
-  WhisperLocalSTT English — local faster-whisper (GPU if available)
-  WhisperRemoteSTT English — remote OpenAI-compatible /audio/transcriptions
+  SonioxSTT        Urdu, one-shot over the Soniox realtime websocket
+  SonioxStream     Urdu, live partials for the /ws turn
+  WhisperLocalSTT  English, local faster-whisper (GPU if available)
+  WhisperRemoteSTT English, remote OpenAI-compatible /audio/transcriptions
 
-Shared by both entrypoints: server/app.py (FastAPI) and mari_s2s/handlers/*.py
-(huggingface/speech-to-speech plugin handlers) — no more duplicated websocket logic.
+Used by server/app.py and mari_s2s/handlers/.
 """
 
 from __future__ import annotations
@@ -20,14 +20,8 @@ import httpx
 from .. import config as C
 from .base import STTProvider
 
-# "Mari" — the company's own name, said constantly by visitors — was coming back from
-# both engines as "Mary"/"Marry"/"Merry" and, once those are biased against, as other
-# real words with the same "Mah-ri" shape ("Maori", "Mardi"): a short, common word
-# outweighs an unfamiliar one with a similar sound unless the engine is told what to
-# expect. A leading sentence that USES "Mari" in context, not just a comma list of
-# names, is what actually shifts a prompt-biased decoder — it looks like the kind of
-# text the model expects to continue, rather than a keyword dump. Every name and term
-# here is one a visitor is likely to actually say at this kiosk.
+# Biases the recognizer toward the kiosk's vocabulary; without it "Mari" comes back as
+# "Mary". A sentence that uses the names in context shifts the decoder more than a list.
 _VOCAB_HINT_EN = (
     "The following is a conversation with Maryam at the Mari Energies kiosk, "
     "discussing Mari Energies, Mari Petroleum, MPCL, the Mari Gas Field, Daharki, "
@@ -207,19 +201,9 @@ class SonioxStream:
                     self.finals.append(text)
                 else:
                     partial += text
-            # The standing partial is replaced by any message that carried a real
-            # token — including a purely final one, whose text has just moved into
-            # self.finals and must not also be left behind here, or the tail of the
-            # utterance is said twice.
-            #
-            # What must NOT touch it is a message carrying no usable token at all:
-            # a keepalive, an endpoint marker, or a batch of nothing but filtered
-            # <...> markers. Those used to blank last_partial, and when finish()'s
-            # grace then expired before the finals for that tail arrived,
-            # "finals + last_partial" was the empty string — the visitor watched
-            # their words appear as live captions and then got silence, because an
-            # empty transcript makes run_reply answer {done, spoken:false} without
-            # ever calling the LLM.
+            # Replaced by any message with a real token (a final one included, or the
+            # tail is said twice), but never blanked by a keepalive or marker-only
+            # message, which would leave finish() with an empty transcript.
             if saw_token:
                 self.last_partial = partial
             if self.on_partial:
@@ -233,11 +217,11 @@ class SonioxStream:
                 break
 
     async def finish(self, grace: float = 0.35) -> str:
-        """End the utterance and return the transcript fast. Soniox only emits its
-        `is_final` tokens ~1s+ after end-of-audio, but the streaming partials already
-        hold the full text (the client keeps streaming through the VAD silence tail).
-        So instead of blocking for finalization we take a short grace, then use
-        finals + the latest partial. Cuts ~1s off every turn."""
+        """End the utterance and return finals + the latest partial after a short grace.
+
+        Soniox finalizes ~1s after end-of-audio, but the partials already hold the text,
+        so this does not wait for finalization.
+        """
         try:
             if self.ws:
                 await self.ws.send("")  # end-of-audio
@@ -245,23 +229,14 @@ class SonioxStream:
             pass
         await asyncio.sleep(grace)      # let the reader catch the tail of the partial
         text = ("".join(self.finals) + self.last_partial).strip()
-        # Still nothing: the grace above is tuned for the common case, where the
-        # partials already hold the utterance and only the finals are outstanding.
-        # A turn whose tail is still in flight lands here with an empty string,
-        # and an empty transcript costs the visitor the whole turn — the reply
-        # path answers {done, spoken:false} in silence rather than asking the LLM.
-        # A second, longer wait is cheap by comparison: it costs nothing at all on
-        # a normal turn (which has already returned above) and only delays the one
-        # kind of turn that would otherwise have been lost outright. Polled so a
-        # transcript that lands early still returns early.
+        # Still empty: wait longer, polling. Only a turn that would otherwise be lost pays.
         if not text:
             for _ in range(int(_EMPTY_GRACE / _EMPTY_POLL)):
                 await asyncio.sleep(_EMPTY_POLL)
                 text = ("".join(self.finals) + self.last_partial).strip()
                 if text:
                     break
-        # Close in the background — the Soniox close handshake (~1s to JP) must not
-        # block the reply from starting.
+        # In the background: the close handshake (~1s) must not delay the reply.
         self._closing = asyncio.create_task(self.close())
         return text
 
@@ -289,11 +264,7 @@ class WhisperLocalSTT(STTProvider):
         if WhisperLocalSTT._model is None:
             from faster_whisper import WhisperModel
 
-            # device="auto": ctranslate2 (faster-whisper's backend) picks CUDA
-            # itself when available — no torch import needed just to ask.
-            # The backend container has no GPU passthrough (see server/Dockerfile),
-            # so this always resolves to CPU there; falls back to CPU explicitly
-            # if a GPU is visible but unusable (e.g. missing cuDNN).
+            # "auto" picks CUDA when available; CPU if a GPU is visible but unusable.
             try:
                 WhisperLocalSTT._model = WhisperModel(self.model_size, device="auto", compute_type="int8")
             except Exception:
@@ -365,8 +336,7 @@ _stt_cache: dict[str, STTProvider] = {}
 
 
 def get_stt_provider(lang: str) -> STTProvider:
-    """Return the configured STT adapter for a language (cached — local-model
-    adapters keep their loaded model across calls)."""
+    """The configured STT adapter for a language, cached so local models stay loaded."""
     key = f"{lang}:{C.EN_STT if lang != 'ur' else 'soniox'}"
     if key not in _stt_cache:
         if lang == "ur":
@@ -376,36 +346,17 @@ def get_stt_provider(lang: str) -> STTProvider:
     return _stt_cache[key]
 
 
-# Even with the vocabulary hint above, "Mari" sometimes still comes back as the far
-# more common English name it sounds identical to. This is a kiosk that only ever
-# discusses Mari Energies, so a homophone match is corrected outright rather than left
-# for the LLM to puzzle over — the LLM sees only the corrected text, never the raw
-# transcript.
-#
-# Every homophone/near-homophone Whisper has actually produced for "Mari": the plain
-# English name family (Mary/Marry/Merry), and two more exotic mishearings once the
-# vocabulary hint nudges the decoder toward an unfamiliar-sounding word instead of
-# giving up and picking the common one — "Māori" (the decoder reaching for a real word
-# with the same "Mah-ri" shape; the macron sits on the "a", and some output strips it
-# to plain "Maori") and "Mardi" (hearing a light intrusive d, as in "Mardi Gras").
+# "Mari" still sometimes comes back as a homophone. Only shapes that clearly refer to
+# the company are corrected, so "call Mary" or "who is Mary" are left alone.
 _MARI_SOUND_ALIKES = r"Mary|Marry|Merry|M[aā]ori|Mardi"
 
-# Two shapes: followed by a word from the company's own name ("Mary Energies", "Marry
-# Petroleum", "Merry Gas Field"), or standing in for the company on its own in the kind
-# of short question this kiosk actually gets ("tell me about Mari", "what is Mari",
-# "who owns Mari", "Mari's history") — anchored to a preceding question/reference word
-# so an unrelated "call Mary" or "hi Mary" is not touched.
+# Followed by a word from the company's name ("Mary Energies"), or asked about on its
+# own ("tell me about Mary").
 _MARI_FOLLOWED = r"(?=\s+Energ|\s+Petroleum|\s+Gas\b|\s+Services|\s+Minerals|\s+Technolog|'s\b)"
-# Only phrasings that are unambiguously ASKING ABOUT the kiosk's own company — never a
-# bare "is"/"who" alone, which would also catch an ordinary sentence about a person
-# named Mary ("who is Mary", "my name is Mary").
 _MARI_PRECEDED = (
     r"(?<=tell\sme\sabout\s)|(?<=what\sis\s)|(?<=what's\s)|(?<=tell\sme\s)|"
     r"(?<=who\sowns\s)|(?<=explain\s)"
 )
-# "Mardi Gras" is a real, common phrase in its own right — never a mishearing of
-# anything to do with this company — so it is excluded outright regardless of what
-# precedes it ("tell me about Mardi Gras" must not become "... Mari Gras").
 _NOT_MARDI_GRAS = r"(?!\s+Gras\b)"
 _MISHEARD_MARI_EN = re.compile(
     rf"(?:{_MARI_PRECEDED})(?:{_MARI_SOUND_ALIKES}){_NOT_MARDI_GRAS}\b"

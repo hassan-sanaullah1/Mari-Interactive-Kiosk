@@ -1,24 +1,11 @@
 """Embedding, sparse encoding and reranking, via FastEmbed (ONNX Runtime).
 
-Three separate models with three different jobs:
+  dense     semantic and cross-lingual similarity (Urdu questions, English corpus)
+  sparse    BM25, for identifiers with no useful semantics ("Bhitai-6", "1414673")
+  reranker  a cross-encoder that judges relevance, not just similarity
 
-  dense     semantic similarity, and — the part that matters most here — cross-lingual
-            alignment. The knowledge base is entirely English and roughly half the
-            questions arrive in Urdu, so this is what makes "ریکروٹمنٹ کا پروسیس" find
-            "Recruitment Process" at all.
-  sparse    BM25 as a sparse vector. Handles what dense embeddings are reliably bad at:
-            exact identifiers, well names, ticker symbols, NTN numbers. "Bhitai-6" and
-            "1414673" have no useful semantics — they need lexical matching.
-  reranker  a cross-encoder that reads query and chunk together, so it can judge
-            relevance rather than similarity. It is the only stage that can say "this
-            chunk mentions your words but does not answer you", which is what the
-            relevance threshold is built on.
-
-Every public entry point has an async variant that offloads to a worker thread. This is
-not a nicety. ONNX inference is CPU-bound and holds the GIL in bursts; calling it
-synchronously inside the voice agent's async handler stalls the whole event loop —
-including the audio I/O that is streaming the previous sentence to the visitor. The
-symptom is a stutter in the avatar's speech, and it is very hard to trace back to here.
+Every entry point has an async variant on a worker thread: ONNX inference is CPU-bound,
+and running it on the event loop stalls the audio being streamed to the visitor.
 """
 
 from __future__ import annotations
@@ -140,15 +127,8 @@ class EmbeddingService:
     def warmup(self) -> None:
         """Load and exercise every model before the first request.
 
-        Loaded in parallel because they are independent and each spends most of its time
-        in I/O (download) or ONNX graph construction. Serially this is 20-40s of dead
-        time on a cold container; the first visitor to walk up to the kiosk should not
-        be the one who pays it.
-
-        Each model is also *run* once, not merely constructed. ONNX Runtime defers real
-        work — memory arena allocation, kernel selection — to the first inference, and a
-        model that has only been constructed still costs several hundred ms on its first
-        real call. That first call would otherwise land inside a visitor's turn.
+        Loaded in parallel, and each run once: ONNX Runtime defers allocation to the
+        first inference, which would otherwise land inside a visitor's turn.
         """
         t0 = time.perf_counter()
         with ThreadPoolExecutor(max_workers=4) as pool:
@@ -248,11 +228,8 @@ class EmbeddingService:
     def _truncate_for_rerank(self, text: str) -> str:
         """Cut a candidate to settings.rerank_doc_tokens using the reranker's tokenizer.
 
-        Cross-encoder cost is linear in total tokens, so this is where the rerank stage's
-        latency is actually decided — 128 tokens instead of a full ~300-token chunk takes
-        the stage from 255 ms to 58 ms. It is safe because chunking.py puts the heading
-        path and the section's opening lines first, which is where the relevance signal
-        for a short spoken query lives.
+        Cost is linear in tokens (255 ms → 58 ms at 128). Safe because chunks start with
+        their heading path and opening lines.
         """
         cap = self.settings.rerank_doc_tokens
         if cap <= 0:

@@ -9,23 +9,20 @@ and none of those need a real model to verify.
 from __future__ import annotations
 
 import asyncio
-import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from server.services.expansion import (  # noqa: E402
+from server.services.expansion import (
     expand_for_lexical, has_urdu, strip_corpus_subject,
 )
-from server.services.generation import GenerationService  # noqa: E402
-from server.services.metadata import MetadataService  # noqa: E402
-from server.services.retriever import RetrievalResult, RetrievedChunk, Retriever  # noqa: E402
-from server.services.rewriter import needs_rewrite  # noqa: E402
-from server.services.settings import RagSettings  # noqa: E402
-from server.services.store import Hit  # noqa: E402
-from server.services.transcript import correct_transcript  # noqa: E402
+from server.services.generation import GenerationService
+from server.services.metadata import MetadataService
+from server.services.retriever import RetrievalResult, RetrievedChunk, Retriever
+from server.services.rewriter import needs_rewrite
+from server.services.settings import RagSettings
+from server.services.store import Hit
+from server.services.transcript import correct_transcript
 
 
 # ── settings ────────────────────────────────────────────────────────

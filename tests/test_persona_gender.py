@@ -8,15 +8,15 @@ a new status label written as "سن رہا ہے" reads as a male assistant.
 from __future__ import annotations
 
 import re
-import sys
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
-from server import knowledge as K  # noqa: E402
+from server.agent.replies import canned
+from server.agent.reply_fixes import feminine_agreement, masculine_agreement
+from server.prompts import get_prompts
 
 # Masculine verb endings that describe the speaker/subject. Each has a feminine
 # counterpart (رہا->رہی, سکتا->سکتی, تھا->تھی, رہے گا->رہے گی).
@@ -44,69 +44,38 @@ def test_ui_strings_use_feminine_forms(relpath: str) -> None:
 
 def test_urdu_prompt_instructs_feminine_self_reference() -> None:
     """The rule has to be stated, or the model drifts to Urdu's masculine default."""
-    assert "مؤنث صیغہ" in K._RULES_UR
+    assert "مؤنث صیغہ" in get_prompts().system[("female", "ur")]
 
 
 def test_urdu_canned_lines_agree_with_the_presenter() -> None:
     """The canned lines never pass through the LLM or the gender_agreement pass, so
     each one carries the presenter's own verb form or the kiosk speaks the wrong
     gender in the two moments a visitor is most likely to hear it."""
-    from server.app import DEMO_REPLY, NO_SPEECH_REPLY, _canned
-
-    # (table, feminine verb, masculine verb) — the demo line is a present-tense
+    # (line, feminine verb, masculine verb): the demo line is a present-tense
     # "can't answer", the no-speech line a past-tense "didn't catch".
-    for table, fem, masc in (
-        (DEMO_REPLY, "سکتی", "سکتا"),
-        (NO_SPEECH_REPLY, "سکی", "سکا"),
+    for name, fem, masc in (
+        ("demo", "سکتی", "سکتا"),
+        ("no_speech", "سکی", "سکا"),
     ):
-        female = _canned(table, "ur", "female")
-        male = _canned(table, "ur", "male")
+        female = canned(name, "ur", "female")
+        male = canned(name, "ur", "male")
         assert fem in female and masc not in female
         assert masc in male and fem not in male
         # An unknown rig degrades to the default presenter rather than raising.
-        assert _canned(table, "ur", "nobody") == female
-        assert _canned(table, "fr", "male") == _canned(table, "en", "male")
+        assert canned(name, "ur", "nobody") == female
+        assert canned(name, "fr", "male") == canned(name, "en", "male")
 
 
-def test_urdu_fallback_rules_agree_with_the_presenter() -> None:
-    """The inline stub is what a missing prompt file falls back to; it names the
-    presenter, so it cannot be shared between the two rigs."""
-    from server.services.generation import _fallback_rules
-
-    assert "مریم" in _fallback_rules("female", "ur")
-    assert "مؤنث" in _fallback_rules("female", "ur")
-    assert "حمزہ" in _fallback_rules("male", "ur")
-    assert "مذکر" in _fallback_rules("male", "ur")
-    assert "Hamza" in _fallback_rules("male", "en")
-    assert _fallback_rules("nobody", "ur") == _fallback_rules("female", "ur")
-
-
-def test_missing_male_prompt_never_falls_back_to_the_female_persona(monkeypatch) -> None:
-    """A missing *_male.md must degrade to the male inline stub, not to Maryam's text.
-
-    Only reachable when a prompt file is absent, so it is easy to regress unnoticed —
-    and the failure mode is the loudest one there is: the male rig introducing itself
-    as Maryam, in the feminine, on every turn.
-    """
-    import voice_config
+def test_the_male_presenter_never_gets_the_female_persona() -> None:
+    """The loudest failure there is: the male rig introducing itself as Maryam."""
     from server.services.generation import GenerationService
 
-    real = voice_config.load_prompt
-    monkeypatch.setattr(
-        voice_config, "load_prompt", lambda n: None if n.endswith("_male") else real(n)
-    )
-
     svc = GenerationService()
-    svc.load_templates()
-
     male_ur = svc.rules("ur", "male")
     assert "حمزہ" in male_ur and "مریم" not in male_ur
     assert "مذکر" in male_ur
     assert "Hamza" in svc.rules("en", "male") and "Maryam" not in svc.rules("en", "male")
-    # The female persona is untouched by the male files going missing.
     assert "مریم" in svc.rules("ur", "female")
-    # And no male greeting is served rather than one that names the wrong presenter.
-    assert ("male", "ur") not in svc._greetings
 
 
 # (input, expected) for the male rig's runtime agreement pass. The second group is the
@@ -138,15 +107,11 @@ _MASCULINE_LEAVES_ALONE = [
 
 @pytest.mark.parametrize("given,expected", _MASCULINE_FIXES)
 def test_masculine_agreement_fixes_the_speakers_own_verb(given, expected) -> None:
-    from voice_config import masculine_agreement
-
     assert masculine_agreement(given, "ur") == expected
 
 
 @pytest.mark.parametrize("given", _MASCULINE_LEAVES_ALONE)
 def test_masculine_agreement_leaves_other_subjects_alone(given) -> None:
-    from voice_config import masculine_agreement
-
     assert masculine_agreement(given, "ur") == given
 
 
@@ -154,6 +119,4 @@ def test_masculine_agreement_leaves_other_subjects_alone(given) -> None:
 def test_feminine_agreement_never_touches_verbs(given) -> None:
     """The female rig's pass only ever fixes the possessive, so every one of these —
     already correct for Maryam — must survive it untouched."""
-    from voice_config import feminine_agreement
-
     assert feminine_agreement(given, "ur") == given

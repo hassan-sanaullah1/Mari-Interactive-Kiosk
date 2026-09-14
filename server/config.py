@@ -1,9 +1,7 @@
-"""MARI · Voice — configuration.
+"""Settings for the web server and providers, read once from ``.env`` and the environment.
 
-Single source of truth for the web server + providers. Reads ``.env`` (real
-environment variables win) and exposes typed settings per stage. All providers are
-plain HTTP/WebSocket clients — no LiveKit, no speech_to_speech runtime dependency —
-so they run standalone under this project.
+Real environment variables win over ``.env``. Retrieval settings are separate, in
+server/services/settings.py (prefix ``MARI_RAG_``).
 """
 
 from __future__ import annotations
@@ -40,6 +38,15 @@ def env(key: str, default: str = "") -> str:
 
 FORCE_DEMO = ENV.get("MARI_FORCE_DEMO") == "1"
 
+LANGS = ("en", "ur")
+
+HOST = env("MARI_HOST", "127.0.0.1")
+PORT = int(env("MARI_PORT", "8010"))
+
+KNOWLEDGE_FILE = Path(
+    env("APP_KNOWLEDGE_FILE", str(ROOT / "server" / "data" / "mari_energies_knowledge_base.md"))
+)
+
 # ── LLM — prefer DeepSeek (APP_LLM_*) when configured, else vLLM Qwen (APP_VLLM_*).
 #    Force either with APP_LLM_PROVIDER = "deepseek" | "vllm". ─────────
 _LLM_FORCED = env("APP_LLM_PROVIDER").lower()
@@ -67,47 +74,26 @@ UPLIFT_KEY = env("APP_UPLIFT_API_KEY")
 UPLIFT_BASE = env("APP_UPLIFT_TTS_BASE_URL", "https://ap-southeast-1.api.upliftai.org").rstrip("/")
 UPLIFT_PATH = env("APP_UPLIFT_TTS_API_PATH", "/v1/synthesis/text-to-speech")
 UPLIFT_VOICE = env("APP_UPLIFT_VOICE_ID", "v_8eelc901v6")
-# Uplift also handles English (see APP_EN_TTS=uplift below). Same voice by default so
-# the kiosk keeps one persona across both languages; override for a separate English one.
+# English through Uplift uses the same voice by default, so the persona sounds the same.
 UPLIFT_VOICE_EN = env("APP_UPLIFT_VOICE_ID_EN", UPLIFT_VOICE)
-# The male presenter's voice. UPLIFT_VOICE above is the female rig's, and stays the
-# default so a deployment that never shows the male rig — or never sets this — sounds
-# exactly as it did. Ids: https://docs.upliftai.org/orator_voices
+# The male presenter's voice, for both languages. Ids: https://docs.upliftai.org/orator_voices
 UPLIFT_VOICE_MALE = env("APP_UPLIFT_VOICE_ID_MALE", UPLIFT_VOICE)
 UPLIFT_FORMAT = env("APP_UPLIFT_OUTPUT_FORMAT", "MP3_22050_32")
-# Speaking rate. Below 1.0 because at the default the voice clips short unstressed
-# words — visitors reported "about us" with the "us" swallowed. Measured by
-# synthesising the phrase and reading the word timings back off a transcription, the
-# "us" lasts 0.18s at 1.0 and 0.26s at 0.9, which is the difference between hearing it
-# and not. The curve is NOT monotonic (0.95 measured WORSE than 1.0, at 0.14s), so
-# retune by measuring rather than by nudging this number in the direction that seems
-# right. Applies to both languages, since one Uplift voice serves both.
+# Below 1.0 so short unstressed words are not clipped; measured, and not monotonic
+# (docs/pronunciation_notes.md).
 try:
     UPLIFT_SPEED = float(env("APP_UPLIFT_SPEED", "0.9"))
-except ValueError:  # a typo in the env must not take the kiosk's voice down
+except ValueError:  # a typo in the env must not take the voice down
     UPLIFT_SPEED = 0.9
 
-# English gets its OWN rate. The 0.9 above was measured against Urdu, where it fixes
-# clipped unstressed words; English needed something different for a different reason.
-# The English persona is a receptionist, and the helpdesk-agent voice reads English
-# prose at a brisk customer-service clip that lands as rushed rather than attentive —
-# a pacing complaint, not a clipping one. Slowing the SHARED knob to fix it would drag
-# Urdu down with it, off a rate that was measured on a curve the comment above notes is
-# not monotonic, so the two are separate numbers instead.
-#
-# Deliberately NOT paired with inserted commas/full stops to space the speech out:
-# server/providers/tts.py measured that on this voice and every inserted pause both
-# opened an unnatural hole AND mispronounced the words around it ("rare earth" became
-# "wear, birth"). Rate is the only lever that slows this voice without corrupting it.
+# English has its own, slower rate: the English prose read as rushed.
 try:
     UPLIFT_SPEED_EN = float(env("APP_UPLIFT_SPEED_EN", "0.78"))
 except ValueError:
     UPLIFT_SPEED_EN = 0.85
 
-# ── English STT/TTS. STT runs LOCALLY by default (the s2s built-in faster-whisper).
-#    English TTS defaults to Uplift — the same provider (and voice) as Urdu, reading
-#    English text — because no Kokoro instance is deployed right now. Point APP_EN_TTS
-#    back at "local"/"remote" once one is. Urdu always stays on Soniox/Uplift. ──
+# ── English STT/TTS. Urdu always uses Soniox/Uplift. English TTS defaults to Uplift
+#    because no Kokoro instance is deployed; set APP_EN_TTS=local|remote when one is. ──
 EN_STT = env("APP_EN_STT", "local")     # "local" (faster-whisper) | "remote"
 EN_TTS = env("APP_EN_TTS", "uplift")    # "uplift" | "local" (kokoro) | "remote"
 
@@ -142,7 +128,13 @@ A2F_MAX_CLIPS = max(1, int(env("APP_A2F_MAX_CLIPS", "1")))
 # too while APP_EN_TTS=uplift (UPLIFT_VOICE_EN), so these only apply when either
 # language is routed to Kokoro.
 VOICE_EN = env("APP_TTS_VOICE_ENGLISH", "af_heart")
+VOICE_EN_MALE = env("APP_TTS_VOICE_ENGLISH_MALE", "am_michael")
 VOICE_UR = env("APP_TTS_VOICE_URDU", "af_heart")
+
+
+def pitch_only() -> bool:
+    """MARI_PITCH_ONLY: a recording aid that answers every female-rig turn with one line."""
+    return ENV.get("MARI_PITCH_ONLY", "0") in ("1", "true", "yes", "on")
 
 
 def llm_ready() -> bool:

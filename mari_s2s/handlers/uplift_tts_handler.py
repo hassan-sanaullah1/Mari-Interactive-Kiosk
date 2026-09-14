@@ -9,9 +9,8 @@ Contract (confirmed against the repo, mirrors TTS/facebookmms_handler.py):
 
 Uplift returns mp3 for the whole segment; we decode to PCM (PyAV), resample to
 16 kHz mono, and yield fixed-size chunks so downstream streaming/interruption
-works like the built-in handlers. The REST call itself is delegated to
-``server.providers.tts.UpliftTTS`` — the same adapter server/app.py uses — so the
-Uplift protocol logic lives in one place instead of being duplicated per entrypoint.
+works like the built-in handlers. Spoken-form normalization and the REST call are the
+same ones server/app.py uses (server/normalization.py, server.providers.tts.UpliftTTS).
 """
 
 from __future__ import annotations
@@ -27,6 +26,7 @@ from speech_to_speech.baseHandler import BaseHandler
 from speech_to_speech.pipeline.handler_types import TTSIn, TTSOut
 from speech_to_speech.pipeline.messages import EndOfResponse, TTSInput
 
+from server.normalization import normalize_for_tts
 from server.providers.tts import UpliftTTS
 
 _TARGET_SR = 16000
@@ -78,7 +78,8 @@ class UpliftTTSHandler(BaseHandler[TTSIn, TTSOut]):
         if not text:
             return
 
-        mp3, _mime = asyncio.run(self._provider.synthesize(text))
+        spoken = normalize_for_tts(text, self._provider.lang)
+        mp3, _mime = asyncio.run(self._provider.synthesize(spoken))
         pcm = _decode_mp3_to_int16_16k(mp3)
 
         # Yield fixed-size chunks; pad the final one (matches facebookmms_handler).

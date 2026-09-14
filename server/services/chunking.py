@@ -1,27 +1,12 @@
 """Structure-aware chunking.
 
-The retriever this replaces chunked with a sliding window over ``text.split()``. That is
-cheap and it is wrong in three specific ways, all of which show up in the eval set:
+    * Every chunk carries its full heading path, so an isolated chunk still says what
+      it is about ("Bhitai-6" appears only in a heading).
+    * Tables are atomic: half a table still looks authoritative.
+    * Oversized paragraphs are split at sentence ends, not mid-sentence.
 
-  1. Headings are severed from their sections. "Bhitai-6" appears in this corpus exactly
-     once — in the heading "7.4 Smart Completion — Bhitai-6 Well". A chunk containing the
-     body but not the heading cannot be retrieved by anyone asking about Bhitai-6, and a
-     chunk containing the heading alone is too short to embed meaningfully. Every chunk
-     here carries its full heading path in its own text, so an isolated chunk still
-     knows what it is about.
-  2. Tables get cut mid-row. This corpus is an annual-report export: the shareholding
-     split, the five-year financial summary and the quick-reference figures are all
-     tables, and half a table is worse than no table because the surviving rows still
-     look authoritative. Tables are atomic here — a table over the size limit is emitted
-     whole rather than split.
-  3. Chunk boundaries land mid-sentence, so both neighbours embed against a fragment.
-
-Sizing is in TOKENS, from the embedding model's own tokenizer, injected as `count_tokens`
-rather than imported. Two reasons: chunking stays unit-testable without downloading a
-600 MB model, and the count is always the count the model will actually see. A word-based
-approximation is not close enough on this corpus — it is dense with numbers, units and
-proper nouns that tokenize to three or four pieces each, so "300 words" was really 450+
-tokens and the tail was being silently truncated at the model's 512-token limit.
+Sizes are in tokens from the embedding model's tokenizer, injected as ``count_tokens`` so
+chunking is testable without downloading the model.
 """
 
 from __future__ import annotations
@@ -56,31 +41,16 @@ def approx_token_count(text: str) -> int:
 
 
 # ── block-level markdown parsing ────────────────────────────────────
-# A hand-rolled block splitter rather than a full markdown AST. The job is only to know
-# where it is unsafe to cut, and heading / fence / table / paragraph covers every
-# structure this corpus actually contains. markdown-it is used in documents.py for
-# frontmatter and normalisation, where a real parser earns its keep.
+# Only needs to know where it is unsafe to cut: headings, fences, tables, paragraphs.
 
 _FRONTMATTER_RE = re.compile(r"\A---\s*\n.*?\n---\s*\n", re.DOTALL)
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 _FENCE_RE = re.compile(r"^\s*(```|~~~)")
 _TABLE_ROW_RE = re.compile(r"^\s*\|")
 _TABLE_SEP_RE = re.compile(r"^\s*\|?[\s:|-]*-{2,}[\s:|-]*\|?\s*$")
-# Sentence end used when a single paragraph is itself over the limit. Includes the Urdu
-# full stop (۔) and the Arabic question mark (؟) — the corpus is English, but prompts,
-# READMEs and any future Urdu source document are chunked by this same code.
-# Abbreviations whose trailing period is NOT a sentence end. Without this the splitter
-# cuts inside a name: "Lt. Gen. Anwar Ali Hyder" breaks after "Lt." and again after
-# "Gen.", and the corpus's Board Chairman entry was emitted as a chunk whose body began
-# with the single word "Gen." — a fragment that embeds as noise and takes the chairman's
-# name out of the chunk that gives his role. Ranks, honorifics and corporate suffixes
-# are what this corpus actually contains.
-#
-# Written as an alternation matched BEFORE the sentence break rather than as a negative
-# lookbehind, because `re` only allows fixed-width lookbehind and these are not the same
-# length. The first branch consumes "Lt. " and yields no split point; the second is the
-# real boundary. Only the second branch has a group, so `re.split` on this pattern emits
-# the abbreviation as part of the surrounding sentence.
+# Abbreviations whose period is not a sentence end ("Lt. Gen. Anwar Ali Hyder"). Matched
+# as a group-less first branch, since `re` lookbehind must be fixed-width; only the second
+# branch (the real boundary, including ۔ and ؟) splits.
 _ABBREV = (
     r"Lt|Gen|Col|Brig|Maj|Capt|Sgt|Hon|Dr|Mr|Mrs|Ms|Prof|St"
     r"|No|Nos|Rs|approx|est|etc|vs|viz"
@@ -186,11 +156,7 @@ def _sections(md: str) -> list[tuple[str, str]]:
     stack: list[tuple[int, str]] = []
     heading_path = ""
     body: list[str] = []
-    # A document with exactly one H1 is using it as a title, and that title is already
-    # carried by every chunk's `source`. Repeating it in all 76 heading paths costs a
-    # dozen tokens per chunk and adds no discriminating signal — every chunk has it, so
-    # it can never separate one from another. Dropped, but only in that case: a document
-    # that genuinely uses several H1s as top-level sections needs them.
+    # A single H1 is the document title, already in every chunk's `source`.
     drop_h1 = len(_TOP_HEADING_RE.findall(strip_frontmatter(md))) == 1
 
     def flush() -> None:
@@ -289,10 +255,7 @@ def chunk_markdown(
 
     for heading_path, body in _sections(md):
         prefix = f"{heading_path}\n\n" if heading_path else ""
-        # The heading path is inside every chunk, so it consumes budget. Subtracting it
-        # keeps the *whole* embedded string under the model's limit rather than only the
-        # body — otherwise a deep heading path silently truncates the content it was
-        # added to explain.
+        # The heading path is embedded too, so it counts against the budget.
         budget = max(min_tokens, chunk_tokens - count(prefix))
 
         pieces: list[str] = []

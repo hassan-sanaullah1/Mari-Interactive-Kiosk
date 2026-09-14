@@ -1,34 +1,19 @@
-"""The one retrieval path, shared by the HTTP API and the voice agent.
+"""The one retrieval path. Anything that needs retrieval calls ``Retriever.retrieve``.
 
-This module exists as much for what it prevents as for what it does. The system it
-replaces had retrieval implemented twice — once in the web service and once in the voice
-agent — and the two copies drifted: different top_k, one of them missing the glossary
-injection, and a fix applied to one of them for months before anyone noticed the other
-still had the bug. Anything that needs retrieval calls `Retriever.retrieve`. The voice
-path may pass a smaller `top_k` and a tighter deadline; it does not get its own logic.
+Stages, in order:
 
-The pipeline, in order, with the reason each stage is where it is:
+  1. transcript correction   domain terms fixed before anything reads the query
+  2. query rewrite           elliptical follow-ups only, timeout-guarded (rewriter.py)
+  3. embed (dense + sparse)  usually already started by ``prestart``
+  4. hybrid search + RRF     one Qdrant round trip, fused server-side
+  5. rerank                  optional cross-encoder over the fused candidates
+  6. threshold               calibrated relevance gate: lets the kiosk say "I don't know"
+  7. section expansion       completes the section the top chunk came from
+  8. glossary injection      abbreviation definitions, whatever retrieval returned
+  9. context assembly        joined, deduped, length-capped
 
-  1. transcript correction   Fix domain terms before anything reads the query. A wrong
-                             content word poisons every later stage identically.
-  2. query rewrite           Conditional and timeout-guarded (see rewriter.py). Only
-                             elliptical follow-ups pay for it.
-  3. embed (dense + sparse)  Usually already done — see `prestart`. The dense side
-                             drops the corpus's own subject first; the sparse side does
-                             not (IDF already handles it there).
-  4. hybrid search + RRF     One Qdrant round trip, fused server-side.
-  5. rerank                  Cross-encoder over the fused candidates.
-  6. threshold               Drop everything below calibrated relevance. This is the
-                             stage that lets the kiosk say "I don't know".
-  7. section expansion       Complete the section the top chunk came from. Answers a
-                             question top-k cannot: "what else is in here?"
-  8. glossary injection      Deterministic override for abbreviations, regardless of
-                             what retrieval returned.
-  9. context assembly        Joined, deduped, length-capped.
-
-Every stage is timed and every stage is optional in the sense that its failure degrades
-the result rather than failing the turn. A visitor who gets an ungrounded-but-polite
-answer has had a worse experience; a visitor who gets a 500 has had no experience.
+Every stage is timed, and a failure degrades the result rather than failing the turn.
+Measurements behind these choices: docs/retrieval_tuning_notes.md.
 """
 
 from __future__ import annotations
@@ -43,6 +28,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from .embedding import EmbeddingService, get_embedding_service
+from .glossary import extract_glossary, find_glossary_matches, format_glossary_block
 from .rewriter import QueryRewriter
 from .settings import RagSettings, get_settings
 from .expansion import expand_for_lexical, has_urdu, strip_corpus_subject
@@ -50,19 +36,6 @@ from .store import Hit, QdrantStore
 from .transcript import correct_transcript
 
 log = logging.getLogger(__name__)
-
-try:
-    from voice_config import extract_glossary, find_glossary_matches, format_glossary_block
-except ImportError:  # pragma: no cover
-    def extract_glossary(text: str) -> dict[str, str]:
-        return {}
-
-    def find_glossary_matches(query: str, glossary: dict[str, str]) -> dict[str, str]:
-        return {}
-
-    def format_glossary_block(matches: dict[str, str]) -> str:
-        return ""
-
 
 @dataclass
 class RetrievedChunk:
@@ -72,10 +45,8 @@ class RetrievedChunk:
     score: float           # rerank probability when reranked, else the RRF score
     fusion_score: float    # always the RRF score, kept for tuning
     reranked: bool
-    # True when this chunk was not retrieved on its own merits but pulled in to complete
-    # the section a ranked chunk came from (see `_expand_section`). Its score is 0 and
-    # must not be compared against a ranked chunk's; this flag is what stops a reader —
-    # or a future gate — from doing that by accident.
+    # Appended by section expansion, not ranked. Its score is 0 and must not be
+    # compared with a ranked chunk's.
     expanded: bool = False
 
 
@@ -102,8 +73,7 @@ class RetrievalResult:
 
 
 class _Timer:
-    """Records per-stage wall clock into a dict. The breakdown is the tuning signal —
-    a single total tells you the budget was blown, not which stage to look at."""
+    """Records per-stage wall clock into a dict."""
 
     def __init__(self, into: dict[str, float]) -> None:
         self._into = into
@@ -140,8 +110,7 @@ class Retriever:
     async def warmup(self) -> None:
         """Load models, ensure the collection, and mine the glossary. Idempotent."""
         t0 = time.perf_counter()
-        # The models and Qdrant are independent; loading them concurrently roughly halves
-        # cold start, and cold start is the window in which the kiosk is visibly dead.
+        # Independent, so loaded concurrently: roughly halves cold start.
         results = await asyncio.gather(
             self.embedding.warmup_async(),
             self._ensure_store(),
@@ -158,15 +127,10 @@ class Retriever:
         await self.store.ensure_collection()
 
     async def refresh_glossary(self) -> None:
-        """Scan the whole corpus once for "ABBR (Full Form)" pairs and cache the map.
+        """Scan the whole corpus once for "ABBR (Full Form)" pairs.
 
-        This is a one-off full scan, not a per-turn cost, and it buys a deterministic
-        guarantee that top-k retrieval cannot give. A corpus can *use* an abbreviation
-        fifty times and *define* it once. Semantic search returns the chunks that use it
-        — they are all about the same topic and all score well — and the single chunk
-        that defines it ranks nowhere. The model then confidently invents an expansion.
-        Force-injecting the definition is a deterministic guardrail over a probabilistic
-        retriever, and it is the reason this survives every refactor.
+        A corpus can use an abbreviation fifty times and define it once, and top-k
+        returns the chunks that use it, so the definition is injected deterministically.
         """
         try:
             texts = [p.get("text", "") async for p in self.store.scroll_all()]
@@ -185,18 +149,8 @@ class Retriever:
     # ── pre-started embedding ───────────────────────────────────────
 
     def prestart(self, text: str) -> None:
-        """Begin embedding `text` now, before the turn handler asks for it.
-
-        Called the moment STT produces a transcript. By the time end-of-speech is
-        detected, endpointing has settled and the turn handler runs, the embedding is
-        usually already finished — so its 15-40 ms disappears entirely rather than being
-        added to the visitor's wait. This is the single cheapest latency win available
-        on the voice path, because it removes a stage from the critical path instead of
-        making it faster.
-
-        Safe to call repeatedly with interim transcripts: each distinct string gets one
-        task, and unclaimed tasks are reaped below.
-        """
+        """Begin embedding `text` as soon as STT produces it, so the 15-40 ms is off the
+        visitor's wait. Safe to call repeatedly: one task per distinct string."""
         corrected, _ = correct_transcript(text or "")
         key = self._cache_key(corrected)
         if not key or key in self._prestarted:
@@ -209,37 +163,22 @@ class Retriever:
         self._reap_prestarted()
 
     def _reap_prestarted(self, keep: int = 8) -> None:
-        """Interim transcripts pile up — one per STT partial. Only the last few can still
-        be claimed, and an un-awaited task holding a vector is a slow leak."""
+        """Cancel all but the newest few unclaimed tasks (one per STT partial)."""
         while len(self._prestarted) > keep:
             oldest = next(iter(self._prestarted))
             self._prestarted.pop(oldest).cancel()
 
     async def _embed_both(self, text: str) -> tuple[np.ndarray, object, list[str]]:
-        # The two channels get DIFFERENT text, which is the whole point of running both.
-        #
-        # Dense gets the query as spoken: multilingual-e5 aligns Urdu to English better
-        # than a bag of translated keywords does, and prepending keywords measurably
-        # blunts it.
-        #
-        # Sparse gets the Urdu-expanded form. BM25 is purely lexical, so an Urdu query
-        # against an English corpus contributes almost nothing to it — the expansion is
-        # what makes the lexical channel exist at all for half the kiosk's traffic. See
-        # expansion.py for how much this is worth (fifteen points of hit@5).
+        # The channels get different text. Sparse gets the Urdu-expanded form, since BM25
+        # is purely lexical; dense gets the query as spoken, which the multilingual
+        # model aligns better than a bag of translated keywords.
         lexical, _terms = (
             expand_for_lexical(text) if self.settings.expand_urdu_lexical else (text, [])
         )
-        # Dense also gets the company's own name removed. The name is in every chunk, so
-        # it cannot discriminate between them — but unlike BM25, a dense embedding has no
-        # document frequency to discount it with, so naming the company pulls the query
-        # toward the generic company-overview region and section 1 wins on almost any
-        # question. Worth 6 points of hit@1; see strip_corpus_subject for the numbers and
-        # for why the sparse channel is deliberately left alone.
+        # Dense also drops the company's own name (see strip_corpus_subject).
         focused = (
             strip_corpus_subject(text) if self.settings.strip_subject_for_dense else text
         )
-        # Separate models on separate threads: concurrently, the pair costs about as
-        # much as the slower one alone.
         dense, sparse = await asyncio.gather(
             self.embedding.embed_query_async(focused),
             self.embedding.embed_sparse_query_async(lexical),
@@ -305,9 +244,7 @@ class Retriever:
             with timer("embed"):
                 dense, sparse, expanded, prestarted = await self._get_vectors(query)
             result.expansion_terms = expanded
-            # Recorded as a flag, not a timing: when the embedding was pre-started its
-            # measured cost here is near zero, and a reader comparing stage timings
-            # across turns needs to know *why* rather than seeing it flicker.
+            # Explains a near-zero embed timing.
             result.embedding_prestarted = prestarted
 
             with timer("search"):
@@ -324,16 +261,9 @@ class Retriever:
                 chunks, added = await self._expand_section(chunks)
             result.section_expanded = added
         except Exception as exc:  # noqa: BLE001
-            # Retrieval failure is never fatal. The system prompt still goes in, the
-            # persona still holds, the core brief is still there, and the visitor gets an
-            # honest "I don't have that" instead of an error. exc_info because this is
-            # the log line that explains a day of "why does the kiosk not know anything".
-            #
-            # There is deliberately no second retriever to fall back to. A shadow BM25
-            # index used to sit here, and it was worse than nothing: it answered from a
-            # separately-chunked copy of the corpus that no eval run ever scored, so a
-            # broken Qdrant produced quietly degraded answers instead of a visible
-            # failure. Empty context is the honest signal, and /healthz reports why.
+            # Never fatal: the persona and core brief still go in, and the visitor hears
+            # an honest "I don't have that". There is deliberately no fallback retriever;
+            # empty context is the visible signal, and /healthz reports why.
             log.warning("retrieval failed (%s); serving with no context",
                         type(exc).__name__, exc_info=True)
             result.degraded = f"{type(exc).__name__}: {exc}"
@@ -356,32 +286,11 @@ class Retriever:
 
     @staticmethod
     def _order(hits: list[Hit]) -> list[Hit]:
-        """Impose a total, deterministic order on the fused hits.
+        """A total, deterministic order on the fused hits.
 
-        RRF fuses *ranks*, so its scores are sums of 1/(k+rank) drawn from a small set,
-        and ties are not an edge case — they are the common case. Measured on the
-        150-question eval: 47 questions had at least one tied pair inside the top 5, and
-        Qdrant returns tied results in whatever order it happened to scan them, which is
-        not stable across processes. So the kiosk could answer the same question with a
-        different chunk after a restart, and the eval swung 70.9% - 72.4% hit@1 on
-        identical code — a band wider than most of the parameter changes this harness
-        exists to detect, which made every small A/B comparison partly a coin flip.
-
-        The tie-break is document order, and it is deliberately content-neutral: it is
-        there to make the system reproducible, NOT to rank better. The obvious-looking
-        alternative is to prefer the higher dense similarity, and it was measured rather
-        than assumed — across the 33 tied groups that contain the answering chunk, the
-        higher-dense chunk is the right one 17 times and the lower-dense chunk 16 times.
-        That is a coin flip: dense cosine carries no information about which of two
-        rank-equivalent chunks is better, and adopting it would only have fixed the
-        assignment of ~33 near-random choices.
-
-        This matters because those choices are worth several points of hit@1 on this
-        question set, so a tie-break can be *selected* for a score it did not earn.
-        Ordering by ascending dense similarity scores 74.6% here versus 70.9% for
-        descending — 5 questions, entirely from the coin flips above. If you change this
-        rule and hit@1 moves by a few points, that is what you are looking at, not a
-        retrieval improvement.
+        RRF scores tie often, and Qdrant returns ties in an order that is not stable
+        across processes. The tie-break is document order: content-neutral, for
+        reproducibility only. A tie-break that moves hit@1 is not a retrieval improvement.
         """
         return sorted(hits, key=lambda h: (-h.score, h.source, h.chunk_index))
 
@@ -391,20 +300,12 @@ class Retriever:
             return []
         hits = self._order(hits)
 
-        # An English-only cross-encoder scoring an Urdu query against English chunks
-        # produces near-noise, and noise applied after a good ranking can only degrade
-        # it. On the Urdu path the curated expansion (expansion.py) has already done the
-        # work, so RRF's ordering is kept as-is.
+        # Only for an English-only cross-encoder, which scores Urdu queries as noise.
         skip = s.rerank_skip_for_urdu and has_urdu(query)
 
         if not s.rerank_enabled or skip:
-            # Gate on dense cosine similarity, NOT on the RRF score. Calibrating against
-            # the eval set showed RRF scores give no separation whatsoever between
-            # answerable and unanswerable questions — unsurprising in hindsight, since
-            # RRF is purely rank-based and something is always rank 1 no matter how
-            # irrelevant the whole candidate set is. Cosine similarity is an absolute
-            # measure and does separate them. Ordering still comes from RRF, which is
-            # the better ranker; only the gate uses similarity.
+            # Order by RRF, but gate on dense cosine: RRF is rank-based, so something is
+            # always rank 1 and its score does not separate answerable questions.
             chunks = [
                 RetrievedChunk(h.text, h.source, h.heading_path, h.dense_similarity,
                                h.score, False)
@@ -425,75 +326,27 @@ class Retriever:
         return self._gate(chunks, s.score_threshold)
 
     def _sections_to_complete(self, chunks: list[RetrievedChunk]) -> list[str]:
-        """Which sections to complete: the one that owns rank 1, and only that one.
+        """The section that owns rank 1, and only that one.
 
-        This is deliberately the simplest possible rule, and it is the simplest rule
-        because two more elaborate ones were built, measured and thrown away. Recording
-        them, because the reasoning that produced them is seductive and wrong.
-
-        The first was "walk the retrieved sections in rank order and complete as many as
-        the budget allows". The second was "order them by how many chunks each
-        contributed, since that is better evidence of the topic than owning one good
-        chunk". Both are defensible, both raise section RECALL, and both make the kiosk
-        worse — because recall was the only thing being measured.
-
-        Scored per chunk over the 342-question tester set, completing every retrieved
-        section appends 163 chunks from the answering section and 1,398 from somewhere
-        else. Section 1, the company overview, supplies 545 of those and 393 KB of
-        prompt on its own: a twelve-chunk overview of everything is weakly relevant to
-        every question and decisively relevant to almost none, so it is retrieved
-        constantly and completed constantly. The result is a context whose share of
-        on-topic text falls from 31.4% to 23.2% while its recall rises — and a model
-        that answers "what are your production figures?" from the quick-reference
-        summary, because the summary is in front of it three times.
-
-        Completing only the rank-1 section scores BEST on both halves at once:
-
-            rule                       section recall   context precision
-            rank-1 section only              91.0%            27.7%
-            rank-1 + corroborated others     91.5%            25.8%
-            by chunk count, top 2            90.3%            23.2%
-            by rank order, top 2             92.0%            23.2%
-
-        The near-miss case that motivated walking further down is real — "what
-        discoveries has Mari Energies made recently?" ranks the history section first —
-        but it is answered by the ranked chunks themselves, not by expanding into
-        another section, so paying for it everywhere buys nothing.
+        Completing more sections raised recall but filled the context with the company
+        overview and made answers worse (see docs/retrieval_tuning_notes.md).
         """
         top = chunks[0].heading_path.split(" > ")[0].strip()
         return [top] if top else []
 
     def _gate(self, chunks: list[RetrievedChunk], threshold: float) -> list[RetrievedChunk]:
-        """Apply the relevance threshold to the RESULT, not to each chunk individually.
+        """Apply the threshold to the result as a whole, not to each chunk.
 
-        This distinction cost 23 points of hit@5 when it was got wrong, so it is worth
-        being precise about what the gate is for. Its job is to answer one question:
-        does this corpus contain anything relevant to what was asked? That is a property
-        of the best match, not of each match — so the threshold is applied to the top
-        chunk, and if the top chunk clears it the whole top-k goes through.
-
-        Filtering every chunk against the same bar looks equivalent and is not. Chunks
-        ranked 2-5 legitimately score lower than the best one; they are supporting
-        context, and a topic here routinely spans two or three chunks (which is why
-        top_k was raised in the first place). Cutting them left the LLM with a single
-        chunk on most turns and made hit@3 and hit@5 collapse to hit@1.
-
-        The relative floor below still drops the long tail — a chunk scoring a tenth of
-        the top one is not supporting the same answer — without gutting the context.
+        The question is whether anything relevant exists, which is a property of the best
+        match. Filtering every chunk cut the supporting chunks and cost 23 points of
+        hit@5. The relative floor still drops the long tail.
         """
         if not chunks:
             return []
-        # The bar is cleared by the BEST chunk, not by the top-ranked one. Those differ,
-        # and assuming they did not was a real bug: RRF ranks by fused rank, so the
-        # rank-1 chunk is frequently a sparse/lexical winner whose dense similarity is
-        # mediocre. Gating on that chunk's score discarded entire correct retrievals —
-        # an Urdu question about "آیلہ مجید" whose top three hits were all the right
-        # board-members section returned nothing at all, because the one that happened
-        # to rank first scored 0.743 against a 0.75 floor.
+        # The best chunk, not the rank-1 chunk: RRF's rank 1 is often a lexical winner
+        # with mediocre dense similarity.
         if max(c.score for c in chunks) < threshold:
-            # Nothing is relevant. Return nothing and let the system prompt's
-            # "say you don't know" branch fire: an honest "I don't have that
-            # information" is a better kiosk experience than a fluent wrong answer.
+            # Nothing relevant: the prompt's "say you don't know" instruction takes over.
             return []
         floor = max(c.score for c in chunks) * self.settings.relative_score_floor
         return [c for c in chunks if c.score >= floor]
@@ -501,31 +354,11 @@ class Retriever:
     async def _expand_section(
         self, chunks: list[RetrievedChunk]
     ) -> tuple[list[RetrievedChunk], int]:
-        """Complete the sections that ranked, by appending their unretrieved chunks.
+        """Append the unretrieved chunks of the winning section.
 
-        Retrieval answers "which chunks match?", and for a corpus of leaf facts that is
-        the same question as "what answers this?". For a numbered outline it is not. Ten
-        of this corpus's eighteen sections are enumerations — eleven discoveries, five
-        field developments, seventeen sustainability milestones — and a visitor asking
-        "what discoveries have you made?" is asking for the enumeration, not for its two
-        best-matching entries. Top-k cannot express that: every chunk of section 6 is
-        equally on-topic, so which two arrive is decided by wording noise, and the kiosk
-        names two discoveries out of ten with complete confidence.
-
-        So: once gating has decided a section is the right one, the rest of that section
-        is not a fresh retrieval decision that has to compete on score. It is already
-        known to be relevant, and it is appended without one — which is why these chunks
-        carry `expanded=True` and score 0 rather than a fabricated score that would let
-        them be ranked against chunks that earned theirs.
-
-        Which section gets completed, and why it is only one of them, is in
-        `_sections_to_complete` — that choice was the difference between this stage
-        helping and hurting.
-
-        Ordering is: ranked chunks first, in rank order, then the appended ones in
-        document order. The rank-1 chunk stays first because it is the one the model
-        weights most heavily and the one least likely to be truncated away; the appendix
-        reads as that section's remaining bullets, which is what it is.
+        Most sections are enumerations ("eleven discoveries"), and top-k returns two
+        entries of one. Appended chunks carry ``expanded=True`` and score 0, and come
+        after the ranked chunks, in document order.
         """
         s = self.settings
         if not s.section_expansion or not chunks:
@@ -535,9 +368,7 @@ class Retriever:
         if not sections:
             return chunks, 0
 
-        # Match on the leading text, not on equality: overlap means a retrieved chunk
-        # and its stored twin are the same chunk, while two DIFFERENT chunks of one
-        # section share only their heading path prefix.
+        # Matched on leading text, since overlapping chunks share their tails.
         seen = {c.text[:200] for c in chunks}
         budget = s.section_expansion_chars
         added: list[RetrievedChunk] = []
@@ -556,9 +387,7 @@ class Retriever:
                 if not hit.text or hit.text[:200] in seen:
                     continue
                 if len(hit.text) > budget:
-                    # Skip rather than stop: sections are ordered by document position,
-                    # not by size, so one long chunk in the middle must not hide the
-                    # short ones after it.
+                    # Skip rather than stop, so one long chunk does not hide shorter ones.
                     continue
                 seen.add(hit.text[:200])
                 budget -= len(hit.text)
@@ -580,17 +409,13 @@ class Retriever:
         seen: set[str] = set()
         used = 0
         for chunk in chunks:
-            # Overlap means adjacent chunks legitimately share text; an exact duplicate
-            # is a re-ingest artefact and wastes a context slot.
+            # An exact duplicate is a re-ingest artefact.
             key = chunk.text[:200]
             if key in seen:
                 continue
             seen.add(key)
             if used + len(chunk.text) > self.settings.max_context_chars:
-                # Skip this one and keep going rather than stopping here. Chunks arrive
-                # in relevance order, not size order, so one long chunk near the cap
-                # used to discard every shorter chunk behind it — including, on the
-                # exploration-portfolio question, the one carrying the figures asked for.
+                # Skip rather than stop, so one long chunk does not drop shorter ones.
                 continue
             parts.append(chunk.text)
             used += len(chunk.text)

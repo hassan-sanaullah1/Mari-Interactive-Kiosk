@@ -1,22 +1,9 @@
-"""Conversational query rewriting — resolving elliptical follow-ups before retrieval.
+"""Rewrites an elliptical follow-up ("and how much do they produce?") into a
+self-contained search query, using the last few turns.
 
-Speech is far more elliptical than typing. A visitor who has just been told about Mari
-Minerals asks "and how much do they produce?" — embedded verbatim, that query retrieves
-against "they", which matches nothing in particular and everything a little. The right
-section is not even in the candidate set, so no amount of reranking recovers it.
-
-Rewriting fixes that by folding the last few turns back into the query. The cost is an
-LLM call in the middle of a latency budget that has no room for one, so this module is
-built around avoiding it:
-
-  * It is conditional. Rewriting only fires when the query actually looks elliptical —
-    a pronoun, a deictic, or too few content words to stand alone. On the eval set that
-    is a small minority of questions, and a self-contained question is passed straight
-    through with no network call at all.
-  * It is timeout-guarded, hard. On timeout the original transcript is used and the turn
-    continues. A rewrite is an optimisation; it is never allowed to delay speech.
-  * It fails open. Any error — connection, malformed response, empty output — returns
-    the original text.
+It costs an LLM call inside the latency budget, so it is conditional (only queries with
+a pronoun, a deictic, or too few content words), timeout-guarded, and fails open: any
+error returns the original text.
 """
 
 from __future__ import annotations
@@ -28,6 +15,7 @@ import time
 
 import httpx
 
+from ..prompts import get_prompts
 from .settings import RagSettings, get_settings
 
 log = logging.getLogger(__name__)
@@ -52,15 +40,6 @@ _STOPWORDS = {
 }
 
 _WORD_RE = re.compile(r"[\w؀-ۿ]+", re.UNICODE)
-
-_SYSTEM = (
-    "Rewrite the user's latest question into a single self-contained search query. "
-    "Resolve every pronoun and reference using the conversation. Keep the original "
-    "language and the original wording wherever possible — you are only replacing "
-    "references with what they refer to, not rephrasing or answering. Output the "
-    "rewritten query alone, with no preamble, quotes or explanation."
-)
-
 
 def needs_rewrite(text: str, has_history: bool, settings: RagSettings) -> bool:
     """Whether this query is worth spending a rewrite call on.
@@ -96,7 +75,7 @@ class QueryRewriter:
             return text, False, (time.perf_counter() - t0) * 1000
 
         turns = history[-self.settings.rewrite_history_turns * 2 :]
-        messages = [{"role": "system", "content": _SYSTEM}]
+        messages = [{"role": "system", "content": get_prompts().query_rewriter}]
         messages += [
             {"role": "user" if t.get("role") == "user" else "assistant",
              "content": (t.get("text") or t.get("content") or "")[:500]}
@@ -116,10 +95,7 @@ class QueryRewriter:
             return text, False, elapsed
 
         elapsed = (time.perf_counter() - t0) * 1000
-        # A rewrite that comes back much longer than the question is the model answering
-        # rather than rewriting; a rewrite that comes back empty is a malformed response.
-        # Both are rejected in favour of the original — the original is never wrong, only
-        # under-specified.
+        # Empty, or much longer than the question (the model answered instead): keep the original.
         if not rewritten or len(rewritten) > max(200, len(text) * 4):
             return text, False, elapsed
         log.debug("rewrote %r -> %r in %.0f ms", text, rewritten, elapsed)
