@@ -428,8 +428,13 @@ _ACRONYMS: dict[str, dict[str, str]] = {
     # tokens, and the plural "N P Us" left a trailing "Us" that reads as the English
     # word "us" ("en pee us") instead of "U-s". Urdu script spells the letter names
     # themselves, so the voice says "en-pee-you" in either language.
-    "NPUs": {"en": "این پی یوز", "ur": "این پی یوز"},
-    "NPU": {"en": "این پی یو", "ur": "این پی یو"},
+    # English joins the three letterforms into ONE token ("اینپیو") where Urdu keeps
+    # them spaced. Spaces are token boundaries to this voice, and in an otherwise
+    # English sentence it paused on each one — "NP ... U". Written solid the letters
+    # run together as a single "en-pee-you". Urdu keeps the spaced form: the same
+    # sentence is already Urdu there, so the voice does not break on it.
+    "NPUs": {"en": "اینپیوز", "ur": "این پی یوز"},
+    "NPU": {"en": "اینپیو", "ur": "این پی یو"},
     "UNGC": {"en": "U N G C", "ur": "یو این جی سی"},
     "SDGs": {"en": "S D Gs", "ur": "ایس ڈی جیز"},
     "UN": {"en": "U N", "ur": "اقوام متحدہ"},

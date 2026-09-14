@@ -108,32 +108,45 @@ NO_SPEECH_REPLY = {
 AVATARS = frozenset({"female", "male"})
 
 # ── DEMO PITCH — temporary, for a recording ─────────────────────────
-# While MARI_PITCH_ONLY=1, every Urdu turn on the female rig answers with this one
-# fixed line, whatever the visitor said, and without calling the LLM at all. It is a
-# recording aid, NOT a product behaviour: the kiosk stops answering questions while
-# it is on. Unset the env var (or set it to 0) to hand Urdu back to the model.
+# While MARI_PITCH_ONLY=1, every turn on the female rig answers with one fixed line
+# in the turn's language, whatever the visitor said, and without calling the LLM at
+# all. It is a recording aid, NOT a product behaviour: the kiosk stops answering
+# questions while it is on. Unset the env var (or set it to 0) to hand both
+# languages back to the model.
 #
 # Deliberately checked at request time rather than at import, so the flag can be
 # flipped without a code change; the server still needs a restart to re-read .env.
 PITCH_ONLY_UR = (
     "Assalamualaikum میں Maryam ہوں، اور میں Mari Energies کی ایک representative ہوں۔ "
     "Sky47، جو Mari Energies کا Data Center اور AI کلاؤڈ Infrastructure Vertical ہے، "
-    "پاکستان کا سب سے بڑا کلاؤڈ AI Farm چلاتا ہے۔ یہ Huawei Ascend NPU اور NVIDIA GPU "
+    "پاکستان کا سب سے بڑا کلاؤڈ AI Farm چلاتا ہے۔ یہ Huawei Ascend NPU "
     "clusters کی مدد سے GPU-as-a-Service فراہم کرتا ہے۔ اس میں liquid-cooled racks "
     "استعمال ہوتے ہیں جو فی rack پچاس Kilo Watts تک handle کر سکتے ہیں۔"
 )
+
+# "fifty kilowatts", not "50KW": this text is read aloud by TTS, and the Urdu line
+# spells the same figure out for the same reason.
+PITCH_ONLY_EN = (
+    "Assalamualaikum, I'm Mariam, a representative of Mari Energies. "
+    "Sky47, our Data Center and AI Cloud Infrastructure vertical, delivers "
+    "GPU-as-a-Service through Pakistan's largest Cloud AI Farm — powered by "
+    "Huawei Ascend NPU clusters, with liquid-cooled racks up to fifty kilowatts, "
+    "built for AI and ML training and inference."
+)
+
+PITCH_ONLY = {"ur": PITCH_ONLY_UR, "en": PITCH_ONLY_EN}
 
 
 def _pitch_override(lang: str, avatar_id: str) -> str | None:
     """The fixed pitch line when MARI_PITCH_ONLY is on, else None.
 
-    Scoped to Urdu on the female rig only — the language and presenter being recorded —
-    so an English turn or the male rig still behaves normally if one gets used by mistake.
+    Scoped to the female rig — the presenter being recorded — so the male rig still
+    behaves normally if it gets used by mistake.
     """
     if C.ENV.get("MARI_PITCH_ONLY", "0") not in ("1", "true", "yes", "on"):
         return None
-    if lang == "ur" and avatar_id == "female":
-        return PITCH_ONLY_UR
+    if avatar_id == "female":
+        return PITCH_ONLY.get(lang)
     return None
 
 

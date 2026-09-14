@@ -355,8 +355,8 @@ def test_kw_number_is_said_in_english_not_urdu() -> None:
 
 
 @pytest.mark.parametrize("text,expected", [
-    ("Huawei Ascend NPU clusters", "این پی یو"),
-    ("Huawei Ascend NPUs power the AI Farm", "این پی یوز"),
+    ("Huawei Ascend NPU clusters", "اینپیو"),
+    ("Huawei Ascend NPUs power the AI Farm", "اینپیوز"),
 ])
 def test_npu_is_letter_named_in_english(text: str, expected: str) -> None:
     """English runs through the same Uplift Urdu-first voice, which does not reliably
@@ -366,12 +366,20 @@ def test_npu_is_letter_named_in_english(text: str, expected: str) -> None:
     assert expected in _spoken(text, "en")
 
 
+def test_npu_is_one_token_in_english() -> None:
+    """Written with spaces the voice broke on each one, so an English sentence said
+    "NP ... U" with an audible pause before the last letter. The letterforms are
+    joined into a single token to close it. Urdu keeps the spaced form — see
+    test_npu_is_urdu_script_in_urdu."""
+    assert "این پی یو" not in _spoken("Ascend NPU clusters", "en")
+
+
 def test_npu_plural_is_matched_before_the_singular() -> None:
     """The acronym rules are \\b-anchored on both sides, so a bare "NPU" entry cannot
     reach inside "NPUs": the trailing "s" leaves no boundary after the "U". The plural
     needs its own entry, listed first because the table applies in insertion order."""
     said = _spoken("Ascend NPUs and NPU clusters", "en")
-    assert "این پی یوز" in said
+    assert "اینپیوز" in said
     assert "NPUs" not in said
 
 
