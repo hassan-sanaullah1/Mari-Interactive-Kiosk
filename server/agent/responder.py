@@ -19,6 +19,7 @@ from .context_budget import fit_history, fit_system_prompt, history_messages, ma
 from .greeting import is_greeting, said_salam
 from .replies import canned, pitch_override
 from .reply_fixes import force_salam, gender_agreement
+from .script_fixes import latin_terms
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ async def respond(text: str, lang: str, history: list | None = None,
     reply = await llm.complete(messages, reply_tokens)
     if is_greeting(text):
         reply = force_salam(reply, lang, returning=said_salam(text))
-    return gender_agreement(reply, lang, avatar)
+    return gender_agreement(latin_terms(reply, lang), lang, avatar)
 
 
 async def respond_sentences(text: str, lang: str, history: list | None = None,
@@ -83,7 +84,7 @@ async def respond_sentences(text: str, lang: str, history: list | None = None,
     def fix(sentence: str) -> str:
         nonlocal needs_salam
         # Gender agreement on every sentence; the salam only on the first.
-        sentence = gender_agreement(sentence, lang, avatar)
+        sentence = gender_agreement(latin_terms(sentence, lang), lang, avatar)
         if needs_salam:
             needs_salam = False
             return force_salam(sentence, lang, returning)

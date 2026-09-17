@@ -133,7 +133,7 @@ VOICE_UR = env("APP_TTS_VOICE_URDU", "af_heart")
 
 
 def pitch_only() -> bool:
-    """MARI_PITCH_ONLY: a recording aid that answers every female-rig turn with one line."""
+    """MARI_PITCH_ONLY: a recording aid that answers every turn with the presenter's pitch line."""
     return ENV.get("MARI_PITCH_ONLY", "0") in ("1", "true", "yes", "on")
 
 

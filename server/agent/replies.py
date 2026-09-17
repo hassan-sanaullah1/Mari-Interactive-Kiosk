@@ -18,9 +18,12 @@ def canned(name: str, lang: str, avatar: str = "female") -> str:
 
 
 def pitch_override(lang: str, avatar: str) -> str | None:
-    """The fixed pitch line while MARI_PITCH_ONLY is on, for the female rig only."""
+    """The presenter's fixed pitch line while MARI_PITCH_ONLY is on.
+
+    None for a presenter with no pitch line rather than falling back to the female one,
+    which names Maryam and carries the feminine Urdu verb.
+    """
     if not C.pitch_only():
         return None
-    if avatar == "female":
-        return get_prompts().replies["pitch"]["female"].get(lang)
-    return None
+    persona = get_prompts().replies["pitch"].get(avatar)
+    return persona.get(lang) if persona else None

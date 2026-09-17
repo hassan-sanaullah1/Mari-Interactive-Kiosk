@@ -22,6 +22,7 @@ class UpliftTTS(TTSProvider):
     """UpliftAI REST synthesis. One voice handles Urdu and English."""
 
     wants_spoken_form = True
+    engine = "uplift"
 
     def __init__(
         self,
@@ -66,7 +67,8 @@ class UpliftTTS(TTSProvider):
 class KokoroLocalTTS(TTSProvider):
     """In-process Kokoro pipeline (GPU if available)."""
 
-    wants_spoken_form = False
+    wants_spoken_form = True
+    engine = "kokoro"
     _pipe = None  # one pipeline per process
 
     def __init__(self, voice: str = ""):
@@ -109,7 +111,8 @@ class KokoroLocalTTS(TTSProvider):
 
 
 class KokoroRemoteTTS(TTSProvider):
-    wants_spoken_form = False
+    wants_spoken_form = True
+    engine = "kokoro"
 
     def __init__(self, base: str = "", path: str = "", token: str = "", model: str = "", voice: str = "", fmt: str = ""):
         self.base = (base or C.KOKORO_BASE).rstrip("/")

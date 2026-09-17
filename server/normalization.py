@@ -19,6 +19,11 @@ logger = logging.getLogger(__name__)
 
 __all__ = ["normalize_tts_text", "normalize_for_tts", "spoken_units"]
 
+# The engines this module writes for. Uplift is one Urdu-first voice for both languages and
+# is fixed by respelling words in Urdu script; Kokoro is English-only, cannot read Urdu
+# script, and is fixed with inline pronunciations instead (server/kokoro_lexicon.py).
+ENGINES = ("uplift", "kokoro")
+
 Changes = list[tuple[str, str]]
 
 
@@ -517,7 +522,8 @@ def _scale(word: str | None, lang: str = "en") -> str:
     return f"{said} "
 
 
-def _respell_by_language(text: str, lang: str, changes: Changes | None = None) -> str:
+def _respell_by_language(text: str, lang: str, changes: Changes | None = None,
+                         kokoro: bool = False) -> str:
     """The rules whose spoken form depends on the language."""
     key = _lang_key(lang)
     # Currency first: its pattern consumes "PKR"/"USD", which the acronym table would
@@ -528,12 +534,16 @@ def _respell_by_language(text: str, lang: str, changes: Changes | None = None) -
             lambda m, u=unit[key]: f"{m.group(1)} {_scale(m.group(2), key)}{u}",
             text, changes,
         )
-    text = _sub(_HUAWEI_RE, _HUAWEI_SAID[key], text, changes)
+    if not kokoro:  # Kokoro's English lexicon already says "Huawei" correctly.
+        text = _sub(_HUAWEI_RE, _HUAWEI_SAID[key], text, changes)
     text = _sub(_NVIDIA_RE, lambda m, s=_NVIDIA_SAID[key]: f"{s} " if m.group(1) else s,
                 text, changes)
     # Before the acronym table, which would claim "MT"-style symbols as initialisms.
     text = spoken_units(text, key, changes)
     for pattern, spoken in _ACRONYM_RULES:
+        # An Urdu-script English column ("NPU") is an Uplift trick; Kokoro reads the letters.
+        if kokoro and _ARABIC_RE.search(spoken[key]):
+            continue
         text = _sub(pattern, spoken[key], text, changes)
     if key == "ur":
         text = _sub(_KIOSK_RE, "kaeosk", text, changes)
@@ -684,6 +694,11 @@ _HONOUR_SAID = {
     "HI": "ہلالے امتیاز ملٹری", "SI": "ستارۂ امتیاز ملٹری",
     "TI": "تمغۂ امتیاز ملٹری", "NI": "نشانے امتیاز ملٹری",
 }
+# Kokoro cannot read Urdu script; its lexicon says these Latin forms.
+_HONOUR_SAID_KOKORO = {
+    "HI": "Hilal-e-Imtiaz Military", "SI": "Sitara-e-Imtiaz Military",
+    "TI": "Tamgha-e-Imtiaz Military", "NI": "Nishan-e-Imtiaz Military",
+}
 _HONOUR_UR_LETTERS = {"ایچ آئی": "HI", "ایس آئی": "SI", "ٹی آئی": "TI", "این آئی": "NI"}
 _HONOUR_WORDS = {"hilal": "HI", "ہلال": "HI", "sitara": "SI", "ستارہ": "SI", "ستارۂ": "SI",
                  "tamgha": "TI", "تمغہ": "TI", "تمغۂ": "TI", "nishan": "NI", "نشان": "NI"}
@@ -705,7 +720,7 @@ _COMMA_BEFORE_SUFFIX_RE = re.compile(r"[,،]\s*(?=\((?:Retd\.?|Retired|R|Late)\)
 _ORPHAN_COMMA_RE = re.compile(r"[,،]\s*(?=[,،])|[,،](?=\s*(?:۔|\.|$))|،(?=\s+ہیں)")
 
 
-def _say_honour(match: re.Match[str], lang: str) -> str:
+def _say_honour(match: re.Match[str], lang: str, kokoro: bool = False) -> str:
     if match.group("abbr"):
         abbr = re.sub(r"\s+", " ", match.group("abbr"))
         key = _HONOUR_UR_LETTERS.get(abbr, abbr.upper())
@@ -715,7 +730,8 @@ def _say_honour(match: re.Match[str], lang: str) -> str:
     # Keep the separator only if the honour followed something ("Hyder, HI(M)").
     lead = match.group(0)[:1]
     comma = ("،" if lang == "ur" else ",") if lead in ",،" else (" " if lead.isspace() else "")
-    return f"{' ' + suffix if suffix else ''}{comma}{' ' if comma.strip() else ''}{_HONOUR_SAID[key]}"
+    said = (_HONOUR_SAID_KOKORO if kokoro else _HONOUR_SAID)[key]
+    return f"{' ' + suffix if suffix else ''}{comma}{' ' if comma.strip() else ''}{said}"
 
 
 # Honorifics before a name. English reads "Mr." and "Dr." correctly; Urdu needs them in
@@ -741,11 +757,12 @@ def _move_suffix(match: re.Match[str], table: dict[str, str]) -> str:
     return f"{word} {rank}{name}"
 
 
-def spoken_names_and_ranks(text: str, lang: str = "en", changes: Changes | None = None) -> str:
+def spoken_names_and_ranks(text: str, lang: str = "en", changes: Changes | None = None,
+                           kokoro: bool = False) -> str:
     if not text:
         return text
 
-    text = _sub(_HONOURS_RE, lambda m: _say_honour(m, lang), text, changes)
+    text = _sub(_HONOURS_RE, lambda m: _say_honour(m, lang, kokoro), text, changes)
     # Before the rank-suffix rules, whose pattern a leftover comma would break.
     text = _sub(_COMMA_BEFORE_SUFFIX_RE, " ", text, changes)
     text = _sub(_ORPHAN_COMMA_RE, "", text, changes)
@@ -763,6 +780,8 @@ def spoken_names_and_ranks(text: str, lang: str = "en", changes: Changes | None 
                     lambda m: f" {_SUFFIX_EN[m.group(1).rstrip('.').lower()]}", text, changes)
     for pattern, replacement in _HONORIFICS[_lang_key(lang)]:
         text = _sub(pattern, replacement, text, changes)
+    if kokoro:  # Names are said by spoken_for_kokoro, not respelled in Urdu script.
+        return text
     text = _sub(_PERSON_NAME_RE, lambda m: _PERSON_NAMES[m.group(0)], text, changes)
     return _sub(_NAME_WORD_RE, lambda m: _KNOWN_WORDS[m.group(0)], text, changes)
 
@@ -1442,20 +1461,72 @@ def normalise_for_uplift(text: str, lang: str = "ur", changes: Changes | None = 
     return _fix_slashes(text, changes)
 
 
+# ── Kokoro: Pakistani words as inline pronunciations ────────────────
+# Kokoro takes "[word](/IPA/)" in its input. Each known word becomes a placeholder here so
+# no later pass (number spell-out, slashes, initialisms) can reach inside the IPA, and the
+# placeholders become the inline pronunciations as the very last step.
+
+from .kokoro_lexicon import KOKORO_ALIASES, KOKORO_IPA  # noqa: E402
+
+# Every spelling → its lexicon key.
+_KOKORO_WORDS: dict[str, str] = {**{w: w for w in KOKORO_IPA}, **KOKORO_ALIASES}
+_KOKORO_WALAIKUM_RE = re.compile(rf"(?<!\w){_WALAIKUM}(?!\w)", re.I)
+_KOKORO_SALAM_RE = re.compile(rf"(?<!\w){_SALAM}(?!\w)", re.I)
+# "MariEnergies" has no boundary inside it.
+_KOKORO_MARI_JOINED_RE = re.compile(r"(?<!\w)Mari(?=[A-Z])")
+# Full names first, so "Ali", "Khan" and "Malik" are only said this way inside a name.
+_KOKORO_FULL_NAME_RE = _words_re(_PERSON_NAMES)
+_KOKORO_WORD_RE = _words_re(w for w in _KOKORO_WORDS if w not in _WORD_BLOCKLIST)
+_SLOT_OPEN, _SLOT_CLOSE, _SLOT_DIGIT0 = "\ue000", "\ue001", 0xE010
+_KOKORO_SLOT_RE = re.compile(f"{_SLOT_OPEN}([\ue010-\ue019]+){_SLOT_CLOSE}")
+_AAA_RE = re.compile(r"\bAAA\b")
+
+
+def spoken_for_kokoro(text: str, slots: list[str], changes: Changes | None = None) -> str:
+    """Replace known Pakistani words with placeholders for their inline pronunciation."""
+
+    def slot(written: str, keys: list[str]) -> str:
+        said = f"[{written}](/{' '.join(KOKORO_IPA[k] for k in keys)}/)"
+        if changes is not None:
+            changes.append((written, said))
+        slots.append(said)
+        digits = "".join(chr(_SLOT_DIGIT0 + int(d)) for d in str(len(slots) - 1))
+        return f"{_SLOT_OPEN}{digits}{_SLOT_CLOSE}"
+
+    text = _KOKORO_WALAIKUM_RE.sub(lambda m: slot(m.group(0), ["Walaikum Assalam"]), text)
+    text = _KOKORO_SALAM_RE.sub(lambda m: slot(m.group(0), ["Assalamualaikum"]), text)
+    text = _KOKORO_MARI_JOINED_RE.sub(lambda m: slot("Mari", ["Mari"]) + " ", text)
+    # A name can mix audited pronunciations with words Kokoro says best as written
+    # ("Zafar Abbas"), so each word of a full name is decided on its own.
+    text = _KOKORO_FULL_NAME_RE.sub(
+        lambda m: " ".join(slot(w, [_KOKORO_WORDS[w]]) if w in _KOKORO_WORDS else w
+                           for w in m.group(0).split()), text)
+    return _KOKORO_WORD_RE.sub(lambda m: slot(m.group(0), [_KOKORO_WORDS[m.group(0)]]), text)
+
+
+def _restore_kokoro_slots(text: str, slots: list[str]) -> str:
+    return _KOKORO_SLOT_RE.sub(
+        lambda m: slots[int("".join(str(ord(c) - _SLOT_DIGIT0) for c in m.group(1)))], text)
+
+
 # ── Public API ──────────────────────────────────────────────────────
 
 
-def normalize_tts_text(text: str, lang: str = "en") -> tuple[str, Changes]:
-    """Rewrite one reply sentence for the Uplift voice.
+def normalize_tts_text(text: str, lang: str = "en", engine: str = "uplift") -> tuple[str, Changes]:
+    """Rewrite one reply sentence for the TTS voice.
 
     ``lang`` is "ur" for the Urdu voice path; anything else is treated as English.
+    ``engine`` is "uplift" or "kokoro" (English only; see :data:`ENGINES`).
     Returns the spoken text and the (before, after) pairs of every rule that fired.
     Sentences arrive whole from the reply stream, so no stream buffering is needed.
     """
     changes: Changes = []
+    kokoro = engine == "kokoro" and lang != "ur"
+    slots: list[str] = []
     # Domains first: "sky47.com.pk" must be seen whole, before the Sky47 rule.
     text = spoken_urls(text, lang, changes)
-    text = _drop_repeated_gloss(text, changes)
+    if not kokoro:
+        text = _drop_repeated_gloss(text, changes)
     text = _sub(_FOOD_GRADE_HYPHEN_RE, "food grade", text, changes)
     text = _sub(_INFRASTRUCTURE_SPLIT_RE, "انفراسٹرکچر", text, changes)
     # The pair before its single-word rules, which would split its script.
@@ -1464,9 +1535,13 @@ def normalize_tts_text(text: str, lang: str = "en") -> tuple[str, Changes]:
     text = _sub(_MITIGATION_RE, "مٹی گیشن", text, changes)
     text = _sub(_TRANSLITERATED_RE, lambda m: _TRANSLITERATED[m.group(0)], text, changes)
     for pattern, replacement in _SAY_AS:
+        # The salam, persona names and Mari are Urdu script for Uplift; Kokoro says them
+        # through its lexicon below.
+        if kokoro and _ARABIC_RE.search(replacement):
+            continue
         text = _sub(pattern, replacement, text, changes)
-    text = _respell_by_language(text, lang, changes)
-    text = spoken_names_and_ranks(text, lang, changes)
+    text = _respell_by_language(text, lang, changes, kokoro)
+    text = spoken_names_and_ranks(text, lang, changes, kokoro)
     text = spoken_addresses(text, lang, changes)
     # Again: the address pass expands "CH4" to "میتھین".
     if lang == "ur":
@@ -1474,22 +1549,31 @@ def normalize_tts_text(text: str, lang: str = "en") -> tuple[str, Changes]:
         text = _sub(_METHANE_RE, "methayn", text, changes)
     text = spoken_formats(text, lang, changes)
     text = normalise_for_english(text, lang, changes)
-    # After formats, whose well rule needs the Latin letter before "Spinwam-1"'s hyphen.
-    text = spoken_places(text, lang, changes)
-    # After every pass that owns a capitalised shape (table acronyms, titles, domains).
-    text = spoken_initialisms(text, lang, changes)
+    if kokoro:
+        # Late for the same reason as spoken_places: the address and well rules need the
+        # Latin names. Kokoro reads plain capitals correctly; hyphenating them made it
+        # worse ("U-E-T" → "UIT"), so only "AAA" is rewritten.
+        text = spoken_for_kokoro(text, slots, changes)
+        text = _sub(_AAA_RE, _SPECIAL_ACRONYMS["AAA"]["en"], text, changes)
+    else:
+        # After formats, whose well rule needs the Latin letter before "Spinwam-1"'s hyphen.
+        text = spoken_places(text, lang, changes)
+        # After every pass that owns a capitalised shape (table acronyms, titles, domains).
+        text = spoken_initialisms(text, lang, changes)
     text = _sub(_RATING_RE, "A one", text, changes)
     if lang != "ur":
         text = _spell_numbers(text, changes)
     # Last, so it sees the fully rewritten text.
     text = normalise_for_uplift(text, lang, changes)
+    if kokoro:
+        text = _restore_kokoro_slots(text, slots)
     return text, changes
 
 
-def normalize_for_tts(text: str, lang: str = "en") -> str:
+def normalize_for_tts(text: str, lang: str = "en", engine: str = "uplift") -> str:
     """:func:`normalize_tts_text`, logging a preview of what was rewritten."""
-    spoken, changes = normalize_tts_text(text, lang)
+    spoken, changes = normalize_tts_text(text, lang, engine)
     if changes:
         preview = "; ".join(f"{before!r} -> {after!r}" for before, after in changes[:5])
-        logger.info("tts normalized (%s, %d changes): %s", lang, len(changes), preview)
+        logger.info("tts normalized (%s/%s, %d changes): %s", engine, lang, len(changes), preview)
     return spoken

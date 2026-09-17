@@ -20,5 +20,7 @@ class TTSProvider(Protocol):
 
     # True when the voice needs server/normalization.py applied to its input first.
     wants_spoken_form: bool
+    # Which spoken form it needs: one of server.normalization.ENGINES.
+    engine: str
 
     async def synthesize(self, text: str) -> tuple[bytes, str]: ...

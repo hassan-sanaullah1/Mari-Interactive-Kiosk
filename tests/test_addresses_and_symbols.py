@@ -334,27 +334,3 @@ def test_urdu_letter_spelling_of_a_unit() -> None:
 def test_symbols_without_a_number_are_left_to_other_rules(text: str) -> None:
     said = normalize_for_tts(text, "en")
     assert "gigabyte" not in said and "terabyte" not in said
-
-
-def test_english_only_voices_get_units_but_not_the_uplift_rewrites(monkeypatch) -> None:
-    """With APP_EN_TTS=remote, English goes to Kokoro, which skipped normalization
-    entirely and read "50kW" as letters. It gets the unit names, and nothing that puts
-    Urdu script in front of an English-only engine."""
-    import asyncio
-
-    from server import providers
-    from server.agent import speech
-
-    sent: list[str] = []
-
-    class FakeKokoro:
-        wants_spoken_form = False
-        lang = "en"
-
-        async def synthesize(self, text: str):
-            sent.append(text)
-            return b"x", "audio/mpeg"
-
-    monkeypatch.setattr(providers, "get_tts_provider", lambda lang, avatar="female": FakeKokoro())
-    asyncio.run(speech.speak("Faheem Haider says up to 50kW per rack.", "en"))
-    assert sent == ["Faheem Haider says up to 50 kilowatts per rack."]

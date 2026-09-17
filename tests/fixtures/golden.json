@@ -22208,8 +22208,8 @@
   "pitch/female/en": "Assalamualaikum, I'm Mariam, a representative of Mari Energies. Sky47, our Data Center and AI Cloud Infrastructure vertical, delivers GPU-as-a-Service through Pakistan's largest Cloud AI Farm — powered by Huawei Ascend NPU clusters, with liquid-cooled racks up to fifty kilowatts, built for AI and ML training and inference.",
   "pitch/female/ur": "Assalamualaikum میں Maryam ہوں، اور میں Mari Energies کی ایک representative ہوں۔ Sky47، جو Mari Energies کا Data Center اور AI کلاؤڈ Infrastructure Vertical ہے، پاکستان کا سب سے بڑا کلاؤڈ AI Farm چلاتا ہے۔ یہ Huawei Ascend NPU clusters کی مدد سے GPU-as-a-Service فراہم کرتا ہے۔ اس میں liquid-cooled racks استعمال ہوتے ہیں جو فی rack پچاس Kilo Watts تک handle کر سکتے ہیں۔",
   "pitch/female/xx": null,
-  "pitch/male/en": null,
-  "pitch/male/ur": null,
+  "pitch/male/en": "Assalamualaikum, I'm Hamza, a representative of Mari Energies. Sky47, our Data Center and AI Cloud Infrastructure vertical, delivers GPU-as-a-Service through Pakistan's largest Cloud AI Farm — powered by Huawei Ascend NPU clusters, with liquid-cooled racks up to fifty kilowatts, built for AI and ML training and inference.",
+  "pitch/male/ur": "Assalamualaikum میں Hamza ہوں، اور میں Mari Energies کا ایک representative ہوں۔ Sky47، جو Mari Energies کا Data Center اور AI کلاؤڈ Infrastructure Vertical ہے، پاکستان کا سب سے بڑا کلاؤڈ AI Farm چلاتا ہے۔ یہ Huawei Ascend NPU clusters کی مدد سے GPU-as-a-Service فراہم کرتا ہے۔ اس میں liquid-cooled racks استعمال ہوتے ہیں جو فی rack پچاس Kilo Watts تک handle کر سکتے ہیں۔",
   "pitch/male/xx": null
  },
  "turns": {
@@ -26979,8 +26979,8 @@
     },
     {
      "type": "reply",
-     "text": "وعلیکم السلام، میں مریم ہوں، Mari Energies کا نمائندہ۔",
-     "demo": false
+     "text": "Assalamualaikum, I'm Hamza, a representative of Mari Energies.",
+     "demo": true
     },
     {
      "type": "tts",
@@ -26991,32 +26991,8 @@
     },
     {
      "type": "reply",
-     "text": "ہم نے 1954 میں ڈہرکی میں Mari Gas Field دریافت کیا تھا۔",
-     "demo": false
-    },
-    {
-     "type": "tts",
-     "mime": "audio/mpeg"
-    },
-    {
-     "bytes": 7
-    },
-    {
-     "type": "reply",
-     "text": "Sky47 کے کلاؤڈ انفرا اسٹرکچر میں Huawei Ascend NPU کلسٹرز استعمال ہوتے ہیں؟",
-     "demo": false
-    },
-    {
-     "type": "tts",
-     "mime": "audio/mpeg"
-    },
-    {
-     "bytes": 7
-    },
-    {
-     "type": "reply",
-     "text": "مزید معلومات کے لیے marienergies.com.pk دیکھیں۔",
-     "demo": false
+     "text": "Sky47, our Data Center and AI Cloud Infrastructure vertical, delivers GPU-as-a-Service through Pakistan's largest Cloud AI Farm — powered by Huawei Ascend NPU clusters, with liquid-cooled racks up to fifty kilowatts, built for AI and ML training and inference.",
+     "demo": true
     },
     {
      "type": "tts",
@@ -27032,32 +27008,10 @@
    ],
    "net": [
     {
-     "kind": "llm",
-     "payload": {
-      "model": "qwen3.5",
-      "messages": [
-       {
-        "role": "system",
-        "content": "sha256:b1e4bb4f152d5f20ee3928ef10c10b6f6ab76fceec14f11e0818793868d013e8 len:13358"
-       },
-       {
-        "role": "user",
-        "content": "What is Mari's net profit?"
-       }
-      ],
-      "temperature": 0.7,
-      "max_tokens": 220,
-      "stream": true,
-      "chat_template_kwargs": {
-       "enable_thinking": false
-      }
-     }
-    },
-    {
      "kind": "tts",
      "payload": {
       "voiceId": "prime-time-anchor",
-      "text": "وعلیکم السلام، میں مریم ہوں، ماڑی Energies کا نمائندہ۔",
+      "text": "السلام علیکم, I'm حمزہ, a representative of ماڑی Energies.",
       "speed": 0.78,
       "outputFormat": "MP3_22050_32"
      }
@@ -27066,25 +27020,7 @@
      "kind": "tts",
      "payload": {
       "voiceId": "prime-time-anchor",
-      "text": "ہم نے nineteen fifty four میں ڈھرکی میں ماڑی Gas Field دریافت کیا تھا۔",
-      "speed": 0.78,
-      "outputFormat": "MP3_22050_32"
-     }
-    },
-    {
-     "kind": "tts",
-     "payload": {
-      "voiceId": "prime-time-anchor",
-      "text": "Sky Forty Seven کے Cloud infrastructure میں ہواوے Ascend اینپیو کلسٹرز استعمال ہوتے ہیں؟",
-      "speed": 0.78,
-      "outputFormat": "MP3_22050_32"
-     }
-    },
-    {
-     "kind": "tts",
-     "payload": {
-      "voiceId": "prime-time-anchor",
-      "text": "مزید معلومات کے لیے ماڑی Energies dot com dot P K دیکھیں۔",
+      "text": "Sky Forty Seven, our Data Center and AI Cloud Infrastructure vertical, delivers G P U-as-a-Service through Paakistaan's largest Cloud AI Farm — powered by ہواوے Ascend اینپیو clusters, with liquid cooled racks up to fifty kilowatts, built for AI and ML training and inference.",
       "speed": 0.78,
       "outputFormat": "MP3_22050_32"
      }
@@ -27199,8 +27135,8 @@
     },
     {
      "type": "reply",
-     "text": "وعلیکم السلام، میں مریم ہوں، Mari Energies کا نمائندہ۔",
-     "demo": false
+     "text": "Assalamualaikum میں Hamza ہوں، اور میں Mari Energies کا ایک representative ہوں۔",
+     "demo": true
     },
     {
      "type": "tts",
@@ -27211,8 +27147,8 @@
     },
     {
      "type": "reply",
-     "text": "ہم نے 1954 میں ڈہرکی میں Mari Gas Field دریافت کیا تھا۔",
-     "demo": false
+     "text": "Sky47، جو Mari Energies کا Data Center اور AI کلاؤڈ Infrastructure Vertical ہے، پاکستان کا سب سے بڑا کلاؤڈ AI Farm چلاتا ہے۔",
+     "demo": true
     },
     {
      "type": "tts",
@@ -27223,8 +27159,8 @@
     },
     {
      "type": "reply",
-     "text": "Sky47 کے کلاؤڈ انفرا اسٹرکچر میں Huawei Ascend NPU کلسٹرز استعمال ہوتے ہیں؟",
-     "demo": false
+     "text": "یہ Huawei Ascend NPU clusters کی مدد سے GPU-as-a-Service فراہم کرتا ہے۔",
+     "demo": true
     },
     {
      "type": "tts",
@@ -27235,8 +27171,8 @@
     },
     {
      "type": "reply",
-     "text": "مزید معلومات کے لیے marienergies.com.pk دیکھیں۔",
-     "demo": false
+     "text": "اس میں liquid-cooled racks استعمال ہوتے ہیں جو فی rack پچاس Kilo Watts تک handle کر سکتے ہیں۔",
+     "demo": true
     },
     {
      "type": "tts",
@@ -27252,32 +27188,10 @@
    ],
    "net": [
     {
-     "kind": "llm",
-     "payload": {
-      "model": "qwen3.5",
-      "messages": [
-       {
-        "role": "system",
-        "content": "sha256:1070e8dd943b3c96d3fb364e8615afd8e554cd7af03639463b993d20d595b6bb len:14453"
-       },
-       {
-        "role": "user",
-        "content": "ماری انرجیز کا منافع کتنا ہے؟"
-       }
-      ],
-      "temperature": 0.7,
-      "max_tokens": 420,
-      "stream": true,
-      "chat_template_kwargs": {
-       "enable_thinking": false
-      }
-     }
-    },
-    {
      "kind": "tts",
      "payload": {
       "voiceId": "prime-time-anchor",
-      "text": "وعلیکم السلام، میں مریم ہوں، ماڑی Energies کا نمائندہ۔",
+      "text": "السلام علیکم میں حمزہ ہوں، اور میں ماڑی Energies کا ایک representative ہوں۔",
       "speed": 0.9,
       "outputFormat": "MP3_22050_32"
      }
@@ -27286,7 +27200,7 @@
      "kind": "tts",
      "payload": {
       "voiceId": "prime-time-anchor",
-      "text": "ہم نے انیس سو چون میں ڈھرکی میں ماڑی Gas Field دریافت کیا تھا۔",
+      "text": "Sky Forty Seven، جو ماڑی Energies کا Data Center اور اے آئی Cloud Infrastructure vertical ہے، پاکستان کا سب سے بڑا Cloud اے آئی Farm چلاتا ہے۔",
       "speed": 0.9,
       "outputFormat": "MP3_22050_32"
      }
@@ -27295,7 +27209,7 @@
      "kind": "tts",
      "payload": {
       "voiceId": "prime-time-anchor",
-      "text": "Sky Forty Seven کے Cloud infrastructure میں ہواوے Ascend این پی یو klusturz استعمال ہوتے ہیں؟",
+      "text": "یہ ہواوے Ascend این پی یو klusturz کی مدد سے جی پی یو-as-a-Service فراہم کرتا ہے۔",
       "speed": 0.9,
       "outputFormat": "MP3_22050_32"
      }
@@ -27304,7 +27218,7 @@
      "kind": "tts",
      "payload": {
       "voiceId": "prime-time-anchor",
-      "text": "مزید معلومات کے لیے ماڑی Energies ڈاٹ کام ڈاٹ پی کے دیکھیں۔",
+      "text": "اس میں likwid koold racks استعمال ہوتے ہیں جو فی rack پچاس کلو واٹ تک handle کر سکتے ہیں۔",
       "speed": 0.9,
       "outputFormat": "MP3_22050_32"
      }

@@ -18,7 +18,11 @@ ur = "معاف کیجیے، میں سن نہیں سکی۔ ذرا دوبارہ ک
 en = "Sorry, I didn't catch that. Could you say it again?"
 ur = "معاف کیجیے، میں سن نہیں سکا۔ ذرا دوبارہ کہیے گا؟"
 
-# MARI_PITCH_ONLY=1: a recording aid. Every female-rig turn answers with this line.
+# MARI_PITCH_ONLY=1: a recording aid. Every turn answers with the presenter's line.
 [pitch.female]
 en = "Assalamualaikum, I'm Mariam, a representative of Mari Energies. Sky47, our Data Center and AI Cloud Infrastructure vertical, delivers GPU-as-a-Service through Pakistan's largest Cloud AI Farm — powered by Huawei Ascend NPU clusters, with liquid-cooled racks up to fifty kilowatts, built for AI and ML training and inference."
 ur = "Assalamualaikum میں Maryam ہوں، اور میں Mari Energies کی ایک representative ہوں۔ Sky47، جو Mari Energies کا Data Center اور AI کلاؤڈ Infrastructure Vertical ہے، پاکستان کا سب سے بڑا کلاؤڈ AI Farm چلاتا ہے۔ یہ Huawei Ascend NPU clusters کی مدد سے GPU-as-a-Service فراہم کرتا ہے۔ اس میں liquid-cooled racks استعمال ہوتے ہیں جو فی rack پچاس Kilo Watts تک handle کر سکتے ہیں۔"
+
+[pitch.male]
+en = "Assalamualaikum, I'm Hamza, a representative of Mari Energies. Sky47, our Data Center and AI Cloud Infrastructure vertical, delivers GPU-as-a-Service through Pakistan's largest Cloud AI Farm — powered by Huawei Ascend NPU clusters, with liquid-cooled racks up to fifty kilowatts, built for AI and ML training and inference."
+ur = "Assalamualaikum میں Hamza ہوں، اور میں Mari Energies کا ایک representative ہوں۔ Sky47، جو Mari Energies کا Data Center اور AI کلاؤڈ Infrastructure Vertical ہے، پاکستان کا سب سے بڑا کلاؤڈ AI Farm چلاتا ہے۔ یہ Huawei Ascend NPU clusters کی مدد سے GPU-as-a-Service فراہم کرتا ہے۔ اس میں liquid-cooled racks استعمال ہوتے ہیں جو فی rack پچاس Kilo Watts تک handle کر سکتے ہیں۔"
