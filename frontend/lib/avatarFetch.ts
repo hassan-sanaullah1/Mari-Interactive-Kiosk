@@ -43,7 +43,7 @@ import { AVATARS } from "@/components/avatar/models";
 
 /**
  * Decompressed size / transferred size, per model — girl15 is served as a real
- * .gz, male2 uncompressed, so the correction is 1.48x for one and 1.0 for the
+ * .gz, the male rig uncompressed, so the correction is 1.48x for one and 1.0 for the
  * other. Only used to keep the progress percentage honest — see fetchAvatar.
  *
  * Looked up by URL rather than passed in, so every existing call site keeps its

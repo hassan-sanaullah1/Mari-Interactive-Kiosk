@@ -17,7 +17,12 @@
  * they are properties of the authored animation, not of this app.
  */
 
-/** Both clips are authored at 30fps; the windows below are quoted in frames. */
+/**
+ * The rate the windows below are quoted in, and the rate the pose index samples
+ * at. girl15's clip is authored at 30fps; male3's is the same animation exported
+ * at 24fps, whose windows are still quoted as 30fps frames because a window is a
+ * position in seconds, not a keyframe — see MALE.
+ */
 export const FPS = 30;
 
 /** Every rig here exports its body animation under this one clip name. */
@@ -140,8 +145,30 @@ const FEMALE: AvatarConfig = {
 };
 
 /**
- * male2.glb — the alternate presenter. (Built by scripts/optimize_glb.py from
- * male_inital02.glb; see the `--keep-windows` note at the end of this comment.)
+ * male3.glb — the alternate presenter. (Built by scripts/optimize_glb.py from
+ * male_inital03.glb; see the `--keep-windows` note at the end of this comment.)
+ *
+ * male_inital03 is a re-export of male_inital02 (which built male2.glb), and was
+ * diffed against it rather than re-measured from scratch. Same 116 nodes, same
+ * 109-joint skin, same UVs and weights, and all 51 morph targets byte-identical
+ * on every primitive whose vertex count did not change. What did change:
+ *
+ *   - The head texture (`Std_Skin_Head_Diffuse4`): a repainted face, 114 mean
+ *     luminance where it lands on the front of the face against the old 139.
+ *   - The beard (16522 -> 16834 verts) and brows (3368 -> 3370) were rebuilt.
+ *     Their jawOpen/mouthFunnel deltas were re-checked against the geometry:
+ *     jawOpen still drops the beard by 0.0306 at peak, mean (0, -0.016,
+ *     -0.009), exactly as on male2, so the beard still follows the jaw.
+ *   - The clip is exported at 24fps (716 keys over 29.79s) instead of 30fps
+ *     (894 keys). Sampled at the same seconds, the body pose matches male2's
+ *     to 0.00 rad over all 109 joints — the same motion, resampled.
+ *
+ * Everything below that was measured on male2 is therefore kept, and was re-run
+ * on this rig where the resample could have moved it. The loop windows in
+ * particular reproduce male2's behaviour through the simulated entry search to
+ * the frame (re-entries at f155, f303 and f577; crossfade gap within 1%), so
+ * they are left in male2's 30fps frame numbers rather than snapped to 24fps
+ * keys, which would have changed the loops for no gain.
  *
  * Replaces male1.glb, whose one real defect was that it carried NO morph targets
  * — so it had no lipsync and no blink, and drove a jaw bone as a stand-in. This
@@ -184,20 +211,29 @@ const FEMALE: AvatarConfig = {
  * none. This is the same failure mode male1's talking window hit, caught here by
  * measurement rather than by eye.
  *
- * If any window here changes, re-run the optimizer with the new numbers:
- *   python scripts/optimize_glb.py male_inital02.glb male2.glb \
- *       --keep-windows 137-219,300-393,559-780
- * It strips keyframes outside them, so a widened window seeks into frames that
- * are no longer in the file.
+ * If any window here changes, re-run the optimizer with the new numbers, given
+ * in the CLIP'S 24fps frames (the script reads the rate off the keys and adds a
+ * frame of margin each side) — so 137-219 at 30fps is 109.6-175.2, kept as:
+ *   python scripts/optimize_glb.py male_inital03.glb male3.glb \
+ *       --keep-windows 109-176,240-315,447-624
+ * then delete the male3.glb.gz it also writes (this rig is served raw, see
+ * `bytes`). It strips keyframes outside the windows, so a widened window seeks
+ * into frames that are no longer in the file.
  */
 const MALE: AvatarConfig = {
   id: "male",
-  url: "/models/male2.glb",
-  // Served uncompressed — no .gz is built for this one, so the two are equal
-  // and the progress readout needs no correction. (Gzip saves only 13% here:
-  // the file is 30MB of already-compressed JPEG/PNG textures, against girl15's
-  // 32% where the bulk is float animation curves.)
-  bytes: { decoded: 39817172, encoded: 39817172 },
+  // The raw export, NOT run through scripts/optimize_glb.py — served as-is while
+  // the rig is still being iterated on. male_inital05 is male_inital04 with a
+  // warmer head texture (Std_Skin_Head_Diffuse6, 135 mean luminance against 04's
+  // 143) and a rebuilt beard (16912 verts). Everything else matches 04: same
+  // skeleton and 24fps clip (keys to 0.001), same materials, and all 51 morph
+  // targets identical on every primitive but the beard, whose jawOpen still drops
+  // it by 0.0306 as before — so A2F lipsync, blink and the loop windows below are
+  // unchanged. (04 was 03 with a lighter head texture and its own beard rebuild.)
+  url: "/models/male_inital05.glb",
+  // Served uncompressed, so the two are equal and the progress readout needs no
+  // correction. 65MB, against the 39MB the optimizer would make of it.
+  bytes: { decoded: 65255428, encoded: 65255428 },
   segments: {
     // One full breathing cycle. The idle is periodic at ~82 frames (2.73s), with
     // troughs at f137 and f219, so this is a whole number of cycles and the loop
@@ -237,8 +273,9 @@ const MALE: AvatarConfig = {
   // offset below this rig's, at 1.632.
   headTargetY: 1.6,
   // The head skin is `lambert5` here, NOT the `Std_Skin_Head` male1 named it:
-  // this export renames the head material while keeping Std_Skin_Arm/Leg. Its
-  // texture is the same one male1's head used, so the tint below is unchanged.
+  // this export renames the head material while keeping Std_Skin_Arm/Leg. On
+  // male2 its texture was the one male1's head used; male3 repaints it — see
+  // the lambert5 note in materialTint below.
   skinMaterials: new Set(["lambert5", "Std_Skin_Arm", "Std_Skin_Leg"]),
   // Zero, unlike the female rig's 0.25. The lift exists to open up the shadow
   // side of a face that has one; his albedo is already 36% brighter than hers,
@@ -254,7 +291,11 @@ const MALE: AvatarConfig = {
   // authors 0.553 on all three skin materials (and a real value on every other
   // material too), so there is nothing left to correct and forcing 0.5 would
   // just overwrite what the artist set.
-  skinRoughness: null,
+  //
+  // male_inital04 and 05 drop roughnessFactor on lambert5 (the head), so it would
+  // load at glTF's fully rough 1.0 default. 0.5 is what 03 authored on the head;
+  // it also moves the arms and legs from 0.553 to 0.5, which is not visible.
+  skinRoughness: 0.5,
   // Scaled to bring this export's albedo onto the female rig's level under the
   // shared lights — see materialTint. The two garment entries are one texture
   // on two meshes (kurta and shalwar). Verified by rendering both rigs through
@@ -265,11 +306,19 @@ const MALE: AvatarConfig = {
   // 178) and the garment 240 (male1: 240), against girl15's skin 130 and kameez
   // 185. Same textures, same correction. The garment is one material here
   // (`pasted__pasted__lambert6`) rather than male1's two meshes sharing one.
+  //
+  // male3's head texture is the exception, and its 0.85 is kept ON PURPOSE. The
+  // repaint is darker (121 whole-texture mean, down from 175), and rendered
+  // through the same lights his face now sits at mean 103 / p95 142, against
+  // male2's 128 / 173 and girl15's 121 / 166. Raising lambert5 to ~1.03 would put
+  // it back on male2's level, but that would paint out the artist's change
+  // rather than correct an export fault, and on screen the darker face reads
+  // naturally against his hands. That is the one number to move if it should not.
   materialTint: {
     "pasted__pasted__lambert6": 0.62,
-    "lambert5": 0.85,
-    "Std_Skin_Arm": 0.85,
-    "Std_Skin_Leg": 0.85,
+    "lambert5": 0.95,
+    "Std_Skin_Arm": 0.95,
+    "Std_Skin_Leg": 0.95,
   },
   // No makeup on this rig — the pass would read back a texture to change nothing.
   faceMaterial: null,

@@ -68,7 +68,9 @@ FPS = 30.0
 # Must mirror the FEMALE rig's loop windows in
 # frontend/components/avatar/models.ts. Frames outside these windows are never
 # sampled: each segment is a self-contained loop and transitions crossfade
-# between them rather than playing through. Given as inclusive frame numbers.
+# between them rather than playing through. Given as inclusive frame numbers IN
+# THE CLIP'S OWN FRAME RATE, which is read off the key spacing (see clip_fps) —
+# girl15 is 30fps, male_inital03 is 24fps.
 #
 # These are the DEFAULT because girl15 is what this script was written for. Any
 # other rig has its own windows cut from its own curves and MUST pass them with
@@ -162,10 +164,30 @@ class BinBuilder:
         return b"".join(self.parts)
 
 
+def clip_fps(gltf, binary) -> float:
+    """The clip's frame rate, from the spacing of its densest keyframe curve.
+
+    Not assumed: male_inital03.glb is the same animation as male_inital02.glb
+    re-exported at 24fps, and trimming it by 30fps frame numbers keeps the wrong
+    keys with no error until the body seeks into one that is gone.
+    """
+    longest = []
+    for anim in gltf.get("animations", []):
+        for samp in anim["samplers"]:
+            if gltf["accessors"][samp["input"]]["count"] > len(longest):
+                longest = [t for (t,) in accessor_bytes(gltf, binary, samp["input"])[0]]
+    if len(longest) < 3:
+        return FPS
+    steps = sorted(b - a for a, b in zip(longest, longest[1:]))
+    return float(round(1.0 / steps[len(steps) // 2]))
+
+
 def optimize(src, dst, drop_morph_normals=True, quantize=True,
              keep_windows=None, trim_anim=True):
     gltf, binary = read_glb(src)
     before = len(binary)
+    fps = clip_fps(gltf, binary)
+    print(f"  clip frame rate     : {fps:g} fps (windows are read in these frames)")
 
     # ---- 1. trim animation keyframes to the windows the player can reach ----
     # Keys are selected by their POSITION IN THE CURVE, not by matching their
@@ -225,7 +247,7 @@ def optimize(src, dst, drop_morph_normals=True, quantize=True,
                 # starting at t=0.
                 t0 = times[0][0]
                 sel = [i for i, (t,) in enumerate(times)
-                       if wanted(int(round((t - t0) * FPS)) + int(round(t0 * FPS)))]
+                       if wanted(int(round((t - t0) * fps)) + int(round(t0 * fps)))]
                 if len(sel) < 2:
                     sel = [0, len(times) - 1]
             anim_kept += len(sel)
@@ -471,9 +493,9 @@ def main():
     ap.add_argument("--no-quantize", action="store_true",
                     help="keep cloth rotation/translation as float32")
     ap.add_argument("--keep-windows", metavar="A-B,C-D,...",
-                    help="inclusive frame windows to keep, overriding the "
-                         "female rig's. REQUIRED for any rig other than "
-                         "girl15 — see KEEP_WINDOWS.")
+                    help="inclusive frame windows to keep, in the clip's own "
+                         "frame rate, overriding the female rig's. REQUIRED "
+                         "for any rig other than girl15 — see KEEP_WINDOWS.")
     ap.add_argument("--no-trim-anim", action="store_true",
                     help="keep every animation keyframe (skips pass 1)")
     a = ap.parse_args()

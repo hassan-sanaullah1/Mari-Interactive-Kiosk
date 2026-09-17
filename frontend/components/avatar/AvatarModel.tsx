@@ -7,7 +7,7 @@
  * windows, material names, whether the rig has blendshapes at all); everything
  * in this file is the machinery they share. The notes below were written
  * against girl15.glb, which is still the default, and remain the reference for
- * how that rig's numbers were arrived at — see models.ts for male2.glb's.
+ * how that rig's numbers were arrived at — see models.ts for the male rig's.
  *
  * Ported from the working implementation (THREEJS_A2F_INTEGRATION.md §4/§5/§9).
  *
@@ -233,7 +233,7 @@ const AVATAR_POSITION_X = 0;
  * different colours if the shot ever widens.
  */
 // Per-rig, as `skinMaterials` in ./models.ts: girl15's lambert11/12/13 and
-// male2's lambert5/Std_Skin_Arm/Std_Skin_Leg.
+// the male rig's lambert5/Std_Skin_Arm/Std_Skin_Leg.
 
 /**
  * How much to lift skin, as an emissive term.
@@ -247,7 +247,7 @@ const AVATAR_POSITION_X = 0;
  */
 // Per-rig now, as `skinEmissive` in ./models.ts: the lift is proportional to
 // the texture it samples, so one number cannot serve two skin tones. girl15
-// keeps the 0.25 this constant held; male2 takes 0, because his albedo is
+// keeps the 0.25 this constant held; the male rig takes 0, because his albedo is
 // already bright enough that the term erased his shading instead of revealing
 // it. See that field for the measurements.
 
