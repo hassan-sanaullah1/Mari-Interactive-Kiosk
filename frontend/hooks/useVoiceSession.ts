@@ -131,6 +131,26 @@ function frameToPCM16(f: Float32Array, srcRate: number): ArrayBuffer {
   return out.buffer;
 }
 
+const MIC_CONSTRAINTS: MediaStreamConstraints = {
+  audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
+};
+
+/**
+ * getUserMedia, with one retry. Restarting a turn right after the last one ended
+ * can find the device not yet released (NotReadableError / AbortError), which used
+ * to surface as a failed tap the visitor had to repeat. A real refusal is final.
+ */
+async function openMic(): Promise<MediaStream> {
+  try {
+    return await navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
+  } catch (e) {
+    const name = (e as { name?: string })?.name;
+    if (name === "NotAllowedError" || name === "SecurityError") throw e;
+    await new Promise((r) => setTimeout(r, 300));
+    return navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
+  }
+}
+
 /** One turn's worth of reply audio, played sentence by sentence as it streams in. */
 type ReplyQueue = {
   push: (b: ArrayBuffer, mime: string, clip: string | null) => void;
@@ -184,6 +204,15 @@ export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
    * gone on reload — a kiosk greets the next visitor with a clean slate.
    */
   const historyRef = useRef<Message[]>([]);
+  /**
+   * Bumped by every startTurn and by everything that cancels one (stop, pause, a
+   * typed turn). startTurn awaits the mic and the AudioContext; if the number has
+   * moved on by the time they resolve, that turn was cancelled while it waited and
+   * must bow out instead of opening a second mic/socket behind the live one.
+   */
+  const turnRef = useRef(0);
+  /** The user-initiated start still waiting on the mic — see toggle(). */
+  const startingRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     historyRef.current = messages;
@@ -206,14 +235,26 @@ export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
   /** Queue of streamed reply sentences, played back-to-back. */
   const queueRef = useRef<ReplyQueue | null>(null);
 
-  /** The one AudioContext, created (and un-suspended) on a user gesture. */
+  /**
+   * The one AudioContext, created (and un-suspended) on a user gesture. Everything
+   * up to the first await runs synchronously, so calling this straight from a click
+   * handler creates/resumes the context while the gesture still counts.
+   */
   const ensureAudioContext = useCallback(async () => {
     const AC =
       window.AudioContext ||
       (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    acRef.current = acRef.current ?? new AC();
+    if (!acRef.current || acRef.current.state === "closed") acRef.current = new AC();
     const ac = acRef.current;
-    if (ac.state === "suspended") await ac.resume();
+    // "suspended", or Safari's "interrupted". resume() outside a gesture can stay
+    // pending forever instead of rejecting, which used to freeze the mic button
+    // until a second tap — so don't wait on it indefinitely.
+    if (ac.state !== "running") {
+      await Promise.race([
+        ac.resume().catch(() => {}),
+        new Promise((r) => setTimeout(r, 1500)),
+      ]);
+    }
     return ac;
   }, []);
 
@@ -460,12 +501,17 @@ export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
   }, [teardownMic]);
 
   const startTurn = useCallback(async () => {
+    const turn = ++turnRef.current;
     setError(null);
+    // Start unlocking audio NOW, before the first await, so it happens inside the
+    // click that started this turn rather than after the mic prompt resolves.
+    const acReady = ensureAudioContext().catch(() => null);
+
+    let stream: MediaStream;
     try {
-      mediaRef.current = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
-      });
+      stream = await openMic();
     } catch {
+      if (turn !== turnRef.current) return; // cancelled while waiting — not an error
       setError("mic-denied");
       activeRef.current = false;
       setActive(false);
@@ -473,7 +519,23 @@ export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
       return;
     }
 
-    const ac = await ensureAudioContext();
+    const ac = await acReady;
+    if (turn !== turnRef.current || !ac) {
+      // Cancelled (stop, pause, typed turn, or a newer start) while the mic was
+      // opening: release it rather than running a turn nobody is waiting for.
+      stream.getTracks().forEach((t) => t.stop());
+      if (turn === turnRef.current) {
+        setError("mic-denied");
+        activeRef.current = false;
+        setActive(false);
+        setMode("idle");
+      }
+      return;
+    }
+
+    // Never run two mics at once — drop whatever an earlier turn left open.
+    teardownMic();
+    mediaRef.current = stream;
 
     cancelledRef.current = false;
     endPendingRef.current = false;
@@ -611,12 +673,14 @@ export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
     mute.connect(ac.destination);
 
     setMode("listening");
-  }, [bindReplyStream, createQueue, endOfTurn, ensureAudioContext, finishTurn, historyPayload]);
+  }, [bindReplyStream, createQueue, ensureAudioContext, finishTurn, historyPayload, teardownMic]);
 
   startTurnRef.current = () => void startTurn();
 
   /** Hard stop: abandon the turn and the session. */
   const stop = useCallback(() => {
+    turnRef.current++; // cancels a turn still waiting on the mic
+    startingRef.current = null;
     cancelledRef.current = true;
     activeRef.current = false;
     pausedRef.current = false;
@@ -651,10 +715,19 @@ export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
     activeRef.current = true;
     pausedRef.current = false;
     setActive(true);
-    void startTurn();
+    const starting = startTurn();
+    startingRef.current = starting;
+    void starting.finally(() => {
+      if (startingRef.current === starting) startingRef.current = null;
+    });
   }, [startTurn]);
 
   const toggle = useCallback(() => {
+    // The mic takes a moment to open and the button shows nothing until it has,
+    // so visitors tap again — which used to STOP the turn they had just started,
+    // leaving the mic off. Ignore taps while a start is in flight; the ✕ button
+    // still cancels it if the mic prompt hangs.
+    if (startingRef.current) return;
     if (activeRef.current) stop();
     else start();
   }, [start, stop]);
@@ -675,6 +748,8 @@ export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
       }
     } else {
       pausedRef.current = true;
+      turnRef.current++; // a turn still opening its mic must not start after the hold
+      startingRef.current = null;
       try {
         audioElRef.current?.pause();
       } catch {}
@@ -715,6 +790,8 @@ export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
         audioElRef.current?.pause();
       } catch {}
       audioElRef.current = null;
+      turnRef.current++; // cancel a spoken turn still waiting on the mic
+      startingRef.current = null;
       teardownMic();
       try {
         wsRef.current?.close();

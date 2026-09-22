@@ -49,6 +49,8 @@ _AUDIO_WAIT_S = 12.0
 # The NIM appends ~1.5s of near-neutral frames after real speech; anything past
 # the clip's true audio length is dropped so the mouth doesn't hold a stale pose.
 _TAIL_TRIM_S = 0.05
+# One process-wide pool of NIM stream slots (see LipsyncTurn.__init__).
+_SLOTS = asyncio.Semaphore(C.A2F_MAX_CLIPS)
 
 
 def decode_to_pcm16_16k(data: bytes, mime: str = "") -> bytes:
@@ -122,7 +124,10 @@ class LipsyncTurn:
         self._client = client
         self._send = send
         self._turn_id = turn_id
-        self._slots = asyncio.Semaphore(C.A2F_MAX_CLIPS)
+        # Shared across turns: the NIM's slot count is global, so a per-turn
+        # semaphore let an overlapping turn (a second page, a chat reply, an
+        # interruption still draining) open a stream the NIM had no slot for.
+        self._slots = _SLOTS
         self._tasks: list[asyncio.Task] = []
         self._audio: dict[str, asyncio.Future] = {}
         self._sessions: set = set()

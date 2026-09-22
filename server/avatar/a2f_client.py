@@ -197,7 +197,16 @@ class A2FStreamSession:
         if self._writer_task is not None:
             self._write_queue.put_nowait(None)  # sentinel: writer exits after the queue
             await asyncio.wait([self._writer_task])
-        await self._stream.write(AudioStream(end_of_audio=AudioStream.EndOfAudio()))
+        try:
+            await self._stream.write(AudioStream(end_of_audio=AudioStream.EndOfAudio()))
+        except Exception:
+            # The NIM already ended the stream (e.g. "No available stream"), so the
+            # write fails with "RPC already finished". Surface the real error so the
+            # caller's retry can act on it.
+            await asyncio.wait([self._read_task], timeout=1.0)
+            if self._read_task.done():
+                await self._read_task
+            raise
         await self._read_task
         return self.frames_total
 
@@ -273,10 +282,12 @@ class A2FClient:
     def _get_channel(self):
         if self._channel is None:
             options = [
-                # Keep the connection alive between utterances.
+                # Ping only while a clip is streaming. Pinging an idle channel every
+                # 30s broke the NIM's default ping policy: it answered with GOAWAY
+                # "too_many_pings" and dropped the connection mid-conversation.
                 ("grpc.keepalive_time_ms", 30000),
                 ("grpc.keepalive_timeout_ms", 10000),
-                ("grpc.keepalive_permit_without_calls", 1),
+                ("grpc.keepalive_permit_without_calls", 0),
             ]
             if self._secure:
                 root_certs = None

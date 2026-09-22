@@ -147,7 +147,10 @@ export function applyA2FLipsync(
     for (const { mesh, touched } of state.meshes) {
       const influences = mesh.morphTargetInfluences!;
       for (const idx of touched) {
-        influences[idx] = THREE.MathUtils.lerp(influences[idx], 0, delta * 10);
+        // Clamped: an unclamped `delta * 10` past 1 overshoots zero and flips
+        // sign every frame, so one long frame gap (a backgrounded tab) blows
+        // the face apart and leaves it stuck there.
+        influences[idx] = THREE.MathUtils.lerp(influences[idx], 0, Math.min(1, delta * 10));
         if (influences[idx] > residual) residual = influences[idx];
       }
     }

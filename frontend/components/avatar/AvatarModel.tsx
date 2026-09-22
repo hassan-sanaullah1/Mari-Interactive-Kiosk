@@ -693,6 +693,9 @@ function advanceLayer(
   if (layer.time > loopEnd) layer.time = loopEnd;
 }
 
+/** Seconds a tab must stay hidden before its face data is refreshed on return. */
+const FACE_REFRESH_AFTER_SECS = 10;
+
 export interface AvatarModelProps {
   url: string;
   /** Which rig this is, and everything that differs about it — see ./models.ts. */
@@ -1136,6 +1139,55 @@ export default function AvatarModel({
       }),
     [morphMeshes],
   );
+
+  // ── FACE REFRESH AFTER A LONG TIME IN THE BACKGROUND ────────
+  /**
+   * A tab left in the background for a long time can come back with the face
+   * torn or frozen mid-word, and only a reload clears it. The morph values
+   * this app sends stay in range throughout (checked by probing the uploaded
+   * uniforms), so what goes stale is the face's GPU-side data. On return,
+   * do for the face what a reload would: zero every morph, reset the lipsync
+   * mixer's state, and dispose the face geometry so three.js re-uploads its
+   * buffers and rebuilds the morph texture from the CPU copies on the next
+   * render. Runs only on that return, never while she speaks.
+   */
+  useEffect(() => {
+    if (morphMeshes.length === 0) return;
+    const canvas = gl.domElement;
+    let hiddenAt: number | null = null;
+    let contextLost = false;
+    const onContextLost = () => {
+      contextLost = true;
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenAt = performance.now();
+        contextLost = false;
+        return;
+      }
+      if (hiddenAt === null) return;
+      const awaySecs = (performance.now() - hiddenAt) / 1000;
+      hiddenAt = null;
+      if (awaySecs < FACE_REFRESH_AFTER_SECS) return;
+
+      for (const mesh of morphMeshes) {
+        mesh.morphTargetInfluences!.fill(0);
+        mesh.geometry.dispose();
+      }
+      a2fStateRef.current = createA2FMorphState();
+      blinkRef.current.blinkProgress = 0;
+      console.info(
+        `[Avatar] tab back after ${awaySecs.toFixed(0)}s — face data refreshed ` +
+          `(context lost while away: ${contextLost ? "yes" : "no"}).`,
+      );
+    };
+    canvas.addEventListener("webglcontextlost", onContextLost);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      canvas.removeEventListener("webglcontextlost", onContextLost);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [morphMeshes, gl]);
 
   // ── PER-FRAME UPDATE ────────────────────────────────────────
   // Priority -1: runs before default-priority callbacks, so anything else that
