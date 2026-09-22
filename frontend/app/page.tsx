@@ -71,13 +71,11 @@ export default function Page() {
   return (
     <main className={styles.root}>
       {/* The supplied artwork — real image assets, not a CSS recreation.
-          <picture> art-directs it: phones get the portrait crop and never
-          download the landscape one (and vice versa). */}
-      <picture>
-        <source srcSet="/mobile_background.png" media="(max-width: 760px)" />
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className={styles.bg} src="/background.png" alt="" fetchPriority="high" />
-      </picture>
+          Picked in page.module.css by viewport and by the `data-theme` the
+          inline script in layout.tsx sets before first paint, so only the one
+          crop for the current theme downloads and a light-theme load never
+          flashes the dark art first. */}
+      <div className={styles.bg} aria-hidden />
       {/* The 3D presenter. `mode` drives her body animation (idle → listening →
           talking); her mouth is driven separately by the Audio2Face frames that
           arrive alongside the reply audio. */}
