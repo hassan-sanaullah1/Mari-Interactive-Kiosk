@@ -31,16 +31,19 @@ export function avatarStateFor(mode: Mode): AvatarState {
  * default rig's URL under its original name, for app/netcheck, which times a
  * cold and a warm fetch of one representative model rather than of every rig.
  *
- * This points at the UNCOMPRESSED .glb on purpose, even though a .gz sits next
- * to it and is 10MB smaller. The deployed host throttles each connection rather
- * than the account: measured against it, the 20MB gzip on one stream takes 118s,
- * while the 30MB raw file pulled as six parallel byte ranges takes 32s. Range
- * requests index the bytes on the wire, so a gzip stream cannot be split that
- * way — the smaller file is the slower one here.
+ * This is the .gz, and lib/avatarFetch.ts fetches it with ONE plain GET.
  *
- * lib/avatarFetch.ts does the splitting and falls back to a single stream when
- * the server will not serve ranges, so this stays correct on a host that
- * behaves differently. The .gz is still built and served (see next.config.ts)
- * for exactly that fallback path.
+ * An older comment here claimed the raw .glb was faster because the file was
+ * pulled as six parallel byte ranges, which a gzip stream cannot be split into.
+ * That implementation no longer exists — avatarFetch.ts is a single GET and says
+ * in its own header not to add Range headers, because ranged responses (206) are
+ * never written to the browser's disk cache, so every reload re-downloaded the
+ * whole model. The comment outlived the code and is corrected here.
+ *
+ * With one GET, smaller simply wins. The raw 30MB girl15.glb was abandoned
+ * mid-download by a real client (ERR_NETWORK_CHANGED, no avatar); the 20MB .gz is
+ * a third less to carry. This page (/netcheck) is how to measure the rest, from
+ * the kiosk rather than from a developer machine whose own link may be the
+ * bottleneck — which is exactly what happened the first time it was measured.
  */
 export const AVATAR_MODEL_URL = AVATARS[DEFAULT_AVATAR].url;

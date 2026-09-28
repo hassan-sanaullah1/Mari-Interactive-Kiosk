@@ -84,7 +84,7 @@ const f = (frame: number) => frame / FPS;
  */
 const FEMALE: AvatarConfig = {
   id: "female",
-  url: "/models/girl15.glb",
+  url: "/models/girl15.glb.gz",
   bytes: { decoded: 29813520, encoded: 20165542 },
   segments: {
     breathing: { loop: [f(119), f(241)] },
@@ -98,7 +98,7 @@ const FEMALE: AvatarConfig = {
 
 /**
  * male_inital08.glb — the alternate presenter. The raw export, NOT run through
- * scripts/optimize_glb.py: served as-is while the rig is still being iterated on.
+ * scripts/optimize_glb.py: used as exported while the rig is still being iterated on.
  *
  * Diffed against male_inital05 (the previous export) rather than re-measured from
  * scratch. Same 116 nodes, same 109-joint skin, the same 51 ARKit morph names, and
@@ -158,10 +158,15 @@ const FEMALE: AvatarConfig = {
  */
 const MALE: AvatarConfig = {
   id: "male",
-  url: "/models/male_inital08.glb",
-  // Served uncompressed, so the two are equal and the progress readout needs no
-  // correction. 66MB, against the ~39MB the optimizer would make of it.
-  bytes: { decoded: 65923940, encoded: 65923940 },
+  url: "/models/male_inital08.glb.gz",
+  // Served as the pre-compressed .gz (next.config.ts), so `encoded` is what
+  // actually crosses the wire and `decoded` is what the reader counts — the ratio
+  // keeps the loading percentage honest. 66MB raw, 42MB gzipped.
+  //
+  // This rig is still the raw export, NOT run through scripts/optimize_glb.py,
+  // which would take it to ~39MB BEFORE compression. Run the optimizer before
+  // this rig goes in front of anyone on a slow link.
+  bytes: { decoded: 65923940, encoded: 42443574 },
   segments: {
     // One full breathing cycle, re-cut for the 30fps timing: seam 0.077 rad over
     // 109 joints, re-enters at f100 and plays 1.97s of its 2.53s (78%), and the

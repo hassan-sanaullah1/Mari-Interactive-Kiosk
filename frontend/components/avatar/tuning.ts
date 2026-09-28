@@ -314,6 +314,12 @@ export interface RigTuning {
   /** A2F weight calibration, or null for a rig with no morphs to calibrate. */
   a2f: { gain: number; shapeGains: Record<string, number> } | null;
   /**
+   * Uniform scale on both wrist bones — hands and fingers together, with the
+   * wrist itself staying put. 1 leaves the rig as authored. See AvatarModel's
+   * HAND SCALE block for how it survives the animation.
+   */
+  handScale: number;
+  /**
    * The light rig under the light theme. The light backdrop is near-white, so a
    * rig lit for the dark one reads as a dark cut-out against it. Per-rig
    * because the two albedos differ (see materialTint) and so need different
@@ -348,6 +354,7 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
     materialTint: {},
     faceMaterial: "lambert12",
     a2f: { gain: 0.9, shapeGains: { jawopen: 0.375 } },
+    handScale: 1,
     lightThemeLighting: { exposure: 1.2, ambient: 0.6, fill: 1.8, environment: 1.3 },
     // The authored rig, unchanged.
     darkThemeLighting: DARK_LIGHTING,
@@ -439,6 +446,12 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
     // the same amplitudes — the jawOpen delta here is 0.027 against her 0.025.
     // Worth a look on screen even so; ?a2fGain= and ?a2fShapes= retune it live.
     a2f: { gain: 0.9, shapeGains: { jawopen: 0.375 } },
+    // 1 = the hands as authored. Measured off male_inital05, they are 11.3% of his
+    // height long and 7.6% wide, against the female rig's 10.4% and 6.4%, and the
+    // camera enlarges them further because they are held in front of his face.
+    // Lower this (0.9 or so) to shrink them; much below 0.85 the wrist starts to
+    // show a step at the cuff.
+    handScale: 1,
     // Brighter in the shadows than the shared rig, on both themes: ambient and
     // fill only, so what lifts is the shaded side of his face, his beard and the
     // folds of the kurta rather than the whole image. Exposure is left alone

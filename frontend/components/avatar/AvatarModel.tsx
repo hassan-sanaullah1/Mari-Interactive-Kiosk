@@ -696,6 +696,23 @@ function advanceLayer(
 /** Seconds a tab must stay hidden before its face data is refreshed on return. */
 const FACE_REFRESH_AFTER_SECS = 10;
 
+/**
+ * Procedural blink timing. A gap is drawn uniformly from [MIN, MIN + SPREAD]
+ * seconds, so 4-8s here — about ten a minute, a calm speaker's rate. Each blink
+ * takes BLINK_SECS end to end: the lid closes over the first BLINK_CLOSE_FRAC of
+ * it and reopens over the rest, since real lids drop fast and lift slowly.
+ */
+const BLINK_GAP_MIN_SECS = 4;
+const BLINK_GAP_SPREAD_SECS = 4;
+const BLINK_SECS = 0.3;
+const BLINK_CLOSE_FRAC = 0.35;
+
+const smoothstep = (x: number) => x * x * (3 - 2 * x);
+
+/** The bones `config.handScale` applies to, and the clip tracks that would undo it. */
+const HAND_BONES = ["Wrist_L", "Wrist_R"];
+const HAND_SCALE_TRACKS = new Set(HAND_BONES.map((bone) => `${bone}.scale`));
+
 export interface AvatarModelProps {
   url: string;
   /** Which rig this is, and everything that differs about it — see ./models.ts. */
@@ -774,6 +791,24 @@ export default function AvatarModel({
   // they only collapse into one when the first finishes before the others
   // start, which is exactly what does NOT happen on a slow connection.
   const { scene, animations } = useGLTF(url, undefined, undefined, useSharedFetch);
+
+  // ── HAND SCALE ──────────────────────────────────────────────
+  // `config.handScale` is set on the wrist bones once, below. The clip carries a
+  // scale track for each wrist (constant 1.0 on every rig here), and the mixer
+  // rewrites that every frame, AFTER this component's own useFrame — so the
+  // tracks are dropped instead of fought. That has to happen before
+  // useAnimations binds its actions, hence here and not in an effect. It mutates
+  // the cached clip in place, which is idempotent and harmless for a scale of 1.
+  if (config.handScale !== 1) {
+    for (const clip of animations) {
+      clip.tracks = clip.tracks.filter((track) => !HAND_SCALE_TRACKS.has(track.name));
+    }
+  }
+  useEffect(() => {
+    for (const name of HAND_BONES) {
+      scene.getObjectByName(name)?.scale.setScalar(config.handScale);
+    }
+  }, [scene, config.handScale]);
   const groupRef = useRef<THREE.Group>(null);
   const blinkRef = useRef({ nextBlink: 2, blinkProgress: 0 });
   const a2fStateRef = useRef(createA2FMorphState());
@@ -1343,13 +1378,19 @@ export default function AvatarModel({
     blink.nextBlink -= delta;
     if (blink.nextBlink <= 0) {
       blink.blinkProgress = 1;
-      blink.nextBlink = 2 + Math.random() * 4;
+      blink.nextBlink = BLINK_GAP_MIN_SECS + Math.random() * BLINK_GAP_SPREAD_SECS;
     }
     if (blink.blinkProgress > 0) {
-      blink.blinkProgress = Math.max(0, blink.blinkProgress - delta * 8);
+      blink.blinkProgress = Math.max(0, blink.blinkProgress - delta / BLINK_SECS);
     }
+    // blinkProgress counts 1 -> 0; t is how far through the blink we are.
+    const t = 1 - blink.blinkProgress;
     const blinkValue =
-      blink.blinkProgress > 0.5 ? (1 - blink.blinkProgress) * 2 : blink.blinkProgress * 2;
+      blink.blinkProgress <= 0
+        ? 0
+        : t < BLINK_CLOSE_FRAC
+          ? smoothstep(t / BLINK_CLOSE_FRAC)
+          : 1 - smoothstep((t - BLINK_CLOSE_FRAC) / (1 - BLINK_CLOSE_FRAC));
 
     for (const { mesh, left, right } of blinkTargets) {
       const influences = mesh.morphTargetInfluences!;
