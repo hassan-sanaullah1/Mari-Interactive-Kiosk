@@ -42,8 +42,8 @@ async def _messages(text: str, lang: str, history: list | None,
                     avatar: str) -> tuple[list[dict], int]:
     system_prompt = await rag.system_prompt(lang, text, history, avatar)
     reply_tokens = max_tokens(lang)
-    system_prompt = fit_system_prompt(system_prompt, text, reply_tokens)
-    kept = fit_history(system_prompt, text, history_messages(history), reply_tokens)
+    system_prompt = fit_system_prompt(system_prompt, text, reply_tokens, lang)
+    kept = fit_history(system_prompt, text, history_messages(history), reply_tokens, lang)
     messages = [
         {"role": "system", "content": system_prompt},
         *kept,

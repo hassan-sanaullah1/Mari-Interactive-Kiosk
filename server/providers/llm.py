@@ -39,7 +39,7 @@ def _payload(messages: list[dict], max_tokens: int, stream: bool) -> dict:
     return {
         "model": C.LLM_MODEL,
         "messages": messages,
-        "temperature": 0.7,
+        "temperature": C.LLM_TEMPERATURE,
         "max_tokens": max_tokens,
         "stream": stream,
         **_extra_params(),

@@ -64,6 +64,10 @@ else:
     LLM_KEY = env("APP_VLLM_API_KEY")
     LLM_MODEL = env("APP_VLLM_MODEL", "qwen3.5")
 
+# Low on purpose: the reply must restate figures and dates from the retrieved knowledge,
+# and at 0.7 the model swapped them ("share price 54.25" for EPS, July 2026 as May).
+LLM_TEMPERATURE = float(env("APP_LLM_TEMPERATURE", "0.3"))
+
 # ── Urdu STT — Soniox realtime (websocket) ──────────────────────────
 SONIOX_KEY = env("APP_SONIOX_API_KEY")
 SONIOX_URL = env("APP_SONIOX_BASE_URL", "wss://stt-rt.jp.soniox.com/transcribe-websocket")
@@ -86,11 +90,11 @@ try:
 except ValueError:  # a typo in the env must not take the voice down
     UPLIFT_SPEED = 0.9
 
-# English has its own, slower rate: the English prose read as rushed.
+# English has its own rate, tuned by ear on the deployed kiosk.
 try:
-    UPLIFT_SPEED_EN = float(env("APP_UPLIFT_SPEED_EN", "0.78"))
+    UPLIFT_SPEED_EN = float(env("APP_UPLIFT_SPEED_EN", "0.98"))
 except ValueError:
-    UPLIFT_SPEED_EN = 0.85
+    UPLIFT_SPEED_EN = 0.98
 
 # ── English STT/TTS. Urdu always uses Soniox/Uplift. English TTS defaults to Uplift
 #    because no Kokoro instance is deployed; set APP_EN_TTS=local|remote when one is. ──

@@ -16,10 +16,15 @@ from ..services.generation import CONTEXT_HEADER
 logger = logging.getLogger(__name__)
 
 LLM_CONTEXT_TOKENS = 8192
-# Measured on the streaming path: 14,831 characters of Urdu prompt = 7,773 input tokens
-# (1.91 chars/token). Kept below that, since overflow costs the whole turn while an
-# over-tight estimate costs one old exchange of history.
-LLM_CHARS_PER_TOKEN = 1.75
+# Urdu. Overflow costs the whole turn, but an over-tight estimate is not free either:
+# the trim cuts retrieved knowledge, not history, and at the old 1.75 the female Urdu
+# prompt kept only 23-39% of its knowledge. Re-measured with stream usage, full Urdu
+# prompts plus an 8-message history came to 2.49-2.81 chars/token.
+LLM_CHARS_PER_TOKEN = 2.2
+# English packs far more characters into a token. Under the Urdu ratio the trim cut
+# 91-98% of the retrieved knowledge off every English turn and the model answered from
+# the brief alone. A full English prompt measured 3.99 chars/token; 3.0 keeps a margin.
+LLM_CHARS_PER_TOKEN_EN = 3.0
 # Headroom for the chat template's own scaffolding and tokenizer disagreement.
 LLM_CONTEXT_SAFETY_TOKENS = 256
 
@@ -28,17 +33,24 @@ MAX_HISTORY_TURNS = 8
 MAX_HISTORY_CHARS = 400
 
 # Urdu replies of the length the prompt asks for ran past 220 tokens and were cut
-# mid-word. The prompt keeps replies short; this only has to avoid truncating one.
-_MAX_TOKENS = {"en": 220, "ur": 420}
+# mid-word. English was raised from 220 for the same reason: a broad overview answer
+# names each part of the topic. The prompt keeps replies short; this only has to avoid
+# truncating one.
+_MAX_TOKENS = {"en": 320, "ur": 420}
 
 
 def max_tokens(lang: str) -> int:
     return _MAX_TOKENS.get(lang, _MAX_TOKENS["en"])
 
 
-def _budget_chars(reply_tokens: int) -> int:
+def _chars_per_token(lang: str) -> float:
+    """The conservative ratio for this turn's language; Urdu's is the default."""
+    return LLM_CHARS_PER_TOKEN_EN if lang == "en" else LLM_CHARS_PER_TOKEN
+
+
+def _budget_chars(reply_tokens: int, lang: str = "ur") -> int:
     return int(max(LLM_CONTEXT_TOKENS - reply_tokens - LLM_CONTEXT_SAFETY_TOKENS, 0)
-               * LLM_CHARS_PER_TOKEN)
+               * _chars_per_token(lang))
 
 
 def history_messages(history) -> list[dict]:
@@ -64,13 +76,13 @@ def history_messages(history) -> list[dict]:
 
 
 def fit_history(system_prompt: str, question: str, history: list[dict],
-                reply_tokens: int) -> list[dict]:
+                reply_tokens: int, lang: str = "ur") -> list[dict]:
     """Drop the oldest history messages until the request fits.
 
     The system prompt and question are never trimmed here. If they alone overflow,
     nothing is kept and the upstream error surfaces rather than being hidden.
     """
-    budget_chars = _budget_chars(reply_tokens)
+    budget_chars = _budget_chars(reply_tokens, lang)
     fixed = len(system_prompt) + len(question)
     room = budget_chars - fixed
     if room <= 0:
@@ -93,7 +105,8 @@ def fit_history(system_prompt: str, question: str, history: list[dict],
     return kept
 
 
-def fit_system_prompt(system_prompt: str, question: str, reply_tokens: int) -> str:
+def fit_system_prompt(system_prompt: str, question: str, reply_tokens: int,
+                      lang: str = "ur") -> str:
     """Trim the tail of the retrieved context until the prompt itself fits.
 
     The Urdu prompt can overflow with no history at all. Retrieved sections arrive
@@ -101,7 +114,7 @@ def fit_system_prompt(system_prompt: str, question: str, reply_tokens: int) -> s
     instead would cut the reply mid-sentence. Persona and core brief sit above
     CONTEXT_HEADER and are never cut.
     """
-    room = _budget_chars(reply_tokens) - len(question)
+    room = _budget_chars(reply_tokens, lang) - len(question)
     if len(system_prompt) <= room:
         return system_prompt
 
