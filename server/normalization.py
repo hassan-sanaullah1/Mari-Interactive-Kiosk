@@ -687,17 +687,14 @@ _RANK_SUFFIX_UR_RE = re.compile(
 _BARE_SUFFIX_RE = re.compile(r"\s*\((Retd\.?|Retired|R|Late)\)", re.IGNORECASE)
 _BARE_SUFFIX_UR_RE = re.compile(rf"\s*\((?:{_SUFFIX_TOKEN_UR})\)", re.IGNORECASE)
 
-# Military honours, said in full as Pakistanis say them. Latin "HI(M)" is read "HIV" and
-# Latin "Hilal-e-Imtiaz" is garbled, but the Urdu spelling with the izafat written as ے
-# round-trips as "Hilal-e-Imtiaz Military" in both languages.
+# Military honours, said in full in Urdu mode as Pakistanis say them. Latin "HI(M)" is
+# read "HIV" and Latin "Hilal-e-Imtiaz" is garbled, but the Urdu spelling with the izafat
+# written as ے round-trips as "Hilal-e-Imtiaz Military". English mode drops the honour
+# instead: it is a decoration, not a fact a visitor needs read aloud, and Urdu script
+# has no place in an English reply.
 _HONOUR_SAID = {
     "HI": "ہلالے امتیاز ملٹری", "SI": "ستارۂ امتیاز ملٹری",
     "TI": "تمغۂ امتیاز ملٹری", "NI": "نشانے امتیاز ملٹری",
-}
-# Kokoro cannot read Urdu script; its lexicon says these Latin forms.
-_HONOUR_SAID_KOKORO = {
-    "HI": "Hilal-e-Imtiaz Military", "SI": "Sitara-e-Imtiaz Military",
-    "TI": "Tamgha-e-Imtiaz Military", "NI": "Nishan-e-Imtiaz Military",
 }
 _HONOUR_UR_LETTERS = {"ایچ آئی": "HI", "ایس آئی": "SI", "ٹی آئی": "TI", "این آئی": "NI"}
 _HONOUR_WORDS = {"hilal": "HI", "ہلال": "HI", "sitara": "SI", "ستارہ": "SI", "ستارۂ": "SI",
@@ -720,18 +717,20 @@ _COMMA_BEFORE_SUFFIX_RE = re.compile(r"[,،]\s*(?=\((?:Retd\.?|Retired|R|Late)\)
 _ORPHAN_COMMA_RE = re.compile(r"[,،]\s*(?=[,،])|[,،](?=\s*(?:۔|\.|$))|،(?=\s+ہیں)")
 
 
-def _say_honour(match: re.Match[str], lang: str, kokoro: bool = False) -> str:
+def _say_honour(match: re.Match[str], lang: str) -> str:
+    suffix = (match.group("suffix") or "").strip(" ,،")
+    if lang != "ur":
+        # Dropped, keeping any "(Retd)" it was holding apart from the name.
+        return f" {suffix}" if suffix else ""
     if match.group("abbr"):
         abbr = re.sub(r"\s+", " ", match.group("abbr"))
         key = _HONOUR_UR_LETTERS.get(abbr, abbr.upper())
     else:
         key = _HONOUR_WORDS[match.group("word").lower()]
-    suffix = (match.group("suffix") or "").strip(" ,،")
     # Keep the separator only if the honour followed something ("Hyder, HI(M)").
     lead = match.group(0)[:1]
-    comma = ("،" if lang == "ur" else ",") if lead in ",،" else (" " if lead.isspace() else "")
-    said = (_HONOUR_SAID_KOKORO if kokoro else _HONOUR_SAID)[key]
-    return f"{' ' + suffix if suffix else ''}{comma}{' ' if comma.strip() else ''}{said}"
+    comma = "،" if lead in ",،" else (" " if lead.isspace() else "")
+    return f"{' ' + suffix if suffix else ''}{comma}{' ' if comma.strip() else ''}{_HONOUR_SAID[key]}"
 
 
 # Honorifics before a name. English reads "Mr." and "Dr." correctly; Urdu needs them in
@@ -762,7 +761,7 @@ def spoken_names_and_ranks(text: str, lang: str = "en", changes: Changes | None 
     if not text:
         return text
 
-    text = _sub(_HONOURS_RE, lambda m: _say_honour(m, lang, kokoro), text, changes)
+    text = _sub(_HONOURS_RE, lambda m: _say_honour(m, lang), text, changes)
     # Before the rank-suffix rules, whose pattern a leftover comma would break.
     text = _sub(_COMMA_BEFORE_SUFFIX_RE, " ", text, changes)
     text = _sub(_ORPHAN_COMMA_RE, "", text, changes)

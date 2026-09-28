@@ -253,8 +253,14 @@ def _configure(a, monkeypatch_setattr) -> FakeNet:
         "LLM_BASE": "http://llm.test/v1", "LLM_KEY": "k", "LLM_MODEL": "qwen3.5",
         "LLM_PROVIDER": "vllm", "FORCE_DEMO": False, "UPLIFT_KEY": "u",
         "EN_TTS": "uplift", "SONIOX_KEY": "", "A2F_URL": "",
+        # Voice ids land in every TTS payload, so a developer's .env must not leak in.
+        "UPLIFT_VOICE": "v_8eelc901v6", "UPLIFT_VOICE_EN": "v_8eelc901v6",
+        "UPLIFT_VOICE_MALE": "v_8eelc901v6",
     }.items():
         monkeypatch_setattr(C, key, value)
+    from server.providers import tts
+
+    monkeypatch_setattr(tts, "_tts_cache", {})
     monkeypatch_setattr(avatar, "_client", None)
     monkeypatch_setattr(avatar, "_resolved", False)
     rag = a["rag"]

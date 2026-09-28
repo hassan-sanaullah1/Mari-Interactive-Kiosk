@@ -96,11 +96,11 @@ def test_the_salam_returned_and_offered() -> None:
     assert "(/ʌssəlˈaːmʊ ʌlˈɛːkʊm/)" in said
 
 
-def test_chairman_line_keeps_rank_order_and_says_the_honour() -> None:
+def test_chairman_line_keeps_rank_order_and_drops_the_honour() -> None:
     said = kokoro("Board Chairman: Lt. Gen. Anwar Ali Hyder, HI(M), (Retd)")
     assert said.startswith("Board Chairman: Retired [Lieutenant](/lɛftˈɛnənt/) General "
                            "Anwar [Ali](/ˈəli/) [Hyder](/")
-    assert "[Hilal-e-Imtiaz](/hɪlˈaːleː ˌɪmtɪjˈaːz/) Military" in said
+    assert "Imtiaz" not in said and "Military" not in said
     assert "HI(M)" not in said and "(Retd)" not in said
 
 

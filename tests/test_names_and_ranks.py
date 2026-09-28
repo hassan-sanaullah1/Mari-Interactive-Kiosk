@@ -118,19 +118,24 @@ def test_ranks_are_urdu_script_in_urdu_mode() -> None:
 HILAL = "ہلالے امتیاز ملٹری"
 
 
-@pytest.mark.parametrize("lang", ["en", "ur"])
-def test_honour_is_said_in_full(lang: str) -> None:
+def test_honour_is_said_in_full_in_urdu() -> None:
     """Latin "HI(M)" is read as "HIV" and Latin "Hilal-e-Imtiaz" is garbled; the Urdu
     spelling with the izafat written as ے round-trips as "Hilal-e-Imtiaz Military"."""
-    said = spoken_names_and_ranks("Anwar Ali Hyder, HI(M), is the Chairman.", lang)
+    said = spoken_names_and_ranks("Anwar Ali Hyder, HI(M), is the Chairman.", "ur")
     assert HILAL in said
     assert "HI(M)" not in said and "HI" not in said
 
 
-def test_the_honour_follows_the_name_and_retired_moves_to_the_front() -> None:
+def test_honour_is_dropped_in_english() -> None:
+    """English mode leaves the decoration out rather than reading Urdu script aloud."""
+    said = spoken_names_and_ranks("Anwar Ali Hyder, HI(M), is the Chairman.", "en")
+    assert HILAL not in said
+    assert "HI(M)" not in said and "HI" not in said
+
+
+def test_the_honour_is_dropped_and_retired_moves_to_the_front() -> None:
     said = spoken_names_and_ranks("Lt. Gen. Anwar Ali Hyder, HI(M), (Retd) is Chairman.", "en")
-    assert said.startswith("Retired Lieutenant General انور علی حیدر, " + HILAL)
-    assert ", ," not in said and " ," not in said and "(Retd)" not in said
+    assert said == "Retired Lieutenant General انور علی حیدر is Chairman."
 
 
 @pytest.mark.parametrize(
@@ -180,10 +185,10 @@ def test_chairman_line_from_the_knowledge_base() -> None:
     """The worst case found: the raw line came back as "Lifting in general and more
     early hike spread is the chairman"."""
     said = normalize_for_tts("Board Chairman: Lt. Gen. Anwar Ali Hyder, HI(M), (Retd)", "en")
-    # Every part of the line is now rewritten: the rank spelled out, the honour said in
-    # full, the suffix moved in front, and the name itself respelled in Urdu script.
+    # Every part of the line is now rewritten: the rank spelled out, the honour dropped,
+    # the suffix moved in front, and the name itself respelled in Urdu script.
     assert said.startswith("Board Chairman: Retired Lieutenant General ")
-    assert "انور علی حیدر" in said and HILAL in said
+    assert "انور علی حیدر" in said and HILAL not in said
     assert "HI(M)" not in said and "(Retd)" not in said
 
 
