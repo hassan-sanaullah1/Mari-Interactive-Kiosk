@@ -85,6 +85,7 @@ export default function Page() {
         levelRef={voice.levelRef}
         onReady={onAvatarReady}
         ready={avatarReady}
+        theme={theme}
       />
 
       <LanguageBar

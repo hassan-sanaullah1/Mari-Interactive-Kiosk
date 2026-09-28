@@ -15,13 +15,23 @@
  * Adding a third rig means measuring its clip the same way (see SEGMENTS on each
  * entry for what the numbers mean) rather than reusing another rig's windows —
  * they are properties of the authored animation, not of this app.
+ *
+ * What lives here is what describes the ASSET: where it is, how big it is, which
+ * windows of its clip loop, and whether it carries morph targets. Everything
+ * that decides how it LOOKS — framing, skin, tints, A2F gains and the per-theme
+ * light rig — is in ./tuning.ts and is folded into each entry below, so a rig in
+ * hand still answers `config.skinEmissive` and the rest exactly as before.
  */
+
+import { RIG_TUNING, type RigTuning } from "./tuning";
 
 /**
  * The rate the windows below are quoted in, and the rate the pose index samples
- * at. girl15's clip is authored at 30fps; male3's is the same animation exported
- * at 24fps, whose windows are still quoted as 30fps frames because a window is a
- * position in seconds, not a keyframe — see MALE.
+ * at. Both clips are authored at 30fps again — the male exports 03 to 05 were the
+ * same animation at 24fps, whose windows were still quoted as 30fps frames because
+ * a window is a position in seconds, not a keyframe. male_inital06 went back to
+ * 30fps, which is why its windows had to be re-cut rather than re-labelled; see
+ * MALE.
  */
 export const FPS = 30;
 
@@ -38,7 +48,13 @@ export interface Segment {
   loop: [number, number];
 }
 
-export interface AvatarConfig {
+/**
+ * One presenter: the asset facts below, plus everything in its RigTuning entry.
+ * Extending rather than re-listing is what keeps `config.materialTint` and the
+ * rest reachable from a single object, so moving the look values into
+ * ./tuning.ts changed no consumer.
+ */
+export interface AvatarConfig extends RigTuning {
   id: AvatarId;
   /** Where the rig lives, served from frontend/public. */
   url: string;
@@ -49,64 +65,11 @@ export interface AvatarConfig {
    */
   bytes: { decoded: number; encoded: number };
   segments: Record<BodyState, Segment>;
-  /** Height in metres, used to frame the shot until the rig reports its real one. */
-  fallbackHeight: number;
-  /** World Y the face spot aims at — the centre of this rig's face. */
-  headTargetY: number;
-  /**
-   * Materials textured with skin, which get the emissive lift. Read off each
-   * glTF's baseColorTexture rather than guessed from the names.
-   */
-  skinMaterials: Set<string>;
-  /**
-   * How much to lift the skin materials above, as an emissive term driven by
-   * their own base colour texture (see AvatarModel's material pass).
-   *
-   * Per-rig because it is a function of the rig's albedo, not of the scene: the
-   * lift is proportional to the texture it samples, so the same number does
-   * visibly different amounts of work on two different skin tones.
-   */
-  skinEmissive: number;
-  /**
-   * Roughness to force on the skin materials, or null to keep what the export
-   * authored.
-   *
-   * Only set this where the export omitted `roughnessFactor`, which glTF
-   * defaults to 1.0 — fully rough, so the surface takes a broad even sample of
-   * the environment with no specular highlight.
-   */
-  skinRoughness: number | null;
-  /**
-   * Per-material albedo scale, by material name — `color.multiplyScalar` on
-   * load. Empty for a rig that needs none.
-   *
-   * This is what actually matches one rig's exposure to another's under the one
-   * shared light rig, and it is needed because the two exports were authored to
-   * different albedo levels rather than because the scene lights them
-   * differently. Measured off the base colour textures: male1's kurta is
-   * 240/255 mean luminance against girl15's kameez at 185, and his skin is 175
-   * against her 130.
-   *
-   * Roughness is the obvious suspect and is NOT the cause. male1 does omit
-   * `roughnessFactor` on eight of its seventeen materials, so they load at
-   * glTF's 1.0 default — but sweeping the garment from 0.2 to 1.0 and
-   * re-rendering moves its mean luminance by two points out of the seventy that
-   * separated the rigs. The albedo is the whole difference.
-   */
-  materialTint: Record<string, number>;
-  /**
-   * The material carrying painted-on makeup, or null for a rig with none. Only
-   * set this where there is actually makeup to tone down: the pass reads the
-   * texture back through a 2D canvas, which is not free.
-   */
-  faceMaterial: string | null;
   /**
    * True when the rig carries ARKit morph targets. False disables lipsync and
    * blinking for that rig — not a fallback, just nothing to drive.
    */
   hasMorphs: boolean;
-  /** A2F weight calibration, or null for a rig with no morphs to calibrate. */
-  a2f: { gain: number; shapeGains: Record<string, number> } | null;
 }
 
 const f = (frame: number) => frame / FPS;
@@ -128,200 +91,101 @@ const FEMALE: AvatarConfig = {
     listening: { loop: [f(300), f(393)] },
     talking: { loop: [f(558), f(780)] },
   },
-  fallbackHeight: 1.68,
-  headTargetY: 1.45,
-  skinMaterials: new Set(["lambert11", "lambert13", "lambert12"]),
-  // The original value, from when this was a module constant — she is the rig
-  // it was tuned against, so it stays exactly as it was.
-  skinEmissive: 0.25,
-  // Her skin declares roughnessFactor 0.5 in the glTF; nothing to correct.
-  skinRoughness: null,
-  // She is the rig the other is matched TO, so nothing is scaled here and her
-  // appearance is exactly what it was before male1 existed.
-  materialTint: {},
-  faceMaterial: "lambert12",
   hasMorphs: true,
-  a2f: { gain: 0.9, shapeGains: { jawopen: 0.375 } },
+  // Framing, skin, tints, A2F and the per-theme light rig — see ./tuning.ts.
+  ...RIG_TUNING.female,
 };
 
 /**
- * male3.glb — the alternate presenter. (Built by scripts/optimize_glb.py from
- * male_inital03.glb; see the `--keep-windows` note at the end of this comment.)
+ * male_inital08.glb — the alternate presenter. The raw export, NOT run through
+ * scripts/optimize_glb.py: served as-is while the rig is still being iterated on.
  *
- * male_inital03 is a re-export of male_inital02 (which built male2.glb), and was
- * diffed against it rather than re-measured from scratch. Same 116 nodes, same
- * 109-joint skin, same UVs and weights, and all 51 morph targets byte-identical
- * on every primitive whose vertex count did not change. What did change:
+ * Diffed against male_inital05 (the previous export) rather than re-measured from
+ * scratch. Same 116 nodes, same 109-joint skin, the same 51 ARKit morph names, and
+ * morph deltas byte-identical on every primitive whose vertex count did not change
+ * — so A2F lipsync and blink are untouched. What DID change:
  *
- *   - The head texture (`Std_Skin_Head_Diffuse4`): a repainted face, 114 mean
- *     luminance where it lands on the front of the face against the old 139.
- *   - The beard (16522 -> 16834 verts) and brows (3368 -> 3370) were rebuilt.
- *     Their jawOpen/mouthFunnel deltas were re-checked against the geometry:
- *     jawOpen still drops the beard by 0.0306 at peak, mean (0, -0.016,
- *     -0.009), exactly as on male2, so the beard still follows the jaw.
- *   - The clip is exported at 24fps (716 keys over 29.79s) instead of 30fps
- *     (894 keys). Sampled at the same seconds, the body pose matches male2's
- *     to 0.00 rad over all 109 joints — the same motion, resampled.
+ *   - THE CLIP IS NOW 30fps. The same 716 keys, carrying the same poses key for
+ *     key (max difference 0.0005 over all 109 joints), are spaced 1/30s apart
+ *     instead of 1/24s: 23.83s instead of 29.79s, so the body plays 25% FASTER
+ *     and every window below had to be re-cut. They are quoted in this clip's own
+ *     frames again, which is what `f()` and FPS=30 mean here.
+ *   - The hair was rebuilt: 33917 -> 34557 verts, material renamed
+ *     `standardSurface2` -> `standardSurface2.001`, its base colour now pure black
+ *     with KHR_materials_clearcoat. Nothing here names that material.
+ *   - The beard was rebuilt again (16912 -> 16920 verts); its jawOpen still drops
+ *     it by 0.0306, mean (0, -0.016, -0.009), as on every export since male2.
+ *   - Legs, nails and the lower garment moved by small amounts, and `hairs24` was
+ *     renamed `hairs47`. HeadEnd_M and Shoulder_L gained translation tracks that
+ *     hold a constant value, so they do nothing.
+ *   - Textures are byte-identical to 05's, so the skin numbers below still hold.
  *
- * Everything below that was measured on male2 is therefore kept, and was re-run
- * on this rig where the resample could have moved it. The loop windows in
- * particular reproduce male2's behaviour through the simulated entry search to
- * the frame (re-entries at f155, f303 and f577; crossfade gap within 1%), so
- * they are left in male2's 30fps frame numbers rather than snapped to 24fps
- * keys, which would have changed the loops for no gain.
+ * male_inital08 is 07 with NO geometry or animation change at all — every mesh,
+ * UV, morph delta and animation key is identical (the clip diffs to exactly
+ * 0.00), so the windows, lipsync and blink below are untouched. Only two
+ * materials moved, both in ways this app has to know about:
  *
- * Replaces male1.glb, whose one real defect was that it carried NO morph targets
- * — so it had no lipsync and no blink, and drove a jaw bone as a stand-in. This
- * export carries the same 51 ARKit blendshapes the female rig does, verified
- * against the live NIM's name list: 50 of A2F's 52 shapes land, the two that do
- * not being `TongueOut` (no morph on either rig) and `EyeLookOutLeft`, which this
- * export misspells "eyeLookOutLeftt". That is an eye-dart shape carrying no
- * speech, and the female rig has an exactly equivalent typo (`heekSquintRight`),
- * so this rig reaches the mouth with the same fidelity she does.
+ *   - The hair (`standardSurface2.001`) now authors roughness 0.536 and
+ *     metalness 0.755, where 07 left roughness out and set metalness 0. Its base
+ *     colour went back to exactly 0, which is why the alphaTest override below
+ *     is still load-bearing — the colour test still reads it as a mask card.
+ *   - The scalp (`pasted__Scalp1_Transparency`) authors roughness 0.768 and
+ *     OMITS metallicFactor, which glTF defaults to 1.0 — fully metallic, where
+ *     07 had it at 0. Deliberately NOT corrected: the scalp is a mask card
+ *     sitting under 1787 hair cards, and rendered through this scene the head
+ *     is unchanged, so an override here would be a guess with nothing to fix.
+ *     Its opacity texture was renamed with a `pasted__` prefix; nothing keys
+ *     on image names.
  *
- * Same skeleton as girl15 (all 109 of its `DeformationSystem` joints, plus jaw
- * and eye bones girl15 lacks) and the SAME AUTHORED ANIMATION retargeted onto a
- * different body — same clip name, same 894 frames, and the same three segments
- * in the same places as male1 and the female rig:
+ * male_inital07 was 06 with one more hair pass and nothing else that matters:
+ * the hair mesh is denser again (34557 -> 35237 verts), its node is renamed
+ * `hairs47` -> `hairs`, and its base colour moved off exact black to 0.0005 —
+ * still far under the 0.01 the alphaTest rule below tests for, so that override
+ * is still doing the work. The beard is back to 16912 verts (05's count) with
+ * jawOpen unchanged at 0.0306. Same 30fps clip (keys match 06 to 0.0005), same
+ * skeleton, same 51 morph names, byte-identical textures, and the same three
+ * materials still missing `roughnessFactor` — so everything measured for 06
+ * below still holds, windows included.
  *
- *   0-38    dead hold at the head of the clip, skipped
- *   38-245  breathing  (at-rest idle)
- *   245-393 listening  (hands rise at 245-300, then a settled listening pose)
- *   393-893 talking    (an authored settle-in, then the gesturing)
- *
- * The WINDOWS inside those segments were cut against THIS rig's curves rather
- * than copied — summed quaternion angle over its 109 rotation channels, no cloth
- * term because there is no cloth sim here.
- *
- * The seam is not the only thing a window has to get right, though: it also has
- * to survive `bestLoopEntry`, which re-enters at whichever frame matches the
- * outgoing pose best and will happily land deep inside a window whose start pose
- * recurs there. So each window below was scored by SIMULATING that search — take
- * the pose at loopEnd-0.35s, run the same nearest-frame scan over the same
- * excluded tail, and measure how much of the window still plays. That is what
- * chose breathing and rejected the seam-optimal alternatives:
- *
- *   breathing  seam-best [41-141] (0.019) re-enters at f111 and plays 29% of the
- *              cycle; [137-219] seams at 0.037 and plays 2.13s of its 2.73s.
- *   listening  seam-best [305-406] (0.055) re-enters at f384 and plays 11%;
- *              [300-393] seams at 0.059 and plays 98%.
- *
- * An idle is periodic, so its start pose genuinely recurs and some loss there is
- * unavoidable — the point is to pick the window that loses least, not to expect
- * none. This is the same failure mode male1's talking window hit, caught here by
- * measurement rather than by eye.
- *
- * If any window here changes, re-run the optimizer with the new numbers, given
- * in the CLIP'S 24fps frames (the script reads the rate off the keys and adds a
- * frame of margin each side) — so 137-219 at 30fps is 109.6-175.2, kept as:
- *   python scripts/optimize_glb.py male_inital03.glb male3.glb \
- *       --keep-windows 109-176,240-315,447-624
- * then delete the male3.glb.gz it also writes (this rig is served raw, see
- * `bytes`). It strips keyframes outside the windows, so a widened window seeks
- * into frames that are no longer in the file.
+ * The windows were re-cut the way the earlier ones were: scored by SIMULATING the
+ * runtime entry search (`bestLoopEntry`) against this clip's own curves, taking
+ * the pose at loopEnd-0.35s, scanning the same excluded tail, and measuring how
+ * much of the window still plays and how far apart the two crossfaded trajectories
+ * are. Keeping 05's key indices was tried first and is what forced the re-cut: at
+ * 30fps the fixed 0.35s fade spans 10.5 keys instead of 8.4, which moved the
+ * talking re-entry to key 599 — 14% of the window, a rig that stands still while
+ * it talks. See each window for its numbers.
  */
 const MALE: AvatarConfig = {
   id: "male",
-  // The raw export, NOT run through scripts/optimize_glb.py — served as-is while
-  // the rig is still being iterated on. male_inital05 is male_inital04 with a
-  // warmer head texture (Std_Skin_Head_Diffuse6, 135 mean luminance against 04's
-  // 143) and a rebuilt beard (16912 verts). Everything else matches 04: same
-  // skeleton and 24fps clip (keys to 0.001), same materials, and all 51 morph
-  // targets identical on every primitive but the beard, whose jawOpen still drops
-  // it by 0.0306 as before — so A2F lipsync, blink and the loop windows below are
-  // unchanged. (04 was 03 with a lighter head texture and its own beard rebuild.)
-  url: "/models/male_inital05.glb",
+  url: "/models/male_inital08.glb",
   // Served uncompressed, so the two are equal and the progress readout needs no
-  // correction. 65MB, against the 39MB the optimizer would make of it.
-  bytes: { decoded: 65255428, encoded: 65255428 },
+  // correction. 66MB, against the ~39MB the optimizer would make of it.
+  bytes: { decoded: 65923940, encoded: 65923940 },
   segments: {
-    // One full breathing cycle. The idle is periodic at ~82 frames (2.73s), with
-    // troughs at f137 and f219, so this is a whole number of cycles and the loop
-    // keeps its phase. Seam 0.037 rad over 109 joints — two hundredths of a
-    // degree each.
+    // One full breathing cycle, re-cut for the 30fps timing: seam 0.077 rad over
+    // 109 joints, re-enters at f100 and plays 1.97s of its 2.53s (78%), and the
+    // two crossfaded trajectories sit 0.049 rad apart — against 0.079 on 05's
+    // window. Carrying 05's keys across unchanged (f110-f175 here) instead gives
+    // 75% and 0.122, so this is the better cut on every axis.
+    breathing: { loop: [f(83), f(159)] },
+    // The settled listening pose, entered after the authored hands-rise. Re-enters
+    // at f245 — the first frame, so the whole 2.63s plays — with a crossfade gap of
+    // 0.276 against 05's 0.281, and slightly more motion per cycle (1.9 vs 1.7).
+    listening: { loop: [f(245), f(324)] },
+    // The authored gesture performance. This is the window that had to move: 05's
+    // keys re-enter at f599 here and play 14% of the cycle, because the fixed 0.35s
+    // crossfade covers 10.5 frames at 30fps where it covered 8.4 at 24fps.
     //
-    // Chosen over the tighter-seaming [41-141] and [119-240] because of the
-    // entry search: those re-enter at f111 and f201 and play 29% and 31% of
-    // their cycle, against 78% here. See the comment above this object.
-    breathing: { loop: [f(137), f(219)] },
-    // The settled listening pose, entered AFTER the authored hands-rise at
-    // 245-300 — the same window the female rig uses, and on this rig the right
-    // one for the entry search rather than the seam: it re-enters at f302, two
-    // frames in, and plays 98% of its 3.1s. The seam-optimal [305-406] (0.055
-    // against this window's 0.059) re-enters at f384 and plays 11%.
-    listening: { loop: [f(300), f(393)] },
-    // The authored gesture performance — the same window male1 used and very
-    // nearly the female's, unsurprising since it is the same animation.
-    //
-    // NOT the tightest-seaming window in the segment, deliberately, and this is
-    // the case that taught the lesson above. The seam-optimal [653-853] (0.118
-    // against this window's 0.164) carries LESS motion per cycle than this one
-    // even before the entry search: 19.1 against 22.9. On male1 an equivalent
-    // seam-only choice re-entered among tied held poses and left the rig looking
-    // like it was barely talking.
-    //
-    // Scored the same way as the others: this re-enters at f577, 18 frames in,
-    // and still plays 6.77s of its 7.37s — 89% of the window and the most
-    // absolute motion (20.4 rad) of any candidate. 0.164 rad over 109 joints is
-    // a tenth of a degree each, which the 0.35s crossfade covers easily.
-    talking: { loop: [f(559), f(780)] },
+    // This cut re-enters at f543, one frame in, and plays 4.83s of its 4.87s
+    // (100%), with the same absolute motion as 05's talking loop (95.6 rad against
+    // 95.3) and a crossfade gap of 0.945 — an order of magnitude tighter than the
+    // 9.93 that window lived with. Its seam (4.37 rad) is wide, which costs
+    // nothing: every loop re-enters through the search above rather than playing
+    // the seam, and loop[0] is only ever the pose for a first entry with no
+    // outgoing pose to match.
+    talking: { loop: [f(543), f(688)] },
   },
-  // Measured off the rig: HeadEnd sits at 1.784 against girl15's 1.616 (and
-  // male1's 1.783 — same skeleton, same proportions).
-  fallbackHeight: 1.85,
-  // Girl15's 1.45 sits 0.029 below her Head_M joint (1.479); this is the same
-  // offset below this rig's, at 1.632.
-  headTargetY: 1.6,
-  // The head skin is `lambert5` here, NOT the `Std_Skin_Head` male1 named it:
-  // this export renames the head material while keeping Std_Skin_Arm/Leg. On
-  // male2 its texture was the one male1's head used; male3 repaints it — see
-  // the lambert5 note in materialTint below.
-  skinMaterials: new Set(["lambert5", "Std_Skin_Arm", "Std_Skin_Leg"]),
-  // Zero, unlike the female rig's 0.25. The lift exists to open up the shadow
-  // side of a face that has one; his albedo is already 36% brighter than hers,
-  // and because emissive ignores the light rig entirely, on him it did not
-  // reveal shading so much as erase it — the hard bright band across his
-  // forehead and nose was this term sitting on top of an already-bright
-  // texture. Measured over the face through the same lights: at 0.10 his p95
-  // luminance was 169 against her 150; at 0 with the tint below he is at 147,
-  // with the same spread of light to dark (std 47.5 against her 45.5).
-  skinEmissive: 0,
-  // null, unlike male1's 0.5. That override existed because male1 omitted
-  // roughnessFactor on its skin and so loaded at glTF's 1.0 default; this export
-  // authors 0.553 on all three skin materials (and a real value on every other
-  // material too), so there is nothing left to correct and forcing 0.5 would
-  // just overwrite what the artist set.
-  //
-  // male_inital04 and 05 drop roughnessFactor on lambert5 (the head), so it would
-  // load at glTF's fully rough 1.0 default. 0.5 is what 03 authored on the head;
-  // it also moves the arms and legs from 0.553 to 0.5, which is not visible.
-  skinRoughness: 0.5,
-  // Scaled to bring this export's albedo onto the female rig's level under the
-  // shared lights — see materialTint. The two garment entries are one texture
-  // on two meshes (kurta and shalwar). Verified by rendering both rigs through
-  // an identical rig: garment mean luminance 138 against her 134 (was 170),
-  // face p95 147 against her 150 (was 169).
-  // Carried over from male1 unchanged, because the albedo is: measured off this
-  // export's own textures, skin is 175/180/178 mean luminance (male1: 175/180/
-  // 178) and the garment 240 (male1: 240), against girl15's skin 130 and kameez
-  // 185. Same textures, same correction. The garment is one material here
-  // (`pasted__pasted__lambert6`) rather than male1's two meshes sharing one.
-  //
-  // male3's head texture is the exception, and its 0.85 is kept ON PURPOSE. The
-  // repaint is darker (121 whole-texture mean, down from 175), and rendered
-  // through the same lights his face now sits at mean 103 / p95 142, against
-  // male2's 128 / 173 and girl15's 121 / 166. Raising lambert5 to ~1.03 would put
-  // it back on male2's level, but that would paint out the artist's change
-  // rather than correct an export fault, and on screen the darker face reads
-  // naturally against his hands. That is the one number to move if it should not.
-  materialTint: {
-    "pasted__pasted__lambert6": 0.62,
-    "lambert5": 0.95,
-    "Std_Skin_Arm": 0.95,
-    "Std_Skin_Leg": 0.95,
-  },
-  // No makeup on this rig — the pass would read back a texture to change nothing.
-  faceMaterial: null,
   // Unlike male1, this export carries the full 51 ARKit shapes on one 12-primitive
   // mesh, so lipsync and blink both run the same code the female rig does.
   // Checked the way girl12's shifted-name bug taught us to: the names align with
@@ -329,12 +193,8 @@ const MALE: AvatarConfig = {
   // with matching y drops, jawOpen drops the jaw by 0.027, smile L/R are opposed)
   // rather than merely being present and plausible.
   hasMorphs: true,
-  // The female rig's calibration, unchanged. It is a property of what the NIM
-  // emits (JawOpen peaking past 2.5 while the lip shapes sit under 1) far more
-  // than of the rig, and these two rigs carry the same authored blendshapes at
-  // the same amplitudes — the jawOpen delta here is 0.027 against her 0.025.
-  // Worth a look on screen even so; ?a2fGain= and ?a2fShapes= retune it live.
-  a2f: { gain: 0.9, shapeGains: { jawopen: 0.375 } },
+  // Framing, skin, tints, A2F and the per-theme light rig — see ./tuning.ts.
+  ...RIG_TUNING.male,
 };
 
 export const AVATARS: Record<AvatarId, AvatarConfig> = {

@@ -1048,6 +1048,16 @@ export default function AvatarModel({
           std.color.multiplyScalar(tint);
         }
 
+        // Roughness the export left out, for materials outside skinMaterials —
+        // same correction skinRoughness makes, and needed for the same reason:
+        // glTF defaults a missing roughnessFactor to 1.0, fully matte, and a
+        // fully matte surface returns no specular. The cyan rim and green kick
+        // read as coloured EDGES on cloth mostly through that specular term, so
+        // a garment that loads at 1.0 keeps its diffuse shading and loses the
+        // back lighting. Affects no skin — see materialRoughness in ./models.ts.
+        const roughness = config.materialRoughness?.[std.name];
+        if (roughness !== undefined) std.roughness = roughness;
+
         if (std.transparent) {
           // Two different cuts, because these cards fail two different ways.
           //
@@ -1059,9 +1069,16 @@ export default function AvatarModel({
           // The hair and brow cards carry real colour, and cutting them hard
           // shreds the strands into spikes and thins the brows to nothing. They
           // only need the faintest texels removed.
+          //
+          // Colour is the wrong signal for a card that is MEANT to be black,
+          // which is why `alphaTest` in ./models.ts can override it by material
+          // name: male_inital06 authors its hair pure black (05 had it at 0.02
+          // grey), so the test above reclassified it as a mask and took the hard
+          // cut — 21% of the texture's visible texels against 4.2%, which ate
+          // the soft strands along the front hairline.
           const color = std.color;
           const isMaskOnly = color.r + color.g + color.b < 0.01;
-          std.alphaTest = isMaskOnly ? 0.35 : 0.08;
+          std.alphaTest = config.alphaTest?.[std.name] ?? (isMaskOnly ? 0.35 : 0.08);
           std.depthWrite = false;
         }
 

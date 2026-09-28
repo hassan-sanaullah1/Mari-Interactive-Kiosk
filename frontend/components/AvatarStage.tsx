@@ -5,6 +5,7 @@ import styles from "./AvatarStage.module.css";
 import { avatarStateFor } from "./avatar/state";
 import { DEFAULT_AVATAR, type AvatarId } from "./avatar/models";
 import type { Mode } from "@/hooks/useVoiceSession";
+import type { Theme } from "@/lib/theme";
 
 /**
  * The 3D presenter's mount point.
@@ -35,6 +36,8 @@ export interface AvatarStageProps {
    *  for however long the asset takes to parse, before onReady's mixer.update(0)
    *  applies a real pose — is never shown on screen. */
   ready?: boolean;
+  /** The page theme — the scene lights the presenter brighter on the light one. */
+  theme?: Theme;
 }
 
 export default function AvatarStage({
@@ -43,6 +46,7 @@ export default function AvatarStage({
   levelRef,
   onReady,
   ready = false,
+  theme,
 }: AvatarStageProps) {
   return (
     <div className={styles.stage} data-ready={ready} aria-hidden="true">
@@ -51,6 +55,7 @@ export default function AvatarStage({
         avatar={avatar}
         levelRef={levelRef}
         onReady={onReady}
+        theme={theme}
       />
     </div>
   );

@@ -9,9 +9,21 @@ venv/
 models/
 !frontend/public/models/
 frontend/public/models/*
+# Allowlist: every rig the app can ASK for has to be named here explicitly.
+#
+# The trap this rule sets: an ignored .glb still sits on the developer's disk and
+# still loads locally, so pointing models.ts at one looks like it works. The
+# deployed build has only what git tracks, so the same URL 404s there and the
+# avatar never appears — a failure that shows up ONLY in production. male2.glb
+# was exactly that, and so had never once been in a deploy.
+#
+# Keep this list in step with components/avatar/models.ts. Superseded rigs come
+# OFF the list and get deleted; they are 30-65MB each, and an unreferenced one is
+# dead weight in the build context and in every layer of the image.
 !frontend/public/models/girl15.glb
 !frontend/public/models/girl15.glb.gz
-!frontend/public/models/male1.glb
+!frontend/public/models/male_inital08.glb
+!frontend/public/models/male_inital08.glb.gz
 *.bin
 .DS_Store
 Thumbs.db
