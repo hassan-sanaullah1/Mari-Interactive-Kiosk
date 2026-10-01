@@ -45,10 +45,10 @@ def test_persona_and_tone_rules_are_in_the_files() -> None:
     assert "Maryam" in en and "مریم" in ur           # she has a name, and uses it
     assert "Mari Energies" in en and "Mari Energies" in ur   # brand stays in Latin script
     assert "کر سکتی ہوں" in ur          # feminine verb forms
-    assert "نمائندہ" in ur              # feminine role noun
+    assert "کی representative" in ur    # feminine role noun, in the English word people say
     # She presents as a member of the team, not as an assistant.
     assert "never a salesperson" in en
-    assert "chatbot" in en and "چیٹ بوٹ" in ur       # ...and is told not to admit to being one
+    assert "chatbot" in en and "chatbot" in ur       # ...and is told not to admit to being one
 
 
 def test_the_greeting_prompts_demand_the_salam_and_the_name() -> None:

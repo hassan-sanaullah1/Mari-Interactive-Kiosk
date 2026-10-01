@@ -27,23 +27,23 @@ def _msgs(n: int, chars: int) -> list[dict]:
 
 def test_history_is_trimmed_until_the_request_fits() -> None:
     # Sized against the real budget rather than hard-coded, so this test keeps
-    # meaning if LLM_CHARS_PER_TOKEN is re-measured: leave room for a few
+    # meaning if the per-script ratios are re-measured: leave room for a few
     # messages, then offer far more than that.
-    budget = (A.LLM_CONTEXT_TOKENS - 420 - A.LLM_CONTEXT_SAFETY_TOKENS) * A.LLM_CHARS_PER_TOKEN
-    system = "s" * int(budget - 3_000)
-    history = _msgs(20, 400)       # far more than the 3k of room left for it
+    budget = A.LLM_CONTEXT_TOKENS - 420 - A.LLM_CONTEXT_SAFETY_TOKENS
+    system = "s" * int((budget - 800) * A.LLM_CHARS_PER_TOKEN_LATIN)
+    history = _msgs(20, 400)       # far more than the ~800 tokens of room left for it
     kept = A.fit_history(system, "q" * 60, history, reply_tokens=420)
     assert len(kept) < len(history)
-    budget = (A.LLM_CONTEXT_TOKENS - 420 - A.LLM_CONTEXT_SAFETY_TOKENS) * A.LLM_CHARS_PER_TOKEN
-    used = len(system) + 60 + sum(len(m["content"]) + 8 for m in kept)
+    used = (A.estimate_tokens(system) + A.estimate_tokens("q" * 60)
+            + sum(A.estimate_tokens(m["content"]) + 4 for m in kept))
     assert used <= budget
 
 
 def test_the_newest_exchange_is_the_one_kept() -> None:
     """An elliptical follow-up ("and what about that one?") resolves against the most
     recent turn, so trimming has to take from the front, not the back."""
-    budget = (A.LLM_CONTEXT_TOKENS - 420 - A.LLM_CONTEXT_SAFETY_TOKENS) * A.LLM_CHARS_PER_TOKEN
-    system = "s" * int(budget - 3_000)
+    budget = A.LLM_CONTEXT_TOKENS - 420 - A.LLM_CONTEXT_SAFETY_TOKENS
+    system = "s" * int((budget - 800) * A.LLM_CHARS_PER_TOKEN_LATIN)
     history = _msgs(20, 400)
     history[-1] = {"role": "user", "content": "NEWEST"}
     kept = A.fit_history(system, "q", history, reply_tokens=420)
@@ -137,8 +137,8 @@ def test_retrieved_context_is_trimmed_before_the_reply_is_shortened() -> None:
     assert len(out) < len(prompt)
     # Everything above the marker is persona/core brief and must survive intact.
     assert out.startswith(head + marker)
-    budget = (A.LLM_CONTEXT_TOKENS - 420 - A.LLM_CONTEXT_SAFETY_TOKENS) * A.LLM_CHARS_PER_TOKEN
-    assert len(out) + len("سوال") <= budget
+    budget = A.LLM_CONTEXT_TOKENS - 420 - A.LLM_CONTEXT_SAFETY_TOKENS
+    assert A.estimate_tokens(out) + A.estimate_tokens("سوال") <= budget
 
 
 def test_a_prompt_that_already_fits_is_untouched() -> None:
@@ -153,3 +153,17 @@ def test_a_prompt_with_no_retrieved_context_is_never_cut() -> None:
     cutting those costs the kiosk its identity. Send it and let the error show."""
     prompt = "PERSONA AND CORE BRIEF " * 5_000   # no context marker at all
     assert A.fit_system_prompt(prompt, "q", reply_tokens=420) == prompt
+
+
+def test_urdu_script_is_priced_higher_than_latin() -> None:
+    """One Urdu prompt mixes Urdu-script rules with English knowledge; pricing both at
+    the Urdu rate threw away retrieved knowledge that would have fit."""
+    assert A.estimate_tokens("ک" * 100) > A.estimate_tokens("k" * 100)
+
+
+def test_english_knowledge_in_an_urdu_prompt_is_kept_when_it_fits() -> None:
+    """The Board question: ~3k tokens of Urdu rules plus ~7.5k chars of English knowledge
+    is ~5k real tokens. The flat Urdu ratio cut 40-65% of that knowledge."""
+    head = "ک " * 2_500 + "\n\n" + CONTEXT_HEADER + "\n"
+    prompt = head + "Board member Syed Bakhtiyar Kazmi, Non-Executive Director. " * 125
+    assert A.fit_system_prompt(prompt, "board ke baray mein bataiye", reply_tokens=420) == prompt

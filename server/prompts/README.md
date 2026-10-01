@@ -31,9 +31,15 @@ Mari Energies, state only what the knowledge base contains, and speak in short s
 A change to that framing belongs in all four `system/*.md` files.
 
 Urdu marks gender on the verb and the possessive, so the Urdu prompts are not a name
-swap: «کر سکتی ہوں» / «کی نمائندہ» for her, «کر سکتا ہوں» / «کا نمائندہ» for him. The
+swap: «کر سکتی ہوں» / «کی representative» for her, «کر سکتا ہوں» / «کا representative» for him. The
 model still slips, so `server/agent/reply_fixes.py` corrects agreement per turn, and
 forces the salam that must open a greeting reply.
+
+The Urdu prompts ask for the Urdu an educated Pakistani speaks today: Urdu grammar, with the
+English words people actually say ("representative", "projects", "Board of Directors") kept in
+Latin script, copied as the knowledge base writes them. The model copies the style it is shown,
+so the Urdu prompt text itself is written that way — keep new wording plain and keep English
+words in Latin.
 
 The fixed lines in `replies.toml` never pass through the LLM or those fixes, so each
 Urdu line is written per presenter.

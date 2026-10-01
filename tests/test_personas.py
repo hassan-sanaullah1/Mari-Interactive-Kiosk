@@ -111,6 +111,7 @@ def test_the_default_is_still_the_female_presenter(gen: GenerationService) -> No
     "reply,expected",
     [
         ("میں Mari Energies کی نمائندہ ہوں۔", "میں Mari Energies کا نمائندہ ہوں۔"),
+        ("میں Mari Energies کی representative ہوں۔", "میں Mari Energies کا representative ہوں۔"),
         ("میں مدد کر سکتی ہوں۔", "میں مدد کر سکتا ہوں۔"),
         ("میں آپ کو بتا رہی ہوں۔", "میں آپ کو بتا رہا ہوں۔"),
     ],
@@ -118,6 +119,11 @@ def test_the_default_is_still_the_female_presenter(gen: GenerationService) -> No
 def test_the_male_presenter_gets_masculine_agreement(reply: str, expected: str) -> None:
     assert masculine_agreement(reply, "ur") == expected
     assert gender_agreement(reply, "ur", "male") == expected
+
+
+def test_the_female_presenter_gets_feminine_agreement_on_representative() -> None:
+    reply = "میں Mari Energies کا representative ہوں۔"
+    assert gender_agreement(reply, "ur", "female") == "میں Mari Energies کی representative ہوں۔"
 
 
 def test_a_possessive_belonging_to_something_else_is_left_alone() -> None:

@@ -84,7 +84,7 @@ def force_salam(reply: str, lang: str = "ur", returning: bool = False) -> str:
 # Only the self-description is touched: in "Mari Energies کے kiosk پر" the possessive
 # agrees with "kiosk", so a blanket کا/کے → کی rewrite would introduce errors.
 
-_ROLE = r"AI Representative|نمائندہ|نمائندگی|میزبان|اسسٹنٹ|assistant"
+_ROLE = r"AI Representative|[Rr]epresentative|نمائندہ|نمائندگی|میزبان|اسسٹنٹ|assistant"
 _SELF_IZAFAT_RE = re.compile(rf"\b(کا|کے)(\s+(?:ایک\s+)?(?:{_ROLE}))")
 # A clause about the speaker: from "میں" to the end of the sentence.
 _SPEAKER_CLAUSE_RE = re.compile(r"میں\b[^۔!؟\n]{0,120}")
