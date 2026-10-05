@@ -162,15 +162,48 @@ services:
         # exactly what this file publishes below.
         NEXT_PUBLIC_MARI_WS: ${NEXT_PUBLIC_MARI_WS:-}
     restart: unless-stopped
+    # Containment for the next framework RCE, not just the last one. The 2026-09
+    # compromise (Next.js 15.5.4) got a shell here and spent it downloading a flooder,
+    # killing rival miners and grepping the disk for secrets. With these, the same
+    # foothold cannot write anything outside two small tmpfs mounts, cannot execute
+    # what it does write there (noexec), cannot regain privileges through setuid
+    # binaries, and cannot eat the whole host's CPU/RAM while it tries.
+    read_only: true
+    tmpfs:
+      # uid/gid 1000 = the image's `node` user (frontend/Dockerfile: USER node).
+      - /tmp:size=64m,noexec,nosuid,nodev,uid=1000,gid=1000
+      # Next's runtime cache dir; it is the only path under /app the server writes.
+      - /app/.next/cache:size=128m,noexec,nosuid,nodev,uid=1000,gid=1000
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: 1.0
     ports:
       - "3000:3000"
     depends_on:
-      # service_healthy, not the bare form. The frontend proxies /api/* to the backend,
-      # so starting it first only produces 502s from a page that looks up.
+      # service_started, NOT service_healthy. The frontend proxies /api/* to the
+      # backend, so gating on health looks like the careful choice — but it means a
+      # backend that is merely SLOW to become healthy keeps the frontend container
+      # from ever being created, and a reverse proxy with no container behind it
+      # answers "server not available" for the whole site. That is a total outage
+      # standing in for a degraded one.
+      #
+      # The backend's first boot is exactly that case: faster-whisper and ~3 GB of
+      # FastEmbed ONNX weights download on a cold cache, and on a small host that can
+      # outrun the healthcheck's 40s start_period plus 5 x 30s retries.
+      #
+      # Starting first is not actually the failure it looks like either — the kiosk
+      # degrades on its own. /api/* 502s until the backend answers, and the UI already
+      # handles a failed turn; the avatar, the background and the whole shell are
+      # static and render regardless. A page that loads and cannot talk yet beats a
+      # domain that does not resolve to anything.
       backend:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
-      # node, not curl: the runtime stage is node:20-slim, which ships neither curl nor
+      # node, not curl: the runtime stage is node:24-slim, which ships neither curl nor
       # wget. Any HTTP status below 500 counts as up — the point is that Next is
       # serving, not that a particular route renders.
       test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"]

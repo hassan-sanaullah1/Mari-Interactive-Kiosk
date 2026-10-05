@@ -1,0 +1,36 @@
+name: Security audit
+
+# Fails (and GitHub emails about it) when the frontend's runtime dependencies have
+# a known high or critical vulnerability. The daily run is the important one: the
+# 2026-09 Coolify compromise came from an advisory published long AFTER the last
+# deploy, which no deploy-time check could have seen.
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  push:
+    paths:
+      - "frontend/package.json"
+      - "frontend/package-lock.json"
+  pull_request:
+    paths:
+      - "frontend/package.json"
+      - "frontend/package-lock.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # Reads package-lock.json only; no install needed.
+      - run: npm audit --omit=dev --audit-level=high

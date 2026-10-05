@@ -22,8 +22,8 @@ frontend/public/models/*
 # dead weight in the build context and in every layer of the image.
 !frontend/public/models/girl15.glb
 !frontend/public/models/girl15.glb.gz
-!frontend/public/models/male_inital08.glb
-!frontend/public/models/male_inital08.glb.gz
+!frontend/public/models/male_inital12.glb
+!frontend/public/models/male_inital12.glb.gz
 *.bin
 .DS_Store
 Thumbs.db

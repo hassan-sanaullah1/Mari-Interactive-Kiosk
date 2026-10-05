@@ -1,0 +1,41 @@
+# Opens PRs for outdated / vulnerable dependencies. The kiosk frontend sat on
+# Next.js 15.5.4 for months after a public RCE fix shipped and was compromised on
+# Coolify (2026-09); this is what would have flagged it the week the fix landed.
+#
+# Security PRs additionally need "Dependabot security updates" switched on in the
+# repo's Settings -> Code security.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for routine bumps instead of one per package; majors stay separate.
+      frontend-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      backend-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker
+    directory: /frontend
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /server
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
