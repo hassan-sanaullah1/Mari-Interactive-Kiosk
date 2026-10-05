@@ -30,9 +30,13 @@ _URDU_CHAR = "\u0600-\u06ff"
 
 # ── Brand ───────────────────────────────────────────────────────────
 # Bare «ماری» is a real Urdu word ("killed"), and «میری انرجی» can mean "my energy", so only
-# the company's own compounds are matched.
-_MARI = r"(?:ماری|ماڑی|میری)"
+# the company's own compounds are matched. «مریم» is the female presenter's name and sits all
+# over her prompt; when the model slips into Urdu script for the brand it reaches for it
+# («مریم انرجیز», «مریم گیس فیلڈ»), and the company is named after her. In a compound it is
+# never the presenter, so it is matched there too — «میں مریم ہوں» is left alone.
+_MARI = r"(?:ماری|ماڑی|میری|مریم)"
 _BRAND_RULES = (
+    (re.compile(rf"{_MARI}\s*(?:گیس|Gas)\s*(?:فیلڈ|Field)", re.I), "Mari Gas Field"),
     (re.compile(rf"{_MARI}\s*(?:انرجیز|Energies)|(?:ماری|ماڑی)\s*انرجی(?![{_URDU_CHAR}])", re.I),
      "Mari Energies"),
     (re.compile(rf"{_MARI}\s*(?:پٹرولیم|پیٹرولیم|Petroleum)", re.I), "Mari Petroleum"),
@@ -218,10 +222,56 @@ def _latin_names(text: str) -> str:
     return "".join(out)
 
 
+# ── Words that switch script part-way ───────────────────────────────
+# Qwen sometimes writes the first letter of an English word in Urdu script and the rest
+# in Latin: «کiosk», «فiscal», «نiaz». Such a word is never correct, so whatever the word,
+# the Urdu letters are replaced by their Latin sound. Where a letter has more than one
+# (ک is k, c or q), the spelling the knowledge base uses wins, with its capitalisation.
+_LATIN_SOUNDS: dict[str, tuple[str, ...]] = {
+    "ا": ("a",), "آ": ("a",), "ع": ("a",), "ب": ("b",), "پ": ("p",), "ت": ("t",),
+    "ٹ": ("t",), "ث": ("s",), "ج": ("j",), "چ": ("ch",), "ح": ("h",), "خ": ("kh",),
+    "د": ("d",), "ڈ": ("d",), "ذ": ("z",), "ر": ("r",), "ڑ": ("r",), "ز": ("z", "s"),
+    "ژ": ("zh",), "س": ("s", "c"), "ش": ("sh",), "ص": ("s",), "ض": ("z",), "ط": ("t",),
+    "ظ": ("z",), "غ": ("gh",), "ف": ("f", "ph"), "ق": ("q", "k"), "ک": ("k", "c", "q"),
+    "ك": ("k", "c"), "گ": ("g",), "ل": ("l",), "م": ("m",), "ن": ("n",), "و": ("w", "v"),
+    "ہ": ("h",), "ھ": ("h",), "ی": ("y", "i", "e"), "ي": ("y", "i"), "ے": ("e",),
+}
+_MIXED_WORD_RE = re.compile(rf"(?<![{_URDU_CHAR}A-Za-z])([{''.join(_LATIN_SOUNDS)}]{{1,2}})([A-Za-z]{{2,}})\b")
+
+
+@lru_cache(maxsize=1)
+def _corpus_words() -> dict[str, str]:
+    """Every Latin word in the knowledge base, lower-cased, mapped to its usual spelling."""
+    try:
+        corpus = C.KNOWLEDGE_FILE.read_text(encoding="utf-8")
+    except OSError:
+        return {}
+    words: dict[str, str] = {}
+    for word in re.findall(r"[A-Za-z][A-Za-z'-]*", corpus):
+        # Lower case wins when the corpus uses it at all: capitals there may just open a sentence.
+        if word.islower() or word.lower() not in words:
+            words[word.lower()] = word
+    return words
+
+
+def _latin_word(m: re.Match[str]) -> str:
+    urdu, rest = m.group(1), m.group(2)
+    heads = [""]
+    for letter in urdu:
+        heads = [h + s for h in heads for s in _LATIN_SOUNDS[letter]]
+    known = _corpus_words()
+    for head in heads:
+        if (head + rest).lower() in known:
+            return known[(head + rest).lower()]
+    word = heads[0] + rest
+    return word.capitalize() if rest[:1].isupper() else word
+
+
 def latin_terms(reply: str, lang: str = "ur") -> str:
     """Rewrite Urdu-script names, brand and abbreviations in an Urdu reply to Latin."""
     if lang != "ur" or not reply:
         return reply
+    reply = _MIXED_WORD_RE.sub(_latin_word, reply)
     for pattern, latin in _BRAND_RULES:
         reply = pattern.sub(latin, reply)
     for pattern, latin in _HONOURS:

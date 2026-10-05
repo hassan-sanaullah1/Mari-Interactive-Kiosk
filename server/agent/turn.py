@@ -5,11 +5,17 @@ Protocol, server → client:
     per sentence: {"reply", text, demo}, then {"tts", mime, clip?} followed by audio bytes
     {"done", spoken}
     out of band: {"lipsync", uid, names?, frames}, keyed to the {"tts"} message's clip
+
+Synthesis runs ahead of playback: each sentence's TTS starts as soon as the responder
+yields it, so the next one renders while this one is sent and the LLM keeps streaming.
+Sentences still go out strictly in order.
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
+import time
 
 from fastapi import WebSocket
 
@@ -18,6 +24,12 @@ from .. import config as C
 from . import speech
 from .replies import canned
 from .responder import respond_sentences
+
+logger = logging.getLogger(__name__)
+
+# Sentences synthesized ahead and not yet sent. Small, so an interrupted turn wastes
+# little and Uplift never sees more than this many concurrent calls from one turn.
+_LOOKAHEAD = 2
 
 _turn_seq = 0
 
@@ -58,21 +70,45 @@ async def run_reply(
     a2f = avatar.get_a2f_client()
     lips = avatar.LipsyncTurn(a2f, send_json, turn_id) if a2f is not None else None
 
-    async def speak_sentence(text: str) -> bool:
-        """Synthesize and send one sentence, with its lipsync clip. True if audio was sent."""
-        if not C.tts_ready(lang):
+    t_turn = time.perf_counter()
+    first_audio_ms: float | None = None
+    synth_ms: list[int] = []
+    synths: list[asyncio.Task] = []
+
+    async def synthesize(text: str) -> tuple[bytes, str, int]:
+        t = time.perf_counter()
+        audio, mime = await speech.speak(text, lang, avatar_id)
+        return audio, mime, round((time.perf_counter() - t) * 1000)
+
+    def start_synthesis(text: str) -> asyncio.Task | None:
+        """Start one sentence's TTS now; None when TTS isn't configured."""
+        if not C.tts_ready(lang, avatar_id):
+            return None
+        task = asyncio.create_task(synthesize(text))
+        synths.append(task)
+        return task
+
+    async def deliver(text: str, is_demo: bool, synth: asyncio.Task | None) -> bool:
+        """Send one sentence, its audio and its lipsync clip. True if audio was sent."""
+        nonlocal first_audio_ms
+        await send_json({"type": "reply", "text": text, "demo": is_demo})
+        if synth is None:
             return False
-        # Opened before synthesis so the A2F stream is primed by the time audio exists.
+        # Opened before waiting on the audio, so the A2F stream primes while it renders,
+        # but only after the previous sentence's audio went out, as A2F_MAX_CLIPS=1 expects.
         clip = lips.open_clip() if lips is not None else None
         sent = False
         try:
-            audio, mime = await speech.speak(text, lang, avatar_id)
+            audio, mime, ms = await synth
+            synth_ms.append(ms)
             if audio:
                 header = {"type": "tts", "mime": mime}
                 if clip is not None:
                     header["clip"] = clip
                 await send_audio(header, audio)
                 sent = True
+                if first_audio_ms is None:
+                    first_audio_ms = (time.perf_counter() - t_turn) * 1000
                 if clip is not None:
                     lips.feed(clip, audio, mime)
             elif clip is not None:
@@ -83,6 +119,7 @@ async def run_reply(
             await send_json({"type": "warn", "message": f"tts: {exc}"})
         return sent
 
+    producer: asyncio.Task | None = None
     try:
         if echo_transcript:
             await send_json({"type": "stt", "text": transcript, "lang": lang})
@@ -93,14 +130,33 @@ async def run_reply(
                 await send_json({"type": "done", "spoken": False})
                 return
             line = canned("no_speech", lang, avatar_id)
-            await send_json({"type": "reply", "text": line, "demo": True})
-            spoken = await speak_sentence(line)
+            spoken = await deliver(line, True, start_synthesis(line))
         else:
-            async for sentence, is_demo in respond_sentences(transcript, lang, history, avatar_id):
-                await send_json({"type": "reply", "text": sentence, "demo": is_demo})
-                if await speak_sentence(sentence):
+            ahead = asyncio.Semaphore(_LOOKAHEAD)
+            queue: asyncio.Queue = asyncio.Queue()
+
+            async def produce() -> None:
+                try:
+                    async for sentence, is_demo in respond_sentences(
+                        transcript, lang, history, avatar_id
+                    ):
+                        await ahead.acquire()
+                        queue.put_nowait((sentence, is_demo, start_synthesis(sentence)))
+                finally:
+                    queue.put_nowait(None)
+
+            producer = asyncio.create_task(produce())
+            while (item := await queue.get()) is not None:
+                if await deliver(*item):
                     spoken = True
+                ahead.release()
+            await producer  # re-raises a failure of the reply stream
         await send_json({"type": "done", "spoken": spoken})
+        if first_audio_ms is not None:
+            logger.info(
+                "turn %s: first audio %.0f ms after the transcript; synth ms per sentence %s",
+                turn_id, first_audio_ms, synth_ms,
+            )
         if lips is not None:
             # The browser is still playing the audio these frames belong to.
             await lips.drain()
@@ -108,3 +164,9 @@ async def run_reply(
         if lips is not None:
             await lips.abort()
         raise
+    finally:
+        # Interrupted or failed: nothing still rendering is going to be sent.
+        if producer is not None:
+            producer.cancel()
+        for task in synths:
+            task.cancel()

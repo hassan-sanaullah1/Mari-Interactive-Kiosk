@@ -97,99 +97,75 @@ const FEMALE: AvatarConfig = {
 };
 
 /**
- * male_inital08.glb — the alternate presenter. The raw export, NOT run through
- * scripts/optimize_glb.py: used as exported while the rig is still being iterated on.
+ * male_inital12.glb — the alternate presenter. Still the RAW export (see `bytes`):
+ * run scripts/optimize_glb.py before this rig goes in front of anyone on a slow link.
  *
- * Diffed against male_inital05 (the previous export) rather than re-measured from
- * scratch. Same 116 nodes, same 109-joint skin, the same 51 ARKit morph names, and
- * morph deltas byte-identical on every primitive whose vertex count did not change
- * — so A2F lipsync and blink are untouched. What DID change:
+ * Carries the facial bone rig the 09-11 exports introduced — 302 nodes, 295 skin
+ * joints, of which 178 are face (EyeJoint, upperLidMain0..9, lip, cheek, brow) and
+ * animated by this clip. They are ordinary quaternion tracks, so buildPoseIndex
+ * matches on them alongside the 117 body joints; that is why the window numbers
+ * below are an order of magnitude larger than the 51-joint era's and must only be
+ * compared against each other.
  *
- *   - THE CLIP IS NOW 30fps. The same 716 keys, carrying the same poses key for
- *     key (max difference 0.0005 over all 109 joints), are spaced 1/30s apart
- *     instead of 1/24s: 23.83s instead of 29.79s, so the body plays 25% FASTER
- *     and every window below had to be re-cut. They are quoted in this clip's own
- *     frames again, which is what `f()` and FPS=30 mean here.
- *   - The hair was rebuilt: 33917 -> 34557 verts, material renamed
- *     `standardSurface2` -> `standardSurface2.001`, its base colour now pure black
- *     with KHR_materials_clearcoat. Nothing here names that material.
- *   - The beard was rebuilt again (16912 -> 16920 verts); its jawOpen still drops
- *     it by 0.0306, mean (0, -0.016, -0.009), as on every export since male2.
- *   - Legs, nails and the lower garment moved by small amounts, and `hairs24` was
- *     renamed `hairs47`. HeadEnd_M and Shoulder_L gained translation tracks that
- *     hold a constant value, so they do nothing.
- *   - Textures are byte-identical to 05's, so the skin numbers below still hold.
+ * Against male_inital10 (the last export measured here): the 716 keys are the same
+ * count but NOT the same performance — key-for-key the two differ by up to 0.276,
+ * and the clip is stamped 30fps (23.83s) where 10 was 24fps (29.79s). Both the
+ * timing AND the content moved, so the windows were re-cut from scratch rather
+ * than rescaled. Against 09 the face morphs are untouched: 52 names, the 51 ARKit
+ * shapes byte-identical on the head (jawOpen still 2009 verts at 0.0296, blinks
+ * still mirrored at x +-0.0255), and the face mesh is the only one carrying morph
+ * targets at all — so lipsync and the procedural blink need nothing.
  *
- * male_inital08 is 07 with NO geometry or animation change at all — every mesh,
- * UV, morph delta and animation key is identical (the clip diffs to exactly
- * 0.00), so the windows, lipsync and blink below are untouched. Only two
- * materials moved, both in ways this app has to know about:
+ * The head texture is the DARK repaint again (`Std_Skin_Head_Diffuse7 copy`, 135.1
+ * mean luminance — a different file from 08's `Diffuse6` but the same level), after
+ * 09-10 briefly reverted to the pale original at 174.9. The tint in tuning.ts was
+ * set against this level, so it needs no change. Every material authors roughness
+ * and metalness, so the corrections 05-08 needed stay retired. The hair material
+ * is named `standardSurface2.001` again (09/10 called it `standardSurface2`), which
+ * is why the alphaTest key in tuning.ts moved back.
  *
- *   - The hair (`standardSurface2.001`) now authors roughness 0.536 and
- *     metalness 0.755, where 07 left roughness out and set metalness 0. Its base
- *     colour went back to exactly 0, which is why the alphaTest override below
- *     is still load-bearing — the colour test still reads it as a mask card.
- *   - The scalp (`pasted__Scalp1_Transparency`) authors roughness 0.768 and
- *     OMITS metallicFactor, which glTF defaults to 1.0 — fully metallic, where
- *     07 had it at 0. Deliberately NOT corrected: the scalp is a mask card
- *     sitting under 1787 hair cards, and rendered through this scene the head
- *     is unchanged, so an override here would be a guess with nothing to fix.
- *     Its opacity texture was renamed with a `pasted__` prefix; nothing keys
- *     on image names.
+ * SEGMENTS, measured off this clip's own per-frame motion rather than carried over:
  *
- * male_inital07 was 06 with one more hair pass and nothing else that matters:
- * the hair mesh is denser again (34557 -> 35237 verts), its node is renamed
- * `hairs47` -> `hairs`, and its base colour moved off exact black to 0.0005 —
- * still far under the 0.01 the alphaTest rule below tests for, so that override
- * is still doing the work. The beard is back to 16912 verts (05's count) with
- * jawOpen unchanged at 0.0306. Same 30fps clip (keys match 06 to 0.0005), same
- * skeleton, same 51 morph names, byte-identical textures, and the same three
- * materials still missing `roughnessFactor` — so everything measured for 06
- * below still holds, windows included.
+ *   20-235   breathing  (at-rest idle, 1.5-2.2 deg/frame over the body)
+ *   240-320  listening  (the authored hands-rise, 2.4-5.9)
+ *   340-715  talking    (the gesture performance, 25-77)
  *
- * The windows were re-cut the way the earlier ones were: scored by SIMULATING the
- * runtime entry search (`bestLoopEntry`) against this clip's own curves, taking
- * the pose at loopEnd-0.35s, scanning the same excluded tail, and measuring how
- * much of the window still plays and how far apart the two crossfaded trajectories
- * are. Keeping 05's key indices was tried first and is what forced the re-cut: at
- * 30fps the fixed 0.35s fade spans 10.5 keys instead of 8.4, which moved the
- * talking re-entry to key 599 — 14% of the window, a rig that stands still while
- * it talks. See each window for its numbers.
+ * The windows inside them were scored the way every male window since male2 has
+ * been: by SIMULATING the runtime entry search (`bestLoopEntry`) against this
+ * clip's own curves — take the pose at loopEnd-0.35s, scan the same excluded tail,
+ * and measure how much of the window still plays and how far apart the outgoing
+ * and incoming trajectories sit through the fade. Carrying 08's windows across
+ * unchanged was tried first and is what forced the re-cut: they land in the wrong
+ * segments here, playing 28% of the listening loop and 15% of the talking one.
  */
 const MALE: AvatarConfig = {
   id: "male",
-  url: "/models/male_inital08.glb.gz",
-  // Served as the pre-compressed .gz (next.config.ts), so `encoded` is what
-  // actually crosses the wire and `decoded` is what the reader counts — the ratio
-  // keeps the loading percentage honest. 66MB raw, 42MB gzipped.
-  //
-  // This rig is still the raw export, NOT run through scripts/optimize_glb.py,
-  // which would take it to ~39MB BEFORE compression. Run the optimizer before
-  // this rig goes in front of anyone on a slow link.
-  bytes: { decoded: 65923940, encoded: 42443574 },
+  url: "/models/male_inital12.glb.gz",
+  // Served as the pre-compressed .gz (next.config.ts), so `encoded` is what crosses
+  // the wire and `decoded` is what the reader counts — the ratio keeps the loading
+  // percentage honest. 68MB raw, 43MB gzipped. Still the RAW export: run
+  // scripts/optimize_glb.py before this rig goes in front of anyone on a slow link.
+  bytes: { decoded: 68123604, encoded: 43348830 },
   segments: {
-    // One full breathing cycle, re-cut for the 30fps timing: seam 0.077 rad over
-    // 109 joints, re-enters at f100 and plays 1.97s of its 2.53s (78%), and the
-    // two crossfaded trajectories sit 0.049 rad apart — against 0.079 on 05's
-    // window. Carrying 05's keys across unchanged (f110-f175 here) instead gives
-    // 75% and 0.122, so this is the better cut on every axis.
-    breathing: { loop: [f(83), f(159)] },
-    // The settled listening pose, entered after the authored hands-rise. Re-enters
-    // at f245 — the first frame, so the whole 2.63s plays — with a crossfade gap of
-    // 0.276 against 05's 0.281, and slightly more motion per cycle (1.9 vs 1.7).
-    listening: { loop: [f(245), f(324)] },
-    // The authored gesture performance. This is the window that had to move: 05's
-    // keys re-enter at f599 here and play 14% of the cycle, because the fixed 0.35s
-    // crossfade covers 10.5 frames at 30fps where it covered 8.4 at 24fps.
-    //
-    // This cut re-enters at f543, one frame in, and plays 4.83s of its 4.87s
-    // (100%), with the same absolute motion as 05's talking loop (95.6 rad against
-    // 95.3) and a crossfade gap of 0.945 — an order of magnitude tighter than the
-    // 9.93 that window lived with. Its seam (4.37 rad) is wide, which costs
+    // One breathing cycle out of the at-rest idle. Re-enters at f29 and plays
+    // 1.97s of its 2.27s (87%) through a crossfade gap of 0.057 — the tightest
+    // in the segment, and it carries 13.2 of the 14.4 rad the best-moving
+    // candidate does.
+    breathing: { loop: [f(20), f(88)] },
+    // The authored hands-rise and the settled pose after it. The segment is only
+    // 80 frames long, so this is most of it: re-enters at f246, six frames in,
+    // and plays 1.90s of its 2.10s (90%), with the lowest gap (5.41) of any
+    // window that keeps the rise. The gap is large in absolute terms because 178
+    // of the 295 matched joints are face bones, and they are at their busiest
+    // here — against other windows in this segment it is the smallest.
+    listening: { loop: [f(240), f(303)] },
+    // The gesture performance. Re-enters at f445, 32 frames in, and plays 6.27s
+    // of its 7.33s (85%) carrying 185.6 rad — the most motion of any candidate
+    // that also keeps its gap under 8.5. The seam is wide (33.6) and costs
     // nothing: every loop re-enters through the search above rather than playing
-    // the seam, and loop[0] is only ever the pose for a first entry with no
+    // the seam, and loop[0] is only the pose for a first entry that has no
     // outgoing pose to match.
-    talking: { loop: [f(543), f(688)] },
+    talking: { loop: [f(413), f(633)] },
   },
   // Unlike male1, this export carries the full 51 ARKit shapes on one 12-primitive
   // mesh, so lipsync and blink both run the same code the female rig does.

@@ -43,6 +43,9 @@ app = FastAPI(title="MARI · Voice")
 async def _startup() -> None:
     get_prompts()  # a missing prompt file stops startup here
     asyncio.create_task(providers.warm("en"))
+    if C.UR_TTS == "matcha":
+        # Only checks the local TTS server; Soniox has nothing to preload.
+        asyncio.create_task(providers.warm("ur"))
     asyncio.create_task(avatar.warm())
     # Minutes on a cold container; turns are answered from the core brief meanwhile.
     asyncio.create_task(rag.startup())
@@ -125,7 +128,7 @@ async def voice(request: Request, lang: str = "en", avatar: str = "female") -> d
         out["demo"] = True
 
     # Optional: the browser speaks the text itself if no audio comes back.
-    if out["reply"] and C.tts_ready(lang):
+    if out["reply"] and C.tts_ready(lang, avatar_id):
         try:
             audio, mime = await speech.speak(out["reply"], lang, avatar_id)
             if audio:

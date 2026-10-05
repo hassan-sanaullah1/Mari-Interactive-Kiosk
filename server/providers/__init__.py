@@ -24,7 +24,7 @@ from .stt import (
     stt,
     wav_to_pcm16,
 )
-from .tts import KokoroLocalTTS, KokoroRemoteTTS, UpliftTTS, get_tts_provider
+from .tts import KokoroLocalTTS, KokoroRemoteTTS, MatchaTTS, UpliftTTS, get_tts_provider
 
 __all__ = [
     "STTProvider",
@@ -35,6 +35,7 @@ __all__ = [
     "WhisperRemoteSTT",
     "KokoroLocalTTS",
     "KokoroRemoteTTS",
+    "MatchaTTS",
     "UpliftTTS",
     "get_stt_provider",
     "get_tts_provider",
@@ -47,7 +48,8 @@ __all__ = [
 
 async def warm(lang: str = "en") -> None:
     """Preload local-model adapters (Whisper/Kokoro) in the background so the first
-    turn in that language isn't slowed by model load. No-op for remote adapters."""
+    turn in that language isn't slowed by model load, and check the Matcha-TTS server is
+    up. No-op for remote adapters."""
     import asyncio
 
     stt_provider = get_stt_provider(lang)

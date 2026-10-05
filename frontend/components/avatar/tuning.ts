@@ -311,6 +311,20 @@ export interface RigTuning {
    * so loads at glTF's fully matte 1.0.
    */
   materialRoughness?: Record<string, number>;
+  /**
+   * Specular reflection strength to force on a material, by name — 1 is the
+   * physical default, and anything above it reflects more light than arrives.
+   *
+   * The male rig's hair needs this: the export authors
+   * `KHR_materials_specular.specularColorFactor [2, 2, 2]`, double strength, on
+   * a near-black base colour (0.047) with a clearcoat over it. Black hair has
+   * almost no diffuse of its own, so that doubled highlight IS what you see —
+   * every lamp in the rig reads as a bright sheen down the sides of his head.
+   * Nothing about the light rig causes it, and turning the back lights down
+   * does not touch it (measured: the cyan rim at 0 changes his hair by under
+   * half a level out of 255).
+   */
+  materialSpecular?: Record<string, number>;
   /** A2F weight calibration, or null for a rig with no morphs to calibrate. */
   a2f: { gain: number; shapeGains: Record<string, number> } | null;
   /**
@@ -319,6 +333,22 @@ export interface RigTuning {
    * HAND SCALE block for how it survives the animation.
    */
   handScale: number;
+  /**
+   * Multipliers on the two back lights (cyan rim, green kick) for this rig, in
+   * both themes. 1 leaves them at the per-state intensity in LIGHT_STATES.
+   *
+   * Per-rig because what the edge light lands ON differs: the back lights are
+   * meant to catch the silhouette of cloth, and how hot they read depends
+   * entirely on the material at the edge. The male rig's hair is the case that
+   * needs this — it authors metalness 0.755 with clearcoat (see alphaTest
+   * below), so a spot aimed at his outline mirrors straight back off it and the
+   * black hair lights up at the sides, which never happens on her matte hair.
+   *
+   * Only `rim` (the cyan one, camera-left) is dialled back today: it sits
+   * higher and further forward than the kick, so it is the one that reaches his
+   * hair. The green kick stays at 1 on both rigs.
+   */
+  backLight: { rim: number; kick: number };
   /**
    * The light rig under the light theme. The light backdrop is near-white, so a
    * rig lit for the dark one reads as a dark cut-out against it. Per-rig
@@ -355,15 +385,22 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
     faceMaterial: "lambert12",
     a2f: { gain: 0.9, shapeGains: { jawopen: 0.375 } },
     handScale: 1,
-    lightThemeLighting: { exposure: 1.2, ambient: 0.6, fill: 1.8, environment: 1.3 },
+    // Her hair is matte, so the back lights do on her exactly what they were
+    // tuned to do. Nothing to scale.
+    backLight: { rim: 1, kick: 1 },
+    // Lifted over the first light-theme pass (exposure 1.2, ambient 0.6, fill
+    // 1.8): ambient carries most of it, so the gain lands on the shaded side of
+    // her face and the folds of the kameez rather than on the whole image.
+    lightThemeLighting: { exposure: 1.35, ambient: 0.9, fill: 2.3, environment: 1.3 },
     // The authored rig, unchanged.
     darkThemeLighting: DARK_LIGHTING,
   },
 
   // -------------------------------------------------------------------------
-  // male_inital08.glb. The export's own history — what changed between 05, 06,
-  // 07 and 08, and which of those changes the numbers below answer to — is in
-  // the MALE comment in models.ts, next to the clip windows it also decides.
+  // male_inital12.glb — the facial-bone rig (302 nodes) with the dark head repaint
+  // back. What changed against the earlier exports, and which of the numbers below
+  // answer to it, is in the MALE comment in models.ts, next to the clip windows the
+  // same export decides.
   // -------------------------------------------------------------------------
   male: {
     // Measured off the rig: HeadEnd sits at 1.784 against girl15's 1.616 (and
@@ -380,15 +417,12 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
     // male2 its texture was the one male1's head used; male3 repaints it — see
     // the lambert5 note in materialTint below.
     skinMaterials: new Set(["lambert5", "Std_Skin_Arm", "Std_Skin_Leg"]),
-    // Zero, unlike the female rig's 0.25. The lift exists to open up the shadow
-    // side of a face that has one; his albedo is already 36% brighter than hers,
-    // and because emissive ignores the light rig entirely, on him it did not
-    // reveal shading so much as erase it — the hard bright band across his
-    // forehead and nose was this term sitting on top of an already-bright
-    // texture. Measured over the face through the same lights: at 0.10 his p95
-    // luminance was 169 against her 150; at 0 with the tint below he is at 147,
-    // with the same spread of light to dark (std 47.5 against her 45.5).
-    skinEmissive: 0,
+    // Was 0: the lift used to erase his shading rather than reveal it (a hard
+    // bright band across the forehead and nose at 0.10, measured p95 169
+    // against her 150). Nudged back up now that the light theme needs him
+    // brighter without pushing the kurta's highlight any further — watch that
+    // same forehead band if this goes higher than 0.08.
+    skinEmissive: 0.08,
     // null, unlike male1's 0.5. That override existed because male1 omitted
     // roughnessFactor on its skin and so loaded at glTF's 1.0 default; this
     // export authors 0.553 on all three skin materials (and a real value on
@@ -399,7 +433,9 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
     // would load at glTF's fully rough 1.0 default. 0.5 is what 03 authored on
     // the head; it also moves the arms and legs from 0.553 to 0.5, which is not
     // visible.
-    skinRoughness: 0.5,
+    // null again: 09 authors 0.5 on lambert5 and 0.553 on the arm and leg skin.
+    // The 0.5 here existed only because 05-08 omitted roughnessFactor on the head.
+    skinRoughness: null,
     // Scaled to bring this export's albedo onto the female rig's level under the
     // shared lights — see materialTint. The two garment entries are one texture
     // on two meshes (kurta and shalwar). Verified by rendering both rigs through
@@ -431,6 +467,19 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
     // 21% of the texture's visible texels against 4.2% at this cut, taking the soft
     // strands along the front hairline with it. The hair mesh and its opacity
     // texture are unchanged from 05, so this is the cut 05's hair actually got.
+    // Re-keyed for 09, which names the hair material `standardSurface2` again
+    // (08 called it `standardSurface2.001`). Still needed: the hair is authored
+    // near-black (0.0005), which AvatarModel's colour test reads as a mask card
+    // and would cut at 0.35 — 21% of the opacity texture's visible texels against
+    // 4.2% here, which is what ate the front hairline when 06 first went black.
+    // Keyed to 12's hair material name — the exports keep flipping between
+    // `standardSurface2` and `standardSurface2.001`, and a key that misses is
+    // silent. 12 authors the hair at 0.047 rather than near-black, so
+    // AvatarModel's colour test would reach this same 0.08 on its own; the entry
+    // stays because the cut is what we actually want, not a side effect of a
+    // colour, and because 06 and 08 both shipped the hair black enough to take
+    // the 0.35 mask cut, which ate 21% of the opacity texture's visible texels
+    // and with them the front hairline.
     alphaTest: { "standardSurface2.001": 0.08 },
     // The kurta and shalwar (one material, two meshes). male_inital05 and 06 ship
     // it with no roughnessFactor at all, so it loads at glTF's fully matte 1.0 and
@@ -439,7 +488,17 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
     // the female rig has. 0.5 is what male_inital03 authored on this same material
     // and what girl15's kameez carries. Diffuse shading, and so his skin and the
     // garment's overall brightness, are untouched by this.
-    materialRoughness: { "pasted__pasted__lambert6": 0.7 },
+    // No override: 09 authors roughness 0.5 on the kurta, where 05-08 omitted it
+    // and so loaded fully matte at glTF's 1.0 default. That default is what cost
+    // him the cyan rim and green kick as coloured edges on cloth, and 0.5 is both
+    // what this export now sets and what girl15's kameez carries — so there is
+    // nothing left to correct and forcing a value would overwrite the artist's.
+    // The export's own 0.2 is kept: it is what makes his hair read as hair
+    // rather than felt. The sheen it was catching is handled by the specular
+    // override below instead.
+    materialRoughness: {},
+    // TEST
+    materialSpecular: { "standardSurface2.001": 0.6 },
     // The female rig's calibration, unchanged. It is a property of what the NIM
     // emits (JawOpen peaking past 2.5 while the lip shapes sit under 1) far more
     // than of the rig, and these two rigs carry the same authored blendshapes at
@@ -452,12 +511,16 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
     // Lower this (0.9 or so) to shrink them; much below 0.85 the wrist starts to
     // show a step at the cuff.
     handScale: 1,
-    // Brighter in the shadows than the shared rig, on both themes: ambient and
-    // fill only, so what lifts is the shaded side of his face, his beard and the
-    // folds of the kurta rather than the whole image. Exposure is left alone
-    // deliberately — raising it would take the already-bright lit side of the
-    // kurta (240/255 albedo before the tint above) up with it.
-    lightThemeLighting: { exposure: 1.35, ambient: 0.65, fill: 2.1, environment: 1.3 },
+    // The cyan rim pulled back off his hair; the green kick left alone.
+    backLight: { rim: 0, kick: 0 },
+    // Brighter in the shadows than the shared rig on both themes: the lift sits
+    // mostly in ambient and fill, so what opens up is the shaded side of his
+    // face, his beard and the folds of the kurta rather than the whole image.
+    // Lifted here from exposure 1.35 / ambient 0.65 / fill 2.1, the same way her
+    // light-theme entry was. Exposure is the one to back off first if the cloth
+    // flattens: the lit side of the kurta is 240/255 albedo before the tint
+    // above, and it is the brightest thing in the shot.
+    lightThemeLighting: { exposure: 1.3, ambient: 0.95, fill: 2.6, environment: 1.3 },
     darkThemeLighting: { exposure: 1, ambient: 0.45, fill: 1.35, environment: 1 },
   },
 };

@@ -42,9 +42,10 @@
 import { AVATARS } from "@/components/avatar/models";
 
 /**
- * Decompressed size / transferred size, per model — girl15 is served as a real
- * .gz, the male rig uncompressed, so the correction is 1.48x for one and 1.0 for the
- * other. Only used to keep the progress percentage honest — see fetchAvatar.
+ * Decompressed size / transferred size, per model — both rigs are served as real
+ * .gz files (next.config.ts), so the correction is 1.48x for the female rig and
+ * 1.61x for the male one. Only used to keep the progress percentage honest — see
+ * fetchAvatar.
  *
  * Looked up by URL rather than passed in, so every existing call site keeps its
  * signature. An unknown URL (the ?nocache retry is stripped first, but a rig

@@ -96,8 +96,22 @@ try:
 except ValueError:
     UPLIFT_SPEED_EN = 0.98
 
-# ── English STT/TTS. Urdu always uses Soniox/Uplift. English TTS defaults to Uplift
-#    because no Kokoro instance is deployed; set APP_EN_TTS=local|remote when one is. ──
+# ── Urdu TTS for the female presenter: "uplift" (default) or "matcha", a local
+#    server (kaani/kisok-integrated-tts) reached over HTTP only. Matcha-TTS is a female
+#    voice, so the male presenter's Urdu stays on Uplift either way. ──
+UR_TTS = env("APP_UR_TTS", "uplift")
+MATCHA_URL = env("APP_MATCHA_TTS_URL", "http://127.0.0.1:8030").rstrip("/")
+# 1.0 is the model's own pace; the server clamps to 0.6–1.5 too.
+try:
+    MATCHA_SPEED = min(1.5, max(0.6, float(env("APP_MATCHA_SPEED", "1.0"))))
+except ValueError:
+    MATCHA_SPEED = 1.0
+# A sentence the local server can't render goes to Uplift rather than being silent.
+MATCHA_FALLBACK = env("APP_MATCHA_FALLBACK", "1").lower() not in ("0", "false", "no", "off")
+
+# ── English STT/TTS. Urdu uses Soniox, and Uplift or Matcha-TTS (UR_TTS). English TTS
+#    defaults to Uplift because no Kokoro instance is deployed; set
+#    APP_EN_TTS=local|remote when one is. ──
 EN_STT = env("APP_EN_STT", "local")     # "local" (faster-whisper) | "remote"
 EN_TTS = env("APP_EN_TTS", "uplift")    # "uplift" | "local" (kokoro) | "remote"
 
@@ -128,7 +142,7 @@ A2F_TLS_CA = env("APP_A2F_TLS_CA")
 A2F_MAX_CLIPS = max(1, int(env("APP_A2F_MAX_CLIPS", "1")))
 
 # ── Voices ──────────────────────────────────────────────────────────
-# Kokoro voice names. Urdu always uses Uplift (UPLIFT_VOICE) and English uses Uplift
+# Kokoro voice names. Urdu uses Uplift (UPLIFT_VOICE) or Matcha-TTS and English uses Uplift
 # too while APP_EN_TTS=uplift (UPLIFT_VOICE_EN), so these only apply when either
 # language is routed to Kokoro.
 VOICE_EN = env("APP_TTS_VOICE_ENGLISH", "af_heart")
@@ -151,7 +165,10 @@ def stt_ready(lang: str) -> bool:
     return True if EN_STT == "local" else bool(WHISPER_URL)
 
 
-def tts_ready(lang: str) -> bool:
+def tts_ready(lang: str, avatar: str = "female") -> bool:
+    if lang == "ur" and UR_TTS == "matcha" and avatar != "male":
+        # MatchaTTS falls back to Uplift by itself when the local server is down.
+        return True
     if lang == "ur" or EN_TTS == "uplift":
         return bool(UPLIFT_KEY)
     return True if EN_TTS == "local" else bool(KOKORO_BASE)
@@ -168,7 +185,7 @@ async def status() -> dict:
             "en": {"provider": en_stt, "ready": stt_ready("en")},
         },
         "tts": {
-            "ur": {"provider": "uplift", "ready": tts_ready("ur"), "voice": UPLIFT_VOICE},
+            "ur": await _ur_tts_status(),
             "en": {
                 "provider": en_tts,
                 "ready": tts_ready("en"),
@@ -176,6 +193,28 @@ async def status() -> dict:
             },
         },
         "avatar": await _avatar_status(),
+    }
+
+
+async def _ur_tts_status() -> dict:
+    """Urdu TTS for the female presenter; with matcha, whether its server answers now."""
+    if UR_TTS != "matcha":
+        return {"provider": "uplift", "ready": tts_ready("ur"), "voice": UPLIFT_VOICE}
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=0.5) as client:
+            r = await client.get(f"{MATCHA_URL}/healthz")
+            reachable = r.status_code == 200 and r.json().get("ready") is True
+    except Exception:
+        reachable = False
+    return {
+        "provider": "matcha",
+        "ready": tts_ready("ur"),
+        "url": MATCHA_URL,
+        "reachable": reachable,
+        "fallback": "uplift" if MATCHA_FALLBACK else None,
+        "male": {"provider": "uplift", "ready": tts_ready("ur", "male"), "voice": UPLIFT_VOICE_MALE},
     }
 
 

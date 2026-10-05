@@ -53,9 +53,14 @@ export default function Page() {
    * on screen, apparently frozen, until the new one is posed — and coming back
    * to a rig already in drei's cache still needs it, because `avatarReady` is
    * what un-hides the canvas and the new rig has not signalled it yet.
+   *
+   * It also hard-stops the session first: the reply audio is the old rig's
+   * voice, and leaving it playing means the new presenter appears while the
+   * previous one is still talking. The transcript stays — only the turn ends.
    */
   const changeAvatar = (id: AvatarId) => {
     if (id === avatar) return;
+    voice.stop();
     setAvatarReady(false);
     setAvatar(id);
     applyAvatar(id);

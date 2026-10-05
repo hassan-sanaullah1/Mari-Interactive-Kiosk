@@ -155,7 +155,6 @@ async function openMic(): Promise<MediaStream> {
 type ReplyQueue = {
   push: (b: ArrayBuffer, mime: string, clip: string | null) => void;
   finish: () => void;
-  busy: () => boolean;
   stop: () => void;
   resume: () => void;
 };
@@ -190,6 +189,12 @@ export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
   const audioElRef = useRef<HTMLAudioElement | null>(null);
   const activeRef = useRef(false);
   const pausedRef = useRef(false);
+  /**
+   * The mode the hold started from, so resuming knows what it is going back to:
+   * the mic (which has to be re-opened) or a reply in flight (which has to be
+   * handed back to the queue, NOT replaced with a fresh listening turn).
+   */
+  const pausedFromRef = useRef<Mode>("idle");
   const cancelledRef = useRef(false);
   const endPendingRef = useRef(false);
   /** Whether the turn whose {"end"} is deferred had speech in it. */
@@ -379,7 +384,6 @@ export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
         finished = true;
         if (!playing && !items.length) endOfTurn();
       },
-      busy: () => playing || items.length > 0,
       stop() {
         stopped = true;
         finished = true;
@@ -734,19 +738,43 @@ export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
 
   /** Hold the conversation: pause playback, or drop the mic mid-listen. */
   const togglePause = useCallback(() => {
-    if (!activeRef.current) return;
+    // Anything that is not idle can be held. This used to guard on
+    // `activeRef.current`, which is only ever set by the MIC path — so for a
+    // question asked in the chat composer the kiosk was speaking with `active`
+    // false, and the button did nothing at all (and rendered as disabled).
+    // Typed turns deliberately do not set it, because `endOfTurn` reads the same
+    // flag to decide whether to re-open the mic, and typing is not permission to
+    // do that.
+    if (mode === "idle") return;
     if (pausedRef.current) {
       pausedRef.current = false;
       const el = audioElRef.current;
       if (el && el.paused && !el.ended) {
         void el.play();
         setMode("speaking");
-      } else if (queueRef.current?.busy()) {
-        queueRef.current.resume();
-      } else {
+      } else if (pausedFromRef.current === "listening") {
+        // Held with the mic open: give it back.
         void startTurn();
+      } else {
+        // Held mid-reply. Hand the queue its playhead: it plays whatever landed
+        // during the hold, waits for what has not arrived yet, and ends the turn
+        // if the reply finished while we were paused.
+        //
+        // The `busy()` test this replaced got the in-between case wrong — a hold
+        // that lands after one sentence ends and before the next arrives leaves
+        // the queue not playing and empty, so resume fell through to startTurn()
+        // and opened the mic over the rest of the reply.
+        const queue = queueRef.current;
+        queue?.resume();
+        // resume() -> playNext() sets "speaking" synchronously if a sentence was
+        // waiting. If nothing was, the reply is still streaming and the mode has
+        // to move off "paused" anyway, or the button keeps offering to resume a
+        // hold that is already over. With no queue at all there is nothing left
+        // of the turn to go back to.
+        setMode((m) => (m !== "paused" ? m : queue ? "thinking" : "idle"));
       }
     } else {
+      pausedFromRef.current = mode;
       pausedRef.current = true;
       turnRef.current++; // a turn still opening its mic must not start after the hold
       startingRef.current = null;

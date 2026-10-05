@@ -99,3 +99,45 @@ def test_the_responder_applies_it_to_every_sentence() -> None:
 
     assert "latin_terms(sentence, lang)" in inspect.getsource(responder.respond_sentences)
     assert "latin_terms(reply, lang)" in inspect.getsource(responder.respond)
+
+
+@pytest.mark.parametrize(
+    "written,fixed",
+    [
+        # Qwen switches script after the first letter; each of these reached the screen.
+        ("Mari Energies کے کiosk پر", "Mari Energies کے kiosk پر"),
+        ("یہ فiscal year 2024-25 ہے", "یہ fiscal year 2024-25 ہے"),
+        ("عابد نiaz حسن", "عابد Niaz حسن"),        # the corpus's own capitalisation
+        ("ہم کompany ہیں", "ہم company ہیں"),       # lower case where the corpus uses it
+    ],
+)
+def test_a_word_that_switches_script_partway_is_made_latin(written: str, fixed: str) -> None:
+    assert latin_terms(written, "ur") == fixed
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["Sky47 کی سروس", "میں نے 2024 میں دیکھا", "Mari Energies کے kiosk پر", "MD/CEO Faheem Haider ہیں"],
+)
+def test_words_wholly_in_one_script_are_left_alone(text: str) -> None:
+    assert latin_terms(text, "ur") == text
+
+
+@pytest.mark.parametrize(
+    "written,fixed",
+    [
+        # The female presenter's name in place of the brand, from a real long introduction.
+        ("یہاں مریم انرجیز کے ہیڈ آفس میں", "یہاں Mari Energies کے ہیڈ آفس میں"),
+        ("(پہلے مریم پٹرولیم کمپنی لمیٹڈ)", "(پہلے Mari Petroleum کمپنی لمیٹڈ)"),
+        ("ڈہرکی میں مریم گیس فیلڈ کی دریافت", "ڈہرکی میں Mari Gas Field کی دریافت"),
+        ("1954 میں ماری گیس فیلڈ", "1954 میں Mari Gas Field"),
+        ("مریم سروسز اور مریم منرلز", "Mari Services اور Mari Minerals"),
+    ],
+)
+def test_the_presenters_name_in_place_of_the_brand_is_fixed(written: str, fixed: str) -> None:
+    assert latin_terms(written, "ur") == fixed
+
+
+@pytest.mark.parametrize("text", ["میں مریم ہوں۔", "میرا نام مریم ہے، Mari Energies سے۔"])
+def test_the_presenter_still_has_her_own_name(text: str) -> None:
+    assert latin_terms(text, "ur") == text

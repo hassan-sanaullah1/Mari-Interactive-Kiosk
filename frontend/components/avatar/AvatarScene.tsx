@@ -165,9 +165,17 @@ interface DynamicLightingProps {
   headTargetY: number;
   /** The theme's part of the rig — exposure, ambient, fill and reflections. */
   lighting: ThemeLighting;
+  /** This rig's scale on the two back lights — see `backLight` in ./tuning.ts. */
+  backLight: { rim: number; kick: number };
 }
 
-function DynamicLighting({ state = "idle", levelRef, headTargetY, lighting }: DynamicLightingProps) {
+function DynamicLighting({
+  state = "idle",
+  levelRef,
+  headTargetY,
+  lighting,
+  backLight,
+}: DynamicLightingProps) {
   const { gl, scene } = useThree();
   const ambientLightRef = useRef<THREE.AmbientLight>(null);
   const keyLightRef = useRef<THREE.DirectionalLight>(null);
@@ -201,14 +209,14 @@ function DynamicLighting({ state = "idle", levelRef, headTargetY, lighting }: Dy
     if (rimLightRef.current) {
       rimLightRef.current.intensity = THREE.MathUtils.lerp(
         rimLightRef.current.intensity,
-        config.rim + sv * VOICE_BOOST.rim,
+        (config.rim + sv * VOICE_BOOST.rim) * backLight.rim,
         LERP_SPEED,
       );
     }
     if (kickLightRef.current) {
       kickLightRef.current.intensity = THREE.MathUtils.lerp(
         kickLightRef.current.intensity,
-        config.kick + sv * VOICE_BOOST.kick,
+        (config.kick + sv * VOICE_BOOST.kick) * backLight.kick,
         LERP_SPEED,
       );
     }
@@ -400,6 +408,7 @@ export default function AvatarScene({
         levelRef={levelRef}
         headTargetY={config.headTargetY}
         lighting={lighting}
+        backLight={config.backLight}
       />
 
       {/* Reflections only — an <Environment> with no `background` prop does not

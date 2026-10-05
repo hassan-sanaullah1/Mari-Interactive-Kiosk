@@ -79,7 +79,7 @@ export function SendIcon({ className }: { className?: string }) {
 
 /**
  * Presenter silhouettes for the avatar toggle — a head over shoulders, the
- * female one with longer hair and the male with a flat-topped short cut.
+ * female one with longer hair and the male with a close-cropped cut.
  *
  * Drawn rather than labelled because the pill sits in a bottom-left cluster
  * that is already at its width budget on a 402-unit phone (see
@@ -102,10 +102,12 @@ export function FemaleAvatarIcon({ className }: { className?: string }) {
 export function MaleAvatarIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      {/* short, flat-topped hair sitting on the crown only */}
-      <path d="M12 2.1c-2.7 0-4.6 1.6-4.6 3.9 0 .5.4.8.9.7a15 15 0 0 1 7.4 0c.5.1.9-.2.9-.7 0-2.3-1.9-3.9-4.6-3.9Z" />
+      {/* short crop: a crescent hugging the skull and tapering past the ears.
+          Drawn flush with the head on purpose — a flat-topped shape floating
+          above it reads as a cap rather than as hair. */}
+      <path d="M7.6 9.5a4.4 4.4 0 0 1 8.8 0h-.9a3.5 3.5 0 0 0-7 0Z" />
       {/* face */}
-      <circle cx="12" cy="9.2" r="3.5" />
+      <circle cx="12" cy="9.5" r="3.5" />
       {/* shoulders, squarer than the female silhouette */}
       <path d="M12 13.8c-4 0-7.1 2.4-7.7 5.8-.2.9.5 1.6 1.4 1.6h12.6c.9 0 1.6-.7 1.4-1.6-.6-3.4-3.7-5.8-7.7-5.8Z" />
     </svg>

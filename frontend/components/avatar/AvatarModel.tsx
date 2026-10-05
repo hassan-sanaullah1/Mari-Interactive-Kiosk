@@ -170,6 +170,13 @@ const SWITCH_XFADE_SECS = 0.35;
  */
 const TALK_EXIT_DEBOUNCE_MS = 250;
 
+/**
+ * Any one of these on a mesh means it is part of the FACE — see morphMeshes.
+ * Both rigs name their blendshapes this way; the alternatives are the same
+ * fallbacks blinkTargets accepts.
+ */
+const FACE_MORPH_MARKERS = ["jawOpen", "eyeBlinkLeft", "eyeBlink_L", "Eye_Blink_L"];
+
 const bodyStateFor = (state: AvatarState): BodyState => {
   if (state === "speaking") return "talking";
   // "thinking" sits between the user finishing and MARI replying — the
@@ -1093,6 +1100,15 @@ export default function AvatarModel({
         const roughness = config.materialRoughness?.[std.name];
         if (roughness !== undefined) std.roughness = roughness;
 
+        // Specular strength the export pushed past 1 — see materialSpecular in
+        // ./tuning.ts. KHR_materials_specular's specularColorFactor arrives on
+        // THREE's `specularColor`, and a value above 1 is a reflection brighter
+        // than the light that caused it.
+        const specular = config.materialSpecular?.[std.name];
+        if (specular !== undefined && "specularColor" in std) {
+          (std as THREE.MeshPhysicalMaterial).specularColor.setScalar(specular);
+        }
+
         if (std.transparent) {
           // Two different cuts, because these cards fail two different ways.
           //
@@ -1123,13 +1139,23 @@ export default function AvatarModel({
   }, [scene, gl, config]);
 
   // ── MORPH TARGET MESHES ─────────────────────────────────────
+  // Only the meshes carrying FACE blendshapes. A rig can ship morphs that have
+  // nothing to do with speech — male_inital11 carries two garment shapes
+  // ("kameez2") on a separate mesh — and those must not be collected here: the
+  // name check below reads morphMeshes[0] and would report a perfectly good rig
+  // as misnamed, and A2F would log a 0/52 resolve for a mesh it never drives.
+  //
+  // The test is one ARKit name rather than the full list, because the face is
+  // split across a dozen primitives (head, brows, eyes, teeth, tongue,
+  // eyelashes) that each carry the whole set — see the header.
   const morphMeshes = useMemo(() => {
     const meshes: (THREE.SkinnedMesh | THREE.Mesh)[] = [];
     scene.traverse((child) => {
       if (
         (child instanceof THREE.SkinnedMesh || child instanceof THREE.Mesh) &&
         child.morphTargetDictionary &&
-        child.morphTargetInfluences
+        child.morphTargetInfluences &&
+        FACE_MORPH_MARKERS.some((name) => child.morphTargetDictionary![name] !== undefined)
       ) {
         meshes.push(child);
       }
@@ -1369,7 +1395,12 @@ export default function AvatarModel({
     // Audio2Face drives the rig's ARKit morphs by name, 1:1. Nothing else
     // touches the mouth: with no clip playing, applyA2FLipsync decays the
     // morphs it drove back to rest and the face simply settles.
-    applyA2FLipsync(a2fStateRef.current, morphMeshes, delta);
+    //
+    // "idle" covers a held conversation as well as a finished one (see
+    // avatarStateFor in ./state.ts), and both want the same mouth: a paused
+    // audio element freezes the lipsync clock rather than stopping it, so
+    // without this the lips stay in whatever shape the pause caught them.
+    applyA2FLipsync(a2fStateRef.current, morphMeshes, delta, state === "idle");
 
     // ── EYE BLINK ──────────────────────────────────────────────
     // Procedural rather than from A2F: A2F's eye channels are near-silent
