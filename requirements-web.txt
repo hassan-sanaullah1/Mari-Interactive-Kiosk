@@ -8,7 +8,7 @@ numpy>=1.26          # PCM handling
 
 # English runs locally (the s2s built-ins), not the remote APIs:
 faster-whisper>=1.0  # English STT (GPU/CPU)
-soundfile>=0.12      # WAV encoding for local Kokoro
+soundfile>=0.14.0      # WAV encoding for local Kokoro
 # kokoro>=0.7  misaki[en]   # English TTS — needs Python <=3.12 (pins numpy==1.26.4,
 #                             which has no wheel on 3.13). Installs cleanly in the
 #                             Docker/ECS runtime. Until then English TTS uses the
