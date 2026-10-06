@@ -20,7 +20,7 @@ soundfile>=0.12      # WAV encoding for local Kokoro
 # protobuf runtimes.
 grpcio>=1.60          # transport to the A2F NIM
 # nvidia-ace==1.2.0   # pip install --no-deps nvidia-ace==1.2.0  (A2F protos)
-av>=11.0              # decode TTS mp3/wav to the 16 kHz PCM A2F expects
+av>=19.0.1              # decode TTS mp3/wav to the 16 kHz PCM A2F expects
 
 # ── Retrieval layer (server/services/*) ─────────────────────────────
 # FastEmbed rather than sentence-transformers: ONNX Runtime, quantized weights, no
