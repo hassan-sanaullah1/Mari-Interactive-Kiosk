@@ -24,6 +24,16 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={inter.variable}>
+      <head>
+        {/* No <link rel="preload"> for the avatar.
+            It looks like free parallelism, but the model is fetched as six
+            parallel byte ranges (lib/avatarFetch.ts) because this host throttles
+            per connection — a preload would be a seventh connection pulling the
+            whole file serially, competing with the six that are doing the real
+            work, and its response is not the one the loader ends up using. The
+            fetch starts as soon as the avatar chunk evaluates, which is early
+            enough. */}
+      </head>
       <body>
         {/* Apply the stored theme before first paint so there's no flash. */}
         <script

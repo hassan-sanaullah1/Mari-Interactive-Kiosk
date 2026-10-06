@@ -1,23 +1,41 @@
-"""STT adapters — each implements :class:`server.providers.base.STTProvider`.
+"""STT adapters, each implementing :class:`server.providers.base.STTProvider`.
 
-  SonioxSTT       Urdu (and any language Soniox supports) — realtime websocket
-  WhisperLocalSTT English — local faster-whisper (GPU if available)
-  WhisperRemoteSTT English — remote OpenAI-compatible /audio/transcriptions
+  SonioxSTT        Urdu, one-shot over the Soniox realtime websocket
+  SonioxStream     Urdu, live partials for the /ws turn
+  WhisperLocalSTT  English, local faster-whisper (GPU if available)
+  WhisperRemoteSTT English, remote OpenAI-compatible /audio/transcriptions
 
-Shared by both entrypoints: server/app.py (FastAPI) and mari_s2s/handlers/*.py
-(huggingface/speech-to-speech plugin handlers) — no more duplicated websocket logic.
+Used by server/app.py and mari_s2s/handlers/.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import re
 import struct
 
 import httpx
 
 from .. import config as C
 from .base import STTProvider
+
+# Biases the recognizer toward the kiosk's vocabulary; without it "Mari" comes back as
+# "Mary". A sentence that uses the names in context shifts the decoder more than a list.
+_VOCAB_HINT_EN = (
+    "The following is a conversation with Maryam at the Mari Energies kiosk, "
+    "discussing Mari Energies, Mari Petroleum, MPCL, the Mari Gas Field, Daharki, "
+    "Mari Services, Mari Minerals, Mari Technologies, Sky47, GEM Energy, "
+    "Faheem Haider, PSX, and OGDCL."
+)
+_VOCAB_HINT_UR = (
+    "ماری انرجیز، ماری پیٹرولیم، ایم پی سی ایل، ماری گیس فیلڈ، ڈھرکی، ماری سروسز، "
+    "ماری منرلز، ماری ٹیکنالوجیز، سکائی فورٹی سیون، جیم انرجی، فہیم حیدر، پی ایس ایکس"
+)
+
+
+def _vocab_hint(lang: str) -> str:
+    return _VOCAB_HINT_UR if lang == "ur" else _VOCAB_HINT_EN
 
 
 # ─────────────────────────── WAV helpers ────────────────────────────
@@ -95,6 +113,7 @@ class SonioxSTT(STTProvider):
             "num_channels": 1,
             "language_hints": [self.lang],
             "enable_endpoint_detection": True,
+            "context": _vocab_hint(self.lang),
         }
         finals: list[str] = []
         async with websockets.connect(self.url, max_size=None) as ws:
@@ -117,6 +136,12 @@ class SonioxSTT(STTProvider):
                 if data.get("finished"):
                     break
         return "".join(finals).strip()
+
+
+# How long finish() keeps waiting when the first grace produced no text at all, and
+# how often it looks. Only an otherwise-lost turn ever waits this long; see finish().
+_EMPTY_GRACE = 1.5
+_EMPTY_POLL = 0.05
 
 
 class SonioxStream:
@@ -149,6 +174,7 @@ class SonioxStream:
             "num_channels": 1,
             "language_hints": [self.lang],
             "enable_endpoint_detection": True,
+            "context": _vocab_hint(self.lang),
         }
         await self.ws.send(json.dumps(cfg))
         self._reader = asyncio.create_task(self._read())
@@ -165,15 +191,21 @@ class SonioxStream:
             if data.get("error_code"):
                 raise RuntimeError(f"soniox {data.get('error_code')}: {data.get('error_message')}")
             partial = ""
+            saw_token = False
             for tok in data.get("tokens", []):
                 text = tok.get("text", "")
                 if text.startswith("<") and text.endswith(">"):
                     continue
+                saw_token = True
                 if tok.get("is_final"):
                     self.finals.append(text)
                 else:
                     partial += text
-            self.last_partial = partial
+            # Replaced by any message with a real token (a final one included, or the
+            # tail is said twice), but never blanked by a keepalive or marker-only
+            # message, which would leave finish() with an empty transcript.
+            if saw_token:
+                self.last_partial = partial
             if self.on_partial:
                 cur = ("".join(self.finals) + partial).strip()
                 if cur:
@@ -185,11 +217,11 @@ class SonioxStream:
                 break
 
     async def finish(self, grace: float = 0.35) -> str:
-        """End the utterance and return the transcript fast. Soniox only emits its
-        `is_final` tokens ~1s+ after end-of-audio, but the streaming partials already
-        hold the full text (the client keeps streaming through the VAD silence tail).
-        So instead of blocking for finalization we take a short grace, then use
-        finals + the latest partial. Cuts ~1s off every turn."""
+        """End the utterance and return finals + the latest partial after a short grace.
+
+        Soniox finalizes ~1s after end-of-audio, but the partials already hold the text,
+        so this does not wait for finalization.
+        """
         try:
             if self.ws:
                 await self.ws.send("")  # end-of-audio
@@ -197,8 +229,14 @@ class SonioxStream:
             pass
         await asyncio.sleep(grace)      # let the reader catch the tail of the partial
         text = ("".join(self.finals) + self.last_partial).strip()
-        # Close in the background — the Soniox close handshake (~1s to JP) must not
-        # block the reply from starting.
+        # Still empty: wait longer, polling. Only a turn that would otherwise be lost pays.
+        if not text:
+            for _ in range(int(_EMPTY_GRACE / _EMPTY_POLL)):
+                await asyncio.sleep(_EMPTY_POLL)
+                text = ("".join(self.finals) + self.last_partial).strip()
+                if text:
+                    break
+        # In the background: the close handshake (~1s) must not delay the reply.
         self._closing = asyncio.create_task(self.close())
         return text
 
@@ -225,14 +263,11 @@ class WhisperLocalSTT(STTProvider):
     def _get_model(self):
         if WhisperLocalSTT._model is None:
             from faster_whisper import WhisperModel
-            import torch
 
-            if torch.cuda.is_available():
-                try:
-                    WhisperLocalSTT._model = WhisperModel(self.model_size, device="cuda", compute_type="float16")
-                except Exception:
-                    WhisperLocalSTT._model = WhisperModel(self.model_size, device="cpu", compute_type="int8")
-            else:
+            # "auto" picks CUDA when available; CPU if a GPU is visible but unusable.
+            try:
+                WhisperLocalSTT._model = WhisperModel(self.model_size, device="auto", compute_type="int8")
+            except Exception:
                 WhisperLocalSTT._model = WhisperModel(self.model_size, device="cpu", compute_type="int8")
         return WhisperLocalSTT._model
 
@@ -252,7 +287,14 @@ class WhisperLocalSTT(STTProvider):
         model = self._get_model()
 
         def run() -> str:
-            segments, _ = model.transcribe(audio, language="en", beam_size=1, vad_filter=False)
+            # initial_prompt biases Whisper's decoder toward this vocabulary without
+            # constraining it to only these words — it is context, not a grammar. This
+            # is what stops "Mari" (the company's own name, said constantly here) from
+            # coming back as the far more common English name "Mary".
+            segments, _ = model.transcribe(
+                audio, language="en", beam_size=1, vad_filter=False,
+                initial_prompt=_vocab_hint("en"),
+            )
             return "".join(s.text for s in segments).strip()
 
         return await asyncio.to_thread(run)
@@ -271,7 +313,12 @@ class WhisperRemoteSTT(STTProvider):
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
         files = {"file": ("audio.wav", wav, "audio/wav")}
-        data = {"model": self.model, "language": "en", "response_format": "json"}
+        # "prompt" is the OpenAI-compatible name for the same initial_prompt bias used
+        # by the local model below — see _VOCAB_HINT_EN for why "Mari" needs it.
+        data = {
+            "model": self.model, "language": "en", "response_format": "json",
+            "prompt": _vocab_hint("en"),
+        }
         async with httpx.AsyncClient(timeout=60) as client:
             r = await client.post(self.url, headers=headers, files=files, data=data)
             r.raise_for_status()
@@ -289,8 +336,7 @@ _stt_cache: dict[str, STTProvider] = {}
 
 
 def get_stt_provider(lang: str) -> STTProvider:
-    """Return the configured STT adapter for a language (cached — local-model
-    adapters keep their loaded model across calls)."""
+    """The configured STT adapter for a language, cached so local models stay loaded."""
     key = f"{lang}:{C.EN_STT if lang != 'ur' else 'soniox'}"
     if key not in _stt_cache:
         if lang == "ur":
@@ -300,5 +346,34 @@ def get_stt_provider(lang: str) -> STTProvider:
     return _stt_cache[key]
 
 
+# "Mari" still sometimes comes back as a homophone. Only shapes that clearly refer to
+# the company are corrected, so "call Mary" or "who is Mary" are left alone.
+_MARI_SOUND_ALIKES = r"Mary|Marry|Merry|M[aā]ori|Mardi"
+
+# Followed by a word from the company's name ("Mary Energies"), or asked about on its
+# own ("tell me about Mary").
+_MARI_FOLLOWED = r"(?=\s+Energ|\s+Petroleum|\s+Gas\b|\s+Services|\s+Minerals|\s+Technolog|'s\b)"
+_MARI_PRECEDED = (
+    r"(?<=tell\sme\sabout\s)|(?<=what\sis\s)|(?<=what's\s)|(?<=tell\sme\s)|"
+    r"(?<=who\sowns\s)|(?<=explain\s)"
+)
+_NOT_MARDI_GRAS = r"(?!\s+Gras\b)"
+_MISHEARD_MARI_EN = re.compile(
+    rf"(?:{_MARI_PRECEDED})(?:{_MARI_SOUND_ALIKES}){_NOT_MARDI_GRAS}\b"
+    rf"|\b(?:{_MARI_SOUND_ALIKES}){_NOT_MARDI_GRAS}\b{_MARI_FOLLOWED}",
+    re.IGNORECASE,
+)
+_MISHEARD_MARI_UR = re.compile(r"میری(?=\s*انرجیز|\s*پیٹرولیم|\s*گیس|\s*کے|\s*کیا|\s*کون)")
+
+
+def _fix_misheard_mari(text: str, lang: str) -> str:
+    if not text:
+        return text
+    if lang == "ur":
+        return _MISHEARD_MARI_UR.sub("ماری", text)
+    return _MISHEARD_MARI_EN.sub("Mari", text)
+
+
 async def stt(wav: bytes, lang: str) -> str:
-    return await get_stt_provider(lang).transcribe(wav)
+    text = await get_stt_provider(lang).transcribe(wav)
+    return _fix_misheard_mari(text, lang)

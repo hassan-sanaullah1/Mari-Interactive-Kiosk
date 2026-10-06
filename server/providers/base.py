@@ -1,9 +1,7 @@
-"""Provider interfaces (ports) — STT / TTS / LLM.
+"""Provider interfaces (ports) for STT and TTS.
 
-Every concrete provider (Soniox, Whisper, Uplift, Kokoro, ...) implements one of
-these Protocols. Callers (server/app.py, mari_s2s/handlers/*) depend only on the
-interface, so swapping a provider is a matter of instantiating a different adapter
-class — not editing dispatch logic in multiple places.
+Callers (server/app.py, server/agent/, mari_s2s/handlers/) depend only on these, so
+swapping a provider means building a different adapter, not editing dispatch code.
 """
 
 from __future__ import annotations
@@ -19,5 +17,11 @@ class STTProvider(Protocol):
 
 class TTSProvider(Protocol):
     """Text-to-speech: text in, (audio_bytes, mime_type) out."""
+
+    # True when the voice needs server/normalization.py applied to its input first.
+    wants_spoken_form: bool
+    # Which spoken form it needs: one of server.normalization.ENGINES. "matcha" is the
+    # exception: it never wants a spoken form, so this repo never normalizes for it.
+    engine: str
 
     async def synthesize(self, text: str) -> tuple[bytes, str]: ...

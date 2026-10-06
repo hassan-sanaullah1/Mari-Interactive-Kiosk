@@ -1,11 +1,10 @@
 """Turn-level lipsync orchestration: TTS audio → Audio2Face → the browser.
 
-The existing speech pipeline is untouched. ``server/app.py``'s ``run_reply``
-already synthesizes one audio blob per reply sentence and pushes it down the
-WebSocket; this module taps that same blob a second time:
+``server/agent/turn.py`` synthesizes one audio blob per reply sentence and sends it down
+the WebSocket; this module feeds the same blob to Audio2Face:
 
-    providers.tts(sentence)  ──► WebSocket ──► <audio> playback   (unchanged)
-                             └─► LipsyncTurn.submit() ──► A2F ──► lipsync frames
+    speech.speak(sentence)  ──► WebSocket ──► <audio> playback
+                            └─► LipsyncTurn.feed() ──► A2F ──► lipsync frames
 
 Each sentence is one A2F "clip" (§10 of THREEJS_A2F_INTEGRATION.md: the NIM is
 clip-in / burst-out, so short clips per sentence let sentence N's frames burst
@@ -40,23 +39,18 @@ logger = logging.getLogger(__name__)
 
 Send = Callable[[dict], Awaitable[None]]
 
-# How many clips may be at the NIM at once. Capped by the NIM's own
-# `stream_number`; going over it means clips queue inside the NIM instead of at
-# our semaphore, where we can't reason about them. See C.A2F_MAX_CLIPS.
-# A clip whose round trip takes longer than this is abandoned — a wedged NIM
-# must never hold the WebSocket open past the end of the spoken reply.
+# A wedged NIM must never hold the WebSocket open past the end of the spoken reply.
 _CLIP_TIMEOUT_S = 25.0
 # Hard cap on opening a stream, so an unreachable NIM costs one clip's lipsync
 # rather than stalling the turn.
 _OPEN_TIMEOUT_S = 4.0
-# How long a primed stream waits for its sentence's TTS audio before giving up.
-# Priming exists to cover TTS synthesis (~1s); a stream still waiting after this
-# is a symptom of a stalled TTS call, and holding a NIM slot (and pushing silence
-# into it) for longer helps nobody.
+# How long a primed stream waits for its sentence's audio; longer means TTS has stalled.
 _AUDIO_WAIT_S = 12.0
 # The NIM appends ~1.5s of near-neutral frames after real speech; anything past
 # the clip's true audio length is dropped so the mouth doesn't hold a stale pose.
 _TAIL_TRIM_S = 0.05
+# One process-wide pool of NIM stream slots (see LipsyncTurn.__init__).
+_SLOTS = asyncio.Semaphore(C.A2F_MAX_CLIPS)
 
 
 def decode_to_pcm16_16k(data: bytes, mime: str = "") -> bytes:
@@ -112,9 +106,8 @@ class _Publisher:
 class LipsyncTurn:
     """Per-reply fan-out of TTS sentences into A2F clips.
 
-    One instance per WebSocket turn. Nothing here blocks the reply path: the
-    audio still reaches the browser exactly as fast as it did before A2F
-    existed, and every A2F round trip runs in a background task.
+    One instance per WebSocket turn. Nothing here blocks the reply path: every A2F
+    round trip runs in a background task.
 
     Each sentence goes through two calls:
 
@@ -131,7 +124,10 @@ class LipsyncTurn:
         self._client = client
         self._send = send
         self._turn_id = turn_id
-        self._slots = asyncio.Semaphore(C.A2F_MAX_CLIPS)
+        # Shared across turns: the NIM's slot count is global, so a per-turn
+        # semaphore let an overlapping turn (a second page, a chat reply, an
+        # interruption still draining) open a stream the NIM had no slot for.
+        self._slots = _SLOTS
         self._tasks: list[asyncio.Task] = []
         self._audio: dict[str, asyncio.Future] = {}
         self._sessions: set = set()
@@ -213,7 +209,24 @@ class LipsyncTurn:
             # its ~1.5s of appended trailing silence (§10).
             publisher.clip_secs = len(pcm) / 2 / A2F_SAMPLE_RATE
             await session.write(pcm)
-            frames = await asyncio.wait_for(session.finish(), timeout=_CLIP_TIMEOUT_S)
+            try:
+                frames = await asyncio.wait_for(session.finish(), timeout=_CLIP_TIMEOUT_S)
+            except RuntimeError as exc:
+                # The NIM can free the previous clip's slot later than our semaphore
+                # does. One retry covers that race without masking a down NIM.
+                if "No available stream" not in str(exc):
+                    raise
+                logger.warning("A2F clip %s: no stream slot yet, retrying once: %s", uid, exc)
+                await session.abort()
+                self._sessions.discard(session)
+                await asyncio.sleep(0.3)
+                session = await asyncio.wait_for(
+                    self._client.open_stream(sample_rate=A2F_SAMPLE_RATE, on_batch=publisher.publish),
+                    timeout=_OPEN_TIMEOUT_S,
+                )
+                self._sessions.add(session)
+                await session.write(pcm)
+                frames = await asyncio.wait_for(session.finish(), timeout=_CLIP_TIMEOUT_S)
             logger.info(
                 "A2F clip %s: %d frames for %.2fs of audio", uid, frames, publisher.clip_secs
             )

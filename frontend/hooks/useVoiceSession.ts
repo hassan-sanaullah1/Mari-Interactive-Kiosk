@@ -6,7 +6,7 @@
  * This is a port of web/app.js onto React state; the wire protocol is unchanged and
  * the FastAPI side (server/app.py `ws()`) was not modified:
  *
- *   client → {"type":"start","lang"}  ·  <raw 16 kHz mono PCM16 frames>  ·  {"type":"end"}
+ *   client → {"type":"start","lang"}  ·  <raw 16 kHz mono PCM16 frames>  ·  {"type":"end","spoke"}
  *   server → {"partial"|"stt", text} · per sentence {"reply",text} {"tts",mime,clip} <audio bytes>
  *          → {"done", spoken}   (or {"error"|"warn", message})
  *
@@ -33,6 +33,7 @@ import {
   waitForFrames,
 } from "@/lib/blendshapePlayer";
 import type { Lang } from "@/lib/i18n";
+import { DEFAULT_AVATAR, type AvatarId } from "@/components/avatar/models";
 
 export type Mode = "idle" | "listening" | "thinking" | "speaking" | "paused";
 
@@ -49,8 +50,64 @@ const TARGET_SR = 16000;
  * waitForFrames() in lib/blendshapePlayer.ts.
  */
 const CLIP_FRAME_WAIT_MS = 700;
-/** RMS thresholds for endpointing — same values the existing web/app.js used. */
-const VAD = { start: 0.025, stop: 0.015, silenceMs: 600, preSpeechMs: 8000, maxMs: 20000 };
+/**
+ * RMS thresholds for endpointing. silenceMs was 600 — short enough that an
+ * ordinary mid-sentence breath or thinking pause ended the turn early
+ * ("half sentence" cutoffs); 1200ms gives a real pause room without making
+ * genuine end-of-turn silence feel laggy.
+ *
+ * `start` is how loud the room has to get before the turn counts as speech, and
+ * it is the one number here that can lose a turn outright: below it the VAD never
+ * starts, so preSpeechMs eventually closes the turn with no audio and the visitor
+ * is never heard at all. A kiosk is used at arm's length, in a room with other
+ * people in it, by someone who may not lean in — 0.045 was deaf to a normal
+ * speaking voice at that distance, and turns were dying on the pre-speech timeout
+ * rather than on anything the visitor did. Erring low is the safe direction: a
+ * false start costs a moment of silence at the head of the clip, which STT
+ * discards, while a missed start costs the whole turn.
+ *
+ * `stop` sits below `start` deliberately (hysteresis) — once speech is running,
+ * it takes a quieter room to end it than it took to begin it, so the level
+ * drifting around one threshold cannot chop a sentence in half.
+ */
+/**
+ * `startMs` is how long the level has to stay above `start` before the turn counts as
+ * speech. A single frame over the threshold used to be enough, which is why tapping the
+ * mic in a room that is merely NOT SILENT — a fan, a projector, other visitors, the
+ * kiosk's own hum — marked the turn as spoken, sent no speech to STT, and got the
+ * "sorry, I didn't catch that" apology back. One 4096-sample frame is ~85ms at 48kHz,
+ * so 250ms is roughly three consecutive frames: far too long for a door click or a
+ * chair scrape to fake, and still shorter than the first syllable of a real word.
+ *
+ * `noiseMargin` is the other half of that fix. A fixed threshold cannot be right for
+ * both a silent office and a busy hall, so the first `calibrateMs` of every turn are
+ * used to measure the room instead of being tested against a constant: the effective
+ * start threshold becomes whichever is higher, `start` or the measured floor times this
+ * margin. Speech is several times louder than the noise it sits on, so a voice clears
+ * it comfortably while the noise itself never does.
+ */
+const VAD = {
+  start: 0.02,
+  stop: 0.012,
+  // 1200 cut people off mid-sentence: it is the length of pause tolerated, and an
+  // ordinary one for breath or thought reaches ~1.2s. The cost is symmetric — this is
+  // also how long after a real end-of-turn the kiosk waits before answering — so it
+  // buys ~250ms more thinking room for ~250ms more latency, which is the right trade
+  // at a kiosk where being cut off means repeating the whole question.
+  silenceMs: 1500,
+  preSpeechMs: 8000,
+  maxMs: 20000,
+  startMs: 250,
+  calibrateMs: 300,
+  noiseMargin: 2.2,
+  // Frames louder than this are speech, not room tone, and are excluded from the noise
+  // estimate. Set well above any plausible room and below a normal speaking voice.
+  noiseCeiling: 0.06,
+  // Hard cap on the calibrated start threshold. However loud the room measures, a
+  // normal speaking voice has to be able to cross it — an uncrossable threshold is a
+  // deaf kiosk, which is a far worse failure than an occasional false start.
+  startCeiling: 0.055,
+};
 
 /** Downsample one Float32 frame to 16 kHz and pack as little-endian PCM s16. */
 function frameToPCM16(f: Float32Array, srcRate: number): ArrayBuffer {
@@ -74,11 +131,30 @@ function frameToPCM16(f: Float32Array, srcRate: number): ArrayBuffer {
   return out.buffer;
 }
 
+const MIC_CONSTRAINTS: MediaStreamConstraints = {
+  audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
+};
+
+/**
+ * getUserMedia, with one retry. Restarting a turn right after the last one ended
+ * can find the device not yet released (NotReadableError / AbortError), which used
+ * to surface as a failed tap the visitor had to repeat. A real refusal is final.
+ */
+async function openMic(): Promise<MediaStream> {
+  try {
+    return await navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
+  } catch (e) {
+    const name = (e as { name?: string })?.name;
+    if (name === "NotAllowedError" || name === "SecurityError") throw e;
+    await new Promise((r) => setTimeout(r, 300));
+    return navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
+  }
+}
+
 /** One turn's worth of reply audio, played sentence by sentence as it streams in. */
 type ReplyQueue = {
   push: (b: ArrayBuffer, mime: string, clip: string | null) => void;
   finish: () => void;
-  busy: () => boolean;
   stop: () => void;
   resume: () => void;
 };
@@ -86,7 +162,7 @@ type ReplyQueue = {
 let uid = 0;
 const nextId = () => `m${++uid}`;
 
-export function useVoiceSession(lang: Lang) {
+export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
   const [mode, setMode] = useState<Mode>("idle");
   const [active, setActive] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -98,6 +174,13 @@ export function useVoiceSession(lang: Lang) {
 
   // ---- mutable audio-graph state (never drives rendering directly) ----
   const langRef = useRef(lang);
+  /**
+   * Which presenter is on screen, mirrored out of state for the same reason as
+   * `lang`: the socket callbacks close over their turn, and this has to be the
+   * value at the moment the turn is SENT. It rides along on {start}/{text} and
+   * picks the reply voice server-side (see providers.get_tts_provider).
+   */
+  const avatarRef = useRef(avatar);
   const acRef = useRef<AudioContext | null>(null);
   const mediaRef = useRef<MediaStream | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
@@ -106,27 +189,77 @@ export function useVoiceSession(lang: Lang) {
   const audioElRef = useRef<HTMLAudioElement | null>(null);
   const activeRef = useRef(false);
   const pausedRef = useRef(false);
+  /**
+   * The mode the hold started from, so resuming knows what it is going back to:
+   * the mic (which has to be re-opened) or a reply in flight (which has to be
+   * handed back to the queue, NOT replaced with a fresh listening turn).
+   */
+  const pausedFromRef = useRef<Mode>("idle");
   const cancelledRef = useRef(false);
   const endPendingRef = useRef(false);
+  /** Whether the turn whose {"end"} is deferred had speech in it. */
+  const endSpokeRef = useRef(false);
   const assistantIdRef = useRef<string | null>(null);
   /** Media elements can only be routed through an AnalyserNode once. */
   const analysedRef = useRef(new WeakSet<HTMLAudioElement>());
+  /**
+   * The conversation so far, mirrored out of React state so the socket callbacks
+   * (which close over their turn) always read the current transcript. This is the
+   * whole of MARI's memory: it lives in the tab, is sent up with each turn, and is
+   * gone on reload — a kiosk greets the next visitor with a clean slate.
+   */
+  const historyRef = useRef<Message[]>([]);
+  /**
+   * Bumped by every startTurn and by everything that cancels one (stop, pause, a
+   * typed turn). startTurn awaits the mic and the AudioContext; if the number has
+   * moved on by the time they resolve, that turn was cancelled while it waited and
+   * must bow out instead of opening a second mic/socket behind the live one.
+   */
+  const turnRef = useRef(0);
+  /** The user-initiated start still waiting on the mic — see toggle(). */
+  const startingRef = useRef<Promise<void> | null>(null);
+
+  useEffect(() => {
+    historyRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     langRef.current = lang;
   }, [lang]);
 
+  useEffect(() => {
+    avatarRef.current = avatar;
+  }, [avatar]);
+
+  /** Prior turns, in the shape the server's _history_messages() expects. */
+  const historyPayload = useCallback(
+    () => historyRef.current.map(({ role, text }) => ({ role, text })),
+    [],
+  );
+
   /** Queue of streamed reply sentences, played back-to-back. */
   const queueRef = useRef<ReplyQueue | null>(null);
 
-  /** The one AudioContext, created (and un-suspended) on a user gesture. */
+  /**
+   * The one AudioContext, created (and un-suspended) on a user gesture. Everything
+   * up to the first await runs synchronously, so calling this straight from a click
+   * handler creates/resumes the context while the gesture still counts.
+   */
   const ensureAudioContext = useCallback(async () => {
     const AC =
       window.AudioContext ||
       (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    acRef.current = acRef.current ?? new AC();
+    if (!acRef.current || acRef.current.state === "closed") acRef.current = new AC();
     const ac = acRef.current;
-    if (ac.state === "suspended") await ac.resume();
+    // "suspended", or Safari's "interrupted". resume() outside a gesture can stay
+    // pending forever instead of rejecting, which used to freeze the mic button
+    // until a second tap — so don't wait on it indefinitely.
+    if (ac.state !== "running") {
+      await Promise.race([
+        ac.resume().catch(() => {}),
+        new Promise((r) => setTimeout(r, 1500)),
+      ]);
+    }
     return ac;
   }, []);
 
@@ -251,7 +384,6 @@ export function useVoiceSession(lang: Lang) {
         finished = true;
         if (!playing && !items.length) endOfTurn();
       },
-      busy: () => playing || items.length > 0,
       stop() {
         stopped = true;
         finished = true;
@@ -346,13 +478,26 @@ export function useVoiceSession(lang: Lang) {
     };
   }, []);
 
-  const finishTurn = useCallback(() => {
+  /**
+   * End the capture and ask the server to answer.
+   *
+   * `spoke` is whether the VAD ever heard speech in this turn. It has to travel
+   * with the {"end"}, because the two ways a turn can end look identical from the
+   * server side — both arrive as an empty transcript — but mean opposite things:
+   * a turn the visitor spoke into whose transcript was lost deserves "sorry, I
+   * didn't catch that", while the hands-free loop simply timing out on an empty
+   * room must stay silent. Without this flag the kiosk answered its own silence
+   * and then re-opened the mic, which timed out again — talking to nobody, on a
+   * loop, every 8 seconds.
+   */
+  const finishTurn = useCallback((spoke: boolean) => {
     teardownMic();
     setMode("thinking");
+    endSpokeRef.current = spoke;
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
       try {
-        ws.send(JSON.stringify({ type: "end" }));
+        ws.send(JSON.stringify({ type: "end", spoke }));
       } catch {}
     } else {
       endPendingRef.current = true; // socket not open yet — send as soon as it is
@@ -360,12 +505,17 @@ export function useVoiceSession(lang: Lang) {
   }, [teardownMic]);
 
   const startTurn = useCallback(async () => {
+    const turn = ++turnRef.current;
     setError(null);
+    // Start unlocking audio NOW, before the first await, so it happens inside the
+    // click that started this turn rather than after the mic prompt resolves.
+    const acReady = ensureAudioContext().catch(() => null);
+
+    let stream: MediaStream;
     try {
-      mediaRef.current = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
-      });
+      stream = await openMic();
     } catch {
+      if (turn !== turnRef.current) return; // cancelled while waiting — not an error
       setError("mic-denied");
       activeRef.current = false;
       setActive(false);
@@ -373,11 +523,39 @@ export function useVoiceSession(lang: Lang) {
       return;
     }
 
-    const ac = await ensureAudioContext();
+    const ac = await acReady;
+    if (turn !== turnRef.current || !ac) {
+      // Cancelled (stop, pause, typed turn, or a newer start) while the mic was
+      // opening: release it rather than running a turn nobody is waiting for.
+      stream.getTracks().forEach((t) => t.stop());
+      if (turn === turnRef.current) {
+        setError("mic-denied");
+        activeRef.current = false;
+        setActive(false);
+        setMode("idle");
+      }
+      return;
+    }
+
+    // Never run two mics at once — drop whatever an earlier turn left open.
+    teardownMic();
+    mediaRef.current = stream;
 
     cancelledRef.current = false;
     endPendingRef.current = false;
-    const vad = { started: false, silence: 0, elapsed: 0 };
+    // A new turn always starts a new reply bubble, exactly as sendText does.
+    // Without this the turn inherits whatever assistantIdRef was left holding,
+    // and bindReplyStream's {"reply"} branch appends this turn's sentences onto
+    // the PREVIOUS answer instead of creating one below the new question — so
+    // the spoken reply looks missing while a typed one (which clears the ref
+    // itself) looks fine. endOfTurn clears it too, but only on the path where
+    // the reply audio plays to the end; an interrupted, paused or stopped queue
+    // never gets there.
+    assistantIdRef.current = null;
+    // `loud` accumulates consecutive time above the threshold (reset by any quiet
+    // frame), so only SUSTAINED sound starts the turn. `noise` is the running floor
+    // measured during the first calibrateMs; `frames` counts what went into it.
+    const vad = { started: false, silence: 0, elapsed: 0, loud: 0, noise: 0, frames: 0 };
     const queue = createQueue();
     queueRef.current = queue;
 
@@ -391,7 +569,14 @@ export function useVoiceSession(lang: Lang) {
     ws.onopen = () => {
       wsOpen = true;
       try {
-        ws.send(JSON.stringify({ type: "start", lang: langRef.current }));
+        ws.send(
+          JSON.stringify({
+            type: "start",
+            lang: langRef.current,
+            avatar: avatarRef.current,
+            history: historyPayload(),
+          }),
+        );
       } catch {}
       for (const b of pending) {
         try {
@@ -401,7 +586,7 @@ export function useVoiceSession(lang: Lang) {
       pending.length = 0;
       if (endPendingRef.current) {
         try {
-          ws.send(JSON.stringify({ type: "end" }));
+          ws.send(JSON.stringify({ type: "end", spoke: endSpokeRef.current }));
         } catch {}
         endPendingRef.current = false;
       }
@@ -434,19 +619,54 @@ export function useVoiceSession(lang: Lang) {
       }
 
       vad.elapsed += frameMs;
-      if (rms > VAD.start) {
-        vad.started = true;
-        vad.silence = 0;
-      } else if (vad.started && rms < VAD.stop) {
-        vad.silence += frameMs;
+
+      // Measure the room before judging it. These opening frames are still uploaded —
+      // only the speech DECISION waits, so nothing the visitor says is lost.
+      //
+      // Only QUIET frames feed the estimate. A visitor who starts talking the instant
+      // the mic opens would otherwise have their own voice averaged in as "the room",
+      // and the threshold derived from it lands above their speech: the VAD then never
+      // starts, and the turn dies on the pre-speech timeout having heard every word.
+      // Anything above `noiseCeiling` is a voice, not a room, so it is not sampled.
+      if (vad.elapsed <= VAD.calibrateMs && rms < VAD.noiseCeiling) {
+        vad.noise += rms;
+        vad.frames += 1;
+      }
+      const floor = vad.frames > 0 ? vad.noise / vad.frames : 0;
+      // Never let calibration RAISE the bar beyond what a voice clears comfortably:
+      // the measured floor only lifts the threshold in a genuinely noisy room, and even
+      // then not past `startCeiling`.
+      const startAt = Math.min(
+        VAD.startCeiling,
+        Math.max(VAD.start, floor * VAD.noiseMargin),
+      );
+      // End-of-turn threshold. Must stay BELOW startAt (hysteresis): once speech is
+      // running it takes a quieter room to end it than it took to begin. Deriving this
+      // from the floor directly — rather than from the already-margined startAt — is
+      // what keeps an ordinary between-words dip from reading as silence and cutting
+      // the visitor off mid-sentence.
+      const stopAt = Math.min(startAt * 0.6, Math.max(VAD.stop, floor * 1.1));
+
+      if (rms > startAt) {
+        // Sustained, not instantaneous: a lone loud frame is a noise, not a word.
+        vad.loud += frameMs;
+        if (vad.loud >= VAD.startMs) {
+          vad.started = true;
+          vad.silence = 0;
+        }
+      } else {
+        vad.loud = 0;
+        if (vad.started && rms < stopAt) {
+          vad.silence += frameMs;
+        }
       }
 
       if (vad.started && (vad.silence >= VAD.silenceMs || vad.elapsed >= VAD.maxMs)) {
         proc.onaudioprocess = null;
-        finishTurn();
+        finishTurn(true); // they spoke — a lost transcript is worth apologising for
       } else if (!vad.started && vad.elapsed >= VAD.preSpeechMs) {
         proc.onaudioprocess = null;
-        finishTurn(); // long silence — let the server close the turn out
+        finishTurn(false); // nobody spoke — close the turn out in silence
       }
     };
 
@@ -457,12 +677,14 @@ export function useVoiceSession(lang: Lang) {
     mute.connect(ac.destination);
 
     setMode("listening");
-  }, [bindReplyStream, createQueue, endOfTurn, ensureAudioContext, finishTurn]);
+  }, [bindReplyStream, createQueue, ensureAudioContext, finishTurn, historyPayload, teardownMic]);
 
   startTurnRef.current = () => void startTurn();
 
   /** Hard stop: abandon the turn and the session. */
   const stop = useCallback(() => {
+    turnRef.current++; // cancels a turn still waiting on the mic
+    startingRef.current = null;
     cancelledRef.current = true;
     activeRef.current = false;
     pausedRef.current = false;
@@ -485,6 +707,9 @@ export function useVoiceSession(lang: Lang) {
   /** End the turn and wipe the transcript — the dock's ✕ in every state. */
   const endAndClear = useCallback(() => {
     stop();
+    // Wiping the transcript wipes the memory with it — the ✕ is how a visitor
+    // hands the kiosk to the next person.
+    historyRef.current = [];
     setMessages([]);
     setPartial("");
     setError(null);
@@ -494,30 +719,65 @@ export function useVoiceSession(lang: Lang) {
     activeRef.current = true;
     pausedRef.current = false;
     setActive(true);
-    void startTurn();
+    const starting = startTurn();
+    startingRef.current = starting;
+    void starting.finally(() => {
+      if (startingRef.current === starting) startingRef.current = null;
+    });
   }, [startTurn]);
 
   const toggle = useCallback(() => {
+    // The mic takes a moment to open and the button shows nothing until it has,
+    // so visitors tap again — which used to STOP the turn they had just started,
+    // leaving the mic off. Ignore taps while a start is in flight; the ✕ button
+    // still cancels it if the mic prompt hangs.
+    if (startingRef.current) return;
     if (activeRef.current) stop();
     else start();
   }, [start, stop]);
 
   /** Hold the conversation: pause playback, or drop the mic mid-listen. */
   const togglePause = useCallback(() => {
-    if (!activeRef.current) return;
+    // Anything that is not idle can be held. This used to guard on
+    // `activeRef.current`, which is only ever set by the MIC path — so for a
+    // question asked in the chat composer the kiosk was speaking with `active`
+    // false, and the button did nothing at all (and rendered as disabled).
+    // Typed turns deliberately do not set it, because `endOfTurn` reads the same
+    // flag to decide whether to re-open the mic, and typing is not permission to
+    // do that.
+    if (mode === "idle") return;
     if (pausedRef.current) {
       pausedRef.current = false;
       const el = audioElRef.current;
       if (el && el.paused && !el.ended) {
         void el.play();
         setMode("speaking");
-      } else if (queueRef.current?.busy()) {
-        queueRef.current.resume();
-      } else {
+      } else if (pausedFromRef.current === "listening") {
+        // Held with the mic open: give it back.
         void startTurn();
+      } else {
+        // Held mid-reply. Hand the queue its playhead: it plays whatever landed
+        // during the hold, waits for what has not arrived yet, and ends the turn
+        // if the reply finished while we were paused.
+        //
+        // The `busy()` test this replaced got the in-between case wrong — a hold
+        // that lands after one sentence ends and before the next arrives leaves
+        // the queue not playing and empty, so resume fell through to startTurn()
+        // and opened the mic over the rest of the reply.
+        const queue = queueRef.current;
+        queue?.resume();
+        // resume() -> playNext() sets "speaking" synchronously if a sentence was
+        // waiting. If nothing was, the reply is still streaming and the mode has
+        // to move off "paused" anyway, or the button keeps offering to resume a
+        // hold that is already over. With no queue at all there is nothing left
+        // of the turn to go back to.
+        setMode((m) => (m !== "paused" ? m : queue ? "thinking" : "idle"));
       }
     } else {
+      pausedFromRef.current = mode;
       pausedRef.current = true;
+      turnRef.current++; // a turn still opening its mic must not start after the hold
+      startingRef.current = null;
       try {
         audioElRef.current?.pause();
       } catch {}
@@ -541,6 +801,10 @@ export function useVoiceSession(lang: Lang) {
       const body = text.trim();
       if (!body) return;
 
+      // Snapshot before the local echo below, so the typed message goes up once —
+      // as the turn's question, not also as the last line of its own history.
+      const history = historyPayload();
+
       setError(null);
       // The user typed it, so it goes up immediately — the server does not echo
       // a typed turn's transcript back (see run_reply's echo_transcript).
@@ -554,6 +818,8 @@ export function useVoiceSession(lang: Lang) {
         audioElRef.current?.pause();
       } catch {}
       audioElRef.current = null;
+      turnRef.current++; // cancel a spoken turn still waiting on the mic
+      startingRef.current = null;
       teardownMic();
       try {
         wsRef.current?.close();
@@ -580,14 +846,22 @@ export function useVoiceSession(lang: Lang) {
       bindReplyStream(ws, queue);
       ws.onopen = () => {
         try {
-          ws.send(JSON.stringify({ type: "text", text: body, lang: langRef.current }));
+          ws.send(
+            JSON.stringify({
+              type: "text",
+              text: body,
+              lang: langRef.current,
+              avatar: avatarRef.current,
+              history,
+            }),
+          );
         } catch {
           setError("chat-failed");
         }
       };
       ws.onerror = () => setError("chat-failed");
     },
-    [bindReplyStream, createQueue, ensureAudioContext, teardownMic],
+    [bindReplyStream, createQueue, ensureAudioContext, historyPayload, teardownMic],
   );
 
   useEffect(() => () => stop(), [stop]);

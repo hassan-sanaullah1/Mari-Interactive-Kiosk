@@ -5,6 +5,7 @@
  */
 
 import type { Mode } from "@/hooks/useVoiceSession";
+import { AVATARS, DEFAULT_AVATAR } from "./models";
 
 export type AvatarState = "idle" | "listening" | "thinking" | "speaking";
 
@@ -22,5 +23,27 @@ export function avatarStateFor(mode: Mode): AvatarState {
   }
 }
 
-/** Where the .glb lives, served from frontend/public. */
-export const AVATAR_MODEL_URL = "/models/girl13.glb";
+/**
+ * Where the DEFAULT avatar lives, served from frontend/public.
+ *
+ * The full per-model registry — URLs, loop windows, materials — is in
+ * ./models.ts, and the scene resolves its URL from there. This re-export is the
+ * default rig's URL under its original name, for app/netcheck, which times a
+ * cold and a warm fetch of one representative model rather than of every rig.
+ *
+ * This is the .gz, and lib/avatarFetch.ts fetches it with ONE plain GET.
+ *
+ * An older comment here claimed the raw .glb was faster because the file was
+ * pulled as six parallel byte ranges, which a gzip stream cannot be split into.
+ * That implementation no longer exists — avatarFetch.ts is a single GET and says
+ * in its own header not to add Range headers, because ranged responses (206) are
+ * never written to the browser's disk cache, so every reload re-downloaded the
+ * whole model. The comment outlived the code and is corrected here.
+ *
+ * With one GET, smaller simply wins. The raw 30MB girl15.glb was abandoned
+ * mid-download by a real client (ERR_NETWORK_CHANGED, no avatar); the 20MB .gz is
+ * a third less to carry. This page (/netcheck) is how to measure the rest, from
+ * the kiosk rather than from a developer machine whose own link may be the
+ * bottleneck — which is exactly what happened the first time it was measured.
+ */
+export const AVATAR_MODEL_URL = AVATARS[DEFAULT_AVATAR].url;

@@ -1,11 +1,20 @@
-# MARI kiosk — backend + frontend, for Coolify (or any Docker Compose host).
+# MARI kiosk — the whole stack: Qdrant, backend, frontend.
 #
-# The Audio2Face-3D NIM (avatar lipsync) is intentionally NOT part of this stack —
-# it needs a GPU host with the NVIDIA container runtime, which most Coolify targets
-# don't have. Deploy it separately (deploy/a2f/docker-compose.yml, its own README
-# comment) on a GPU-capable host/server in Coolify, then point this stack's backend
-# at it via APP_A2F_URL (e.g. grpcs://a2f.your-domain:443 through a TLS proxy that
-# checks APP_A2F_API_KEY — see deploy/a2f/docker-compose.yml's security note).
+#   docker compose up -d --build
+#   → frontend on http://localhost:3000, backend on http://localhost:8010
+#
+# This is the ONLY compose file for the kiosk. There is deliberately no
+# docker-compose.override.yml: an override is applied automatically and silently, so a
+# stack that works on the machine where the override was written fails everywhere else.
+# The one that used to live here joined the backend to the Audio2Face stack's network as
+# `external: true`, which made plain `docker compose up` fail outright on any host that
+# had never run that other stack.
+#
+# The Audio2Face-3D NIM (avatar lipsync) is not part of this stack — it needs a GPU host
+# with the NVIDIA container runtime. Deploy it separately (deploy/a2f/docker-compose.yml)
+# and point the backend at it with APP_A2F_URL, which must be an address reachable from
+# inside this network: a LAN host:port, or grpcs:// through a TLS proxy that checks
+# APP_A2F_API_KEY. A NIM published on the host's loopback is NOT reachable from here.
 # Leave APP_A2F_URL unset and the kiosk runs fine without lipsync.
 #
 # Coolify notes:
@@ -21,6 +30,48 @@
 #     this compose file) rather than committing a real .env.
 
 services:
+  # Vector store for the retrieval layer (server/services/*). Kept in this stack rather
+  # than deployed separately because the backend cannot answer grounded questions
+  # without it, so there is no useful state where one is up and the other is not.
+  qdrant:
+    image: qdrant/qdrant:v1.12.5
+    restart: unless-stopped
+    environment:
+      # Qdrant has NO authentication by default and its REST API includes "delete
+      # collection". On a host where the container port is reachable by anything other
+      # than this compose network, an unset key means the corpus can be wiped by an
+      # unauthenticated request. Set MARI_RAG_QDRANT_API_KEY in .env / the Coolify UI.
+      QDRANT__SERVICE__API_KEY: ${MARI_RAG_QDRANT_API_KEY:?set MARI_RAG_QDRANT_API_KEY}
+      # Snapshots and the write-ahead log both live under /qdrant/storage.
+      QDRANT__STORAGE__STORAGE_PATH: /qdrant/storage
+    volumes:
+      # Named volume, not a bind mount: the index is derived data (it can always be
+      # rebuilt by re-ingesting the corpus), but rebuilding costs ~40 s of embedding on
+      # every container recreate, which is exactly the boot-time stall this avoids.
+      - qdrant_storage:/qdrant/storage
+    # Deliberately NOT published to the host. The backend reaches it by service name on
+    # the compose network; publishing 6333 would put an admin API on the public
+    # interface. Uncomment only for local debugging.
+    # ports:
+    #   - "6333:6333"
+    healthcheck:
+      # CMD + bash, NOT CMD-SHELL. The Qdrant image ships no curl and no wget, so this
+      # opens the socket with bash's /dev/tcp — and /dev/tcp is a bash builtin that does
+      # not exist in dash. CMD-SHELL runs /bin/sh, which IS dash here, so the previous
+      # version of this check failed every single time with "cannot create
+      # /dev/tcp/127.0.0.1/6333: Directory nonexistent". Because the backend waits on
+      # `condition: service_healthy`, that typo meant backend and frontend sat in
+      # "Created" forever and the stack had never once started.
+      #
+      # /readyz rather than /healthz: Qdrant answers /healthz before its collections are
+      # loaded, so a backend starting on that signal can race the storage load and see
+      # an empty collection.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/6333 && printf 'GET /readyz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '200 OK' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
   backend:
     build:
       context: .
@@ -35,14 +86,57 @@ services:
     environment:
       MARI_HOST: 0.0.0.0
       MARI_PORT: 8010
+      # These override any value of the same name in .env (compose resolves
+      # `environment:` after `env_file:`), which is what makes a .env written for
+      # running the server on the host work unchanged inside the network.
+      #
+      # Retrieval layer. Reaches Qdrant by compose service name on the internal network.
+      MARI_RAG_QDRANT_HOST: qdrant
+      MARI_RAG_QDRANT_PORT: "6333"
+      MARI_RAG_QDRANT_API_KEY: ${MARI_RAG_QDRANT_API_KEY:?set MARI_RAG_QDRANT_API_KEY}
+      # That network is plaintext. qdrant-client silently switches to HTTPS as soon as
+      # an api_key is set, which turns into a TLS handshake against an HTTP port and a
+      # connection error that points nowhere near the cause. Explicitly off.
+      MARI_RAG_QDRANT_HTTPS: "false"
+      # Which corpus files are already in the index, by content hash, so a restart does
+      # not re-embed the corpus. This is state ABOUT the Qdrant volume, so it belongs on
+      # a volume with the same lifecycle — not in the image, and not in the corpus
+      # directory it defaults to (see .dockerignore). If the two ever do fall out of
+      # step, ingestion cross-checks the actual point count before skipping a file.
+      MARI_RAG_METADATA_DB: /app/state/rag_metadata.sqlite
+      # Where FastEmbed keeps its ONNX weights. Without this it defaults to
+      # /tmp/fastembed_cache — NOT the ~/.cache/fastembed path the volume below is
+      # mounted at, so the volume sat empty at 4 KB while 2.1 GB of weights were written
+      # to the container's own writable layer and re-downloaded on every recreate. The
+      # volume was doing nothing, and the symptom (a slow first boot) looks identical
+      # whether it works or not, which is why it went unnoticed.
+      FASTEMBED_CACHE_PATH: /root/.cache/fastembed
+    depends_on:
+      qdrant:
+        condition: service_healthy
     ports:
       - "8010:8010"
+    volumes:
+      # faster-whisper's base.en model (~150MB) downloads from Hugging Face on
+      # first use (server/providers/stt.py's WhisperLocalSTT). On a slow link
+      # that download can take 15+ minutes, which made English STT LOOK broken
+      # (the first request timed out mid-download). This volume persists the
+      # Hugging Face cache across `docker compose up -d --build` container
+      # recreates, so the slow download only ever happens once.
+      - whisper_cache:/root/.cache/huggingface
+      - fastembed_cache:/root/.cache/fastembed
+      # Ingestion bookkeeping (MARI_RAG_METADATA_DB above).
+      - rag_state:/app/state
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/healthz')"]
       interval: 30s
       timeout: 5s
       retries: 5
-      start_period: 20s
+      # /healthz answers as soon as the app is up; the retrieval layer warms in a
+      # background task (server/rag.py) and reports its own state under "rag", so this
+      # does not wait for the ~3 GB of ONNX weights. Turns asked before it finishes are
+      # answered from the core brief rather than refused.
+      start_period: 40s
 
   frontend:
     build:
@@ -62,9 +156,71 @@ services:
         # whenever frontend and backend are on different domains/ports, which is
         # the normal case on Coolify (each service gets its own FQDN). Example:
         #   NEXT_PUBLIC_MARI_WS=wss://mari-backend.your-domain.com/ws
+        #
+        # Left empty for a local `docker compose up`: the browser is then on
+        # :3000 and lib/endpoints.ts derives ws://<same-host>:8010/ws, which is
+        # exactly what this file publishes below.
         NEXT_PUBLIC_MARI_WS: ${NEXT_PUBLIC_MARI_WS:-}
     restart: unless-stopped
+    # Containment for the next framework RCE, not just the last one. The 2026-09
+    # compromise (Next.js 15.5.4) got a shell here and spent it downloading a flooder,
+    # killing rival miners and grepping the disk for secrets. With these, the same
+    # foothold cannot write anything outside two small tmpfs mounts, cannot execute
+    # what it does write there (noexec), cannot regain privileges through setuid
+    # binaries, and cannot eat the whole host's CPU/RAM while it tries.
+    read_only: true
+    tmpfs:
+      # uid/gid 1000 = the image's `node` user (frontend/Dockerfile: USER node).
+      - /tmp:size=64m,noexec,nosuid,nodev,uid=1000,gid=1000
+      # Next's runtime cache dir; it is the only path under /app the server writes.
+      - /app/.next/cache:size=128m,noexec,nosuid,nodev,uid=1000,gid=1000
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: 1.0
     ports:
       - "3000:3000"
     depends_on:
-      - backend
+      # service_started, NOT service_healthy. The frontend proxies /api/* to the
+      # backend, so gating on health looks like the careful choice — but it means a
+      # backend that is merely SLOW to become healthy keeps the frontend container
+      # from ever being created, and a reverse proxy with no container behind it
+      # answers "server not available" for the whole site. That is a total outage
+      # standing in for a degraded one.
+      #
+      # The backend's first boot is exactly that case: faster-whisper and ~3 GB of
+      # FastEmbed ONNX weights download on a cold cache, and on a small host that can
+      # outrun the healthcheck's 40s start_period plus 5 x 30s retries.
+      #
+      # Starting first is not actually the failure it looks like either — the kiosk
+      # degrades on its own. /api/* 502s until the backend answers, and the UI already
+      # handles a failed turn; the avatar, the background and the whole shell are
+      # static and render regardless. A page that loads and cannot talk yet beats a
+      # domain that does not resolve to anything.
+      backend:
+        condition: service_started
+    healthcheck:
+      # node, not curl: the runtime stage is node:24-slim, which ships neither curl nor
+      # wget. Any HTTP status below 500 counts as up — the point is that Next is
+      # serving, not that a particular route renders.
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  whisper_cache:
+  qdrant_storage:
+  # Paired with qdrant_storage: it records what is inside it. Removing one without the
+  # other is safe — ingestion verifies the point count before trusting this — but they
+  # are meant to be created and destroyed together.
+  rag_state:
+  # FastEmbed downloads ~3 GB of ONNX weights (dense + sparse + reranker) on first use.
+  # Without this volume that download repeats on every container recreate, and until it
+  # finishes the kiosk answers ungrounded — the same class of failure the whisper_cache
+  # volume above was added for.
+  fastembed_cache:

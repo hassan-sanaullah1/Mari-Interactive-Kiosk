@@ -2,7 +2,7 @@
  * Applies Audio2Face blendshape weights to the avatar's morph targets.
  *
  * Ported from the working implementation (THREEJS_A2F_INTEGRATION.md §9/§11),
- * trimmed to the path girl13.glb actually takes.
+ * trimmed to the path girl15.glb actually takes.
  *
  * That rig carries the ARKit blendshape names verbatim (jawOpen, mouthFunnel,
  * mouthPucker, mouthRollLower, …) — exactly the vocabulary A2F-3D emits in
@@ -102,9 +102,23 @@ export function applyA2FLipsync(
   state: A2FMorphState,
   morphMeshes: (THREE.SkinnedMesh | THREE.Mesh)[],
   delta: number,
+  /**
+   * True while the conversation is held: ignore the clip and let the mouth
+   * settle to rest.
+   *
+   * Needed because the clip's clock is the audio element's own playhead, so a
+   * paused element does not stop the lipsync — it freezes it, and `sample()`
+   * keeps returning the weights for that one instant. The mouth then holds
+   * whatever shape it was mid-syllable for as long as the hold lasts, which
+   * reads as a glitch rather than as a pause. Suppressing the sample puts the
+   * decay path below in charge, and it relaxes the morphs the clip was driving
+   * over ~100ms. Nothing about the clip is discarded: the playhead has not
+   * moved, so resuming carries on from the same frame.
+   */
+  atRest = false,
 ): number {
   if (isDisabled()) return 0;
-  const s = sampleBlendshapes();
+  const s = atRest ? null : sampleBlendshapes();
 
   // Ramp toward the target over ~125ms in either direction.
   const target = s ? 1 : 0;
@@ -147,7 +161,10 @@ export function applyA2FLipsync(
     for (const { mesh, touched } of state.meshes) {
       const influences = mesh.morphTargetInfluences!;
       for (const idx of touched) {
-        influences[idx] = THREE.MathUtils.lerp(influences[idx], 0, delta * 10);
+        // Clamped: an unclamped `delta * 10` past 1 overshoots zero and flips
+        // sign every frame, so one long frame gap (a backgrounded tab) blows
+        // the face apart and leaves it stuck there.
+        influences[idx] = THREE.MathUtils.lerp(influences[idx], 0, Math.min(1, delta * 10));
         if (influences[idx] > residual) residual = influences[idx];
       }
     }

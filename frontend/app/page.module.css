@@ -7,17 +7,30 @@
   overflow: hidden;
 }
 
-/* The supplied artwork, drawn as an actual <img> — never re-created in CSS. */
+/* The supplied artwork — never re-created in CSS. One image per theme and
+   viewport; a background-image in a rule that doesn't match is never fetched,
+   so each device downloads only the crop it shows. */
 .bg {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center bottom;
+  background: url("/bg-desktop-dark.png") center bottom / cover no-repeat;
   z-index: 0;
   user-select: none;
   pointer-events: none;
+}
+
+:global(:root[data-theme="light"]) .bg {
+  background-image: url("/bg-desktop-light.png");
+}
+
+@media (max-width: 760px) {
+  .bg {
+    background-image: url("/bg-mobile-dark.png");
+  }
+
+  :global(:root[data-theme="light"]) .bg {
+    background-image: url("/bg-mobile-light.png");
+  }
 }
 
 .langBar {

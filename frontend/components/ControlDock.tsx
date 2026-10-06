@@ -46,6 +46,10 @@ export default function ControlDock({
   }, [levelRef]);
 
   const live = mode === "listening" || mode === "speaking";
+  // Enabled whenever there is something to hold. NOT `active`: that is the mic
+  // session's flag, and a question typed in the chat composer never sets it, so
+  // this button showed as disabled while the kiosk was speaking the answer.
+  const canPause = mode !== "idle";
   const status = t[mode];
 
   return (
@@ -87,7 +91,7 @@ export default function ControlDock({
         type="button"
         className={styles.small}
         onClick={onTogglePause}
-        aria-disabled={!active}
+        aria-disabled={!canPause}
         aria-label={paused ? "Resume conversation" : "Pause conversation"}
       >
         {paused ? <PlayIcon className={styles.smallIcon} /> : <PauseIcon className={styles.smallIcon} />}

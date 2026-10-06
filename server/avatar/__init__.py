@@ -1,14 +1,13 @@
 """Avatar support: NVIDIA Audio2Face-3D lipsync for the Three.js/GLB presenter.
 
-Public surface used by server/app.py:
+Public surface (used by server/app.py and server/agent/turn.py):
 
   get_a2f_client()      the shared A2FClient, or None when A2F isn't configured
   LipsyncTurn           per-reply fan-out of TTS sentences into A2F clips
   a2f_status()          config snapshot for /healthz (no secrets)
 
 Everything here is optional: with ``APP_A2F_URL`` unset — or the ``nvidia-ace``
-wheel absent — ``get_a2f_client()`` returns None and the speech pipeline runs
-exactly as it did before, minus lipsync frames.
+wheel absent, ``get_a2f_client()`` returns None and turns run without lipsync frames.
 """
 
 from __future__ import annotations
@@ -63,10 +62,22 @@ async def warm() -> None:
         await client.warmup()
 
 
-def a2f_status() -> dict:
+async def a2f_status() -> dict:
+    """Config snapshot for /healthz, plus a live channel-connectivity probe.
+
+    ``configured``/``client`` reflect static setup; ``connected`` actually dials the
+    channel, so a NIM that is down or still loading shows up here.
+    """
+    configured = bool(C.A2F_URL)
+    connected = False
+    if configured and AVAILABLE:
+        client = get_a2f_client()
+        if client is not None:
+            connected = await client.is_connected()
     return {
-        "configured": bool(C.A2F_URL),
+        "configured": configured,
         "client": AVAILABLE,
-        "ready": bool(C.A2F_URL) and AVAILABLE,
+        "connected": connected,
+        "ready": configured and AVAILABLE and connected,
         "url": C.A2F_URL or None,
     }

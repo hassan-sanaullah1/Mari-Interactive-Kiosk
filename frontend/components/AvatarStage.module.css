@@ -22,15 +22,38 @@
   overflow: hidden;
 }
 
-/* R3F renders <canvas> as this element's only child. Pin it to the box so a
-   momentary size mismatch during a resize can never lay out as extra content. */
-.stage > canvas {
+/* R3F's own wrapper divs between .stage and the canvas — give them the full
+   box so the absolutely-positioned canvas below sizes against .stage rather
+   than a zero-height ancestor. */
+.stage > div {
+  position: absolute;
+  inset: 0;
+}
+
+/* Pin the canvas to the box so a momentary size mismatch during a resize can
+   never lay out as extra content.
+
+   A DESCENDANT selector, not a child one: R3F does not render <canvas> as this
+   element's direct child — it nests it inside two wrapper divs of its own
+   (.stage > div > div > canvas), so `.stage > canvas` matches nothing. */
+.stage canvas {
   position: absolute;
   inset: 0;
   width: 100% !important;
   height: 100% !important;
   display: block;
   background: transparent;
+  /* Hidden until the rig is loaded AND posed (see AvatarStage's `ready` prop) —
+     otherwise the glTF's bind-pose T-pose paints for the frames between mount
+     and AvatarModel's onReady. Opacity, not unmounted, so the render loop
+     keeps running and she appears instantly, already posed, the moment
+     ready flips. */
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
+.stage[data-ready="true"] canvas {
+  opacity: 1;
 }
 
 /* Phones: mobile_UI.png frames the presenter tighter and taller. */

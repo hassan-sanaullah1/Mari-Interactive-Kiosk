@@ -37,8 +37,8 @@ Two measured design spaces, both driven from `app/globals.css`:
 
 | | reference | design space | background |
 |---|---|---|---|
-| desktop | `UI-sample-images/UI.png` | 2000 x 1125 | `public/background.png` |
-| phone (<= 760px) | `UI-sample-images/mobile_UI.png` | 402 x 874 | `public/mobile_background.png` |
+| desktop | `UI-sample-images/UI.png` | 2000 x 1125 | `public/bg-desktop-dark.png` / `bg-desktop-light.png` |
+| phone (<= 760px) | `UI-sample-images/mobile_UI.png` | 402 x 874 | `public/bg-mobile-dark.png` / `bg-mobile-light.png` |
 
 `--s` is one reference unit. The phone media query **redefines `--s`** against the
 402x874 space and re-derives every control size token (`--mic`, `--dock-btn`,

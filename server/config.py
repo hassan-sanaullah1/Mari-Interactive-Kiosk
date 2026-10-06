@@ -1,9 +1,7 @@
-"""MARI · Voice — configuration.
+"""Settings for the web server and providers, read once from ``.env`` and the environment.
 
-Single source of truth for the web server + providers. Reads ``.env`` (real
-environment variables win) and exposes typed settings per stage. All providers are
-plain HTTP/WebSocket clients — no LiveKit, no speech_to_speech runtime dependency —
-so they run standalone under this project.
+Real environment variables win over ``.env``. Retrieval settings are separate, in
+server/services/settings.py (prefix ``MARI_RAG_``).
 """
 
 from __future__ import annotations
@@ -40,6 +38,15 @@ def env(key: str, default: str = "") -> str:
 
 FORCE_DEMO = ENV.get("MARI_FORCE_DEMO") == "1"
 
+LANGS = ("en", "ur")
+
+HOST = env("MARI_HOST", "127.0.0.1")
+PORT = int(env("MARI_PORT", "8010"))
+
+KNOWLEDGE_FILE = Path(
+    env("APP_KNOWLEDGE_FILE", str(ROOT / "server" / "data" / "mari_energies_knowledge_base.md"))
+)
+
 # ── LLM — prefer DeepSeek (APP_LLM_*) when configured, else vLLM Qwen (APP_VLLM_*).
 #    Force either with APP_LLM_PROVIDER = "deepseek" | "vllm". ─────────
 _LLM_FORCED = env("APP_LLM_PROVIDER").lower()
@@ -57,6 +64,10 @@ else:
     LLM_KEY = env("APP_VLLM_API_KEY")
     LLM_MODEL = env("APP_VLLM_MODEL", "qwen3.5")
 
+# Low on purpose: the reply must restate figures and dates from the retrieved knowledge,
+# and at 0.7 the model swapped them ("share price 54.25" for EPS, July 2026 as May).
+LLM_TEMPERATURE = float(env("APP_LLM_TEMPERATURE", "0.3"))
+
 # ── Urdu STT — Soniox realtime (websocket) ──────────────────────────
 SONIOX_KEY = env("APP_SONIOX_API_KEY")
 SONIOX_URL = env("APP_SONIOX_BASE_URL", "wss://stt-rt.jp.soniox.com/transcribe-websocket")
@@ -67,15 +78,40 @@ UPLIFT_KEY = env("APP_UPLIFT_API_KEY")
 UPLIFT_BASE = env("APP_UPLIFT_TTS_BASE_URL", "https://ap-southeast-1.api.upliftai.org").rstrip("/")
 UPLIFT_PATH = env("APP_UPLIFT_TTS_API_PATH", "/v1/synthesis/text-to-speech")
 UPLIFT_VOICE = env("APP_UPLIFT_VOICE_ID", "v_8eelc901v6")
-# Uplift also handles English (see APP_EN_TTS=uplift below). Same voice by default so
-# the kiosk keeps one persona across both languages; override for a separate English one.
+# English through Uplift uses the same voice by default, so the persona sounds the same.
 UPLIFT_VOICE_EN = env("APP_UPLIFT_VOICE_ID_EN", UPLIFT_VOICE)
+# The male presenter's voice, for both languages. Ids: https://docs.upliftai.org/orator_voices
+UPLIFT_VOICE_MALE = env("APP_UPLIFT_VOICE_ID_MALE", UPLIFT_VOICE)
 UPLIFT_FORMAT = env("APP_UPLIFT_OUTPUT_FORMAT", "MP3_22050_32")
+# Below 1.0 so short unstressed words are not clipped; measured, and not monotonic
+# (docs/pronunciation_notes.md).
+try:
+    UPLIFT_SPEED = float(env("APP_UPLIFT_SPEED", "0.9"))
+except ValueError:  # a typo in the env must not take the voice down
+    UPLIFT_SPEED = 0.9
 
-# ── English STT/TTS. STT runs LOCALLY by default (the s2s built-in faster-whisper).
-#    English TTS defaults to Uplift — the same provider (and voice) as Urdu, reading
-#    English text — because no Kokoro instance is deployed right now. Point APP_EN_TTS
-#    back at "local"/"remote" once one is. Urdu always stays on Soniox/Uplift. ──
+# English has its own rate, tuned by ear on the deployed kiosk.
+try:
+    UPLIFT_SPEED_EN = float(env("APP_UPLIFT_SPEED_EN", "0.98"))
+except ValueError:
+    UPLIFT_SPEED_EN = 0.98
+
+# ── Urdu TTS for the female presenter: "uplift" (default) or "matcha", a local
+#    server (kaani/kisok-integrated-tts) reached over HTTP only. Matcha-TTS is a female
+#    voice, so the male presenter's Urdu stays on Uplift either way. ──
+UR_TTS = env("APP_UR_TTS", "uplift")
+MATCHA_URL = env("APP_MATCHA_TTS_URL", "http://127.0.0.1:8030").rstrip("/")
+# 1.0 is the model's own pace; the server clamps to 0.6–1.5 too.
+try:
+    MATCHA_SPEED = min(1.5, max(0.6, float(env("APP_MATCHA_SPEED", "1.0"))))
+except ValueError:
+    MATCHA_SPEED = 1.0
+# A sentence the local server can't render goes to Uplift rather than being silent.
+MATCHA_FALLBACK = env("APP_MATCHA_FALLBACK", "1").lower() not in ("0", "false", "no", "off")
+
+# ── English STT/TTS. Urdu uses Soniox, and Uplift or Matcha-TTS (UR_TTS). English TTS
+#    defaults to Uplift because no Kokoro instance is deployed; set
+#    APP_EN_TTS=local|remote when one is. ──
 EN_STT = env("APP_EN_STT", "local")     # "local" (faster-whisper) | "remote"
 EN_TTS = env("APP_EN_TTS", "uplift")    # "uplift" | "local" (kokoro) | "remote"
 
@@ -106,11 +142,17 @@ A2F_TLS_CA = env("APP_A2F_TLS_CA")
 A2F_MAX_CLIPS = max(1, int(env("APP_A2F_MAX_CLIPS", "1")))
 
 # ── Voices ──────────────────────────────────────────────────────────
-# Kokoro voice names. Urdu always uses Uplift (UPLIFT_VOICE) and English uses Uplift
+# Kokoro voice names. Urdu uses Uplift (UPLIFT_VOICE) or Matcha-TTS and English uses Uplift
 # too while APP_EN_TTS=uplift (UPLIFT_VOICE_EN), so these only apply when either
 # language is routed to Kokoro.
 VOICE_EN = env("APP_TTS_VOICE_ENGLISH", "af_heart")
+VOICE_EN_MALE = env("APP_TTS_VOICE_ENGLISH_MALE", "am_michael")
 VOICE_UR = env("APP_TTS_VOICE_URDU", "af_heart")
+
+
+def pitch_only() -> bool:
+    """MARI_PITCH_ONLY: a recording aid that answers every turn with the presenter's pitch line."""
+    return ENV.get("MARI_PITCH_ONLY", "0") in ("1", "true", "yes", "on")
 
 
 def llm_ready() -> bool:
@@ -123,13 +165,16 @@ def stt_ready(lang: str) -> bool:
     return True if EN_STT == "local" else bool(WHISPER_URL)
 
 
-def tts_ready(lang: str) -> bool:
+def tts_ready(lang: str, avatar: str = "female") -> bool:
+    if lang == "ur" and UR_TTS == "matcha" and avatar != "male":
+        # MatchaTTS falls back to Uplift by itself when the local server is down.
+        return True
     if lang == "ur" or EN_TTS == "uplift":
         return bool(UPLIFT_KEY)
     return True if EN_TTS == "local" else bool(KOKORO_BASE)
 
 
-def status() -> dict:
+async def status() -> dict:
     """Compact config snapshot for /healthz (no secrets)."""
     en_stt = f"whisper-local:{WHISPER_LOCAL_MODEL}" if EN_STT == "local" else "whisper-remote"
     en_tts = {"uplift": "uplift", "local": "kokoro-local"}.get(EN_TTS, "kokoro-remote")
@@ -140,19 +185,41 @@ def status() -> dict:
             "en": {"provider": en_stt, "ready": stt_ready("en")},
         },
         "tts": {
-            "ur": {"provider": "uplift", "ready": tts_ready("ur"), "voice": UPLIFT_VOICE},
+            "ur": await _ur_tts_status(),
             "en": {
                 "provider": en_tts,
                 "ready": tts_ready("en"),
                 "voice": UPLIFT_VOICE_EN if EN_TTS == "uplift" else VOICE_EN,
             },
         },
-        "avatar": _avatar_status(),
+        "avatar": await _avatar_status(),
     }
 
 
-def _avatar_status() -> dict:
+async def _ur_tts_status() -> dict:
+    """Urdu TTS for the female presenter; with matcha, whether its server answers now."""
+    if UR_TTS != "matcha":
+        return {"provider": "uplift", "ready": tts_ready("ur"), "voice": UPLIFT_VOICE}
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=0.5) as client:
+            r = await client.get(f"{MATCHA_URL}/healthz")
+            reachable = r.status_code == 200 and r.json().get("ready") is True
+    except Exception:
+        reachable = False
+    return {
+        "provider": "matcha",
+        "ready": tts_ready("ur"),
+        "url": MATCHA_URL,
+        "reachable": reachable,
+        "fallback": "uplift" if MATCHA_FALLBACK else None,
+        "male": {"provider": "uplift", "ready": tts_ready("ur", "male"), "voice": UPLIFT_VOICE_MALE},
+    }
+
+
+async def _avatar_status() -> dict:
     """Lipsync readiness — imported lazily so config stays dependency-free."""
     from .avatar import a2f_status
 
-    return {"a2f": a2f_status()}
+    return {"a2f": await a2f_status()}

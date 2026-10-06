@@ -8,10 +8,9 @@ Contract (confirmed against the repo):
   input  : VADAudio     (.audio ndarray, .mode "progressive"|"final", .turn_id, ...)
   output : Transcription (.text, .language_code, .turn_id, .turn_revision, ...)
 
-The websocket call itself is delegated to ``server.providers.stt.SonioxSTT`` — the
-same adapter server/app.py uses — so the Soniox protocol logic lives in one place
-instead of being duplicated per entrypoint. process() is a *sync* generator (s2s
-runs each handler in its own thread), so the async call is driven with asyncio.run().
+The websocket call is the same ``server.providers.stt.SonioxSTT`` adapter server/app.py
+uses. process() is a sync generator (s2s runs each handler in its own thread), so the
+async call is driven with asyncio.run().
 """
 
 from __future__ import annotations

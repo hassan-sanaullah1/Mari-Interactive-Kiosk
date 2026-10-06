@@ -23,6 +23,11 @@ This repo actually holds **two separate, independently runnable things**:
 
 ---
 
+
+> **Retrieval (RAG):** hybrid dense + sparse search over Qdrant lives in
+> `server/services/`. Parameters, measured results and the reasoning behind every tuned
+> value are documented in [README-RAG.md](README-RAG.md).
+
 ## Running the kiosk
 
 The kiosk is **backend** (FastAPI, `server/app.py`) + **frontend** (Next.js,

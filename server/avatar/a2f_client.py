@@ -197,7 +197,16 @@ class A2FStreamSession:
         if self._writer_task is not None:
             self._write_queue.put_nowait(None)  # sentinel: writer exits after the queue
             await asyncio.wait([self._writer_task])
-        await self._stream.write(AudioStream(end_of_audio=AudioStream.EndOfAudio()))
+        try:
+            await self._stream.write(AudioStream(end_of_audio=AudioStream.EndOfAudio()))
+        except Exception:
+            # The NIM already ended the stream (e.g. "No available stream"), so the
+            # write fails with "RPC already finished". Surface the real error so the
+            # caller's retry can act on it.
+            await asyncio.wait([self._read_task], timeout=1.0)
+            if self._read_task.done():
+                await self._read_task
+            raise
         await self._read_task
         return self.frames_total
 
@@ -273,10 +282,12 @@ class A2FClient:
     def _get_channel(self):
         if self._channel is None:
             options = [
-                # Keep the connection alive between utterances.
+                # Ping only while a clip is streaming. Pinging an idle channel every
+                # 30s broke the NIM's default ping policy: it answered with GOAWAY
+                # "too_many_pings" and dropped the connection mid-conversation.
                 ("grpc.keepalive_time_ms", 30000),
                 ("grpc.keepalive_timeout_ms", 10000),
-                ("grpc.keepalive_permit_without_calls", 1),
+                ("grpc.keepalive_permit_without_calls", 0),
             ]
             if self._secure:
                 root_certs = None
@@ -299,6 +310,23 @@ class A2FClient:
             logger.info("A2F channel warmed up (%s)", self._target)
         except Exception as exc:
             logger.warning("A2F channel warmup failed: %s", exc)
+
+    async def is_connected(self, timeout: float = 3.0) -> bool:
+        """Best-effort liveness probe for /healthz — does NOT open a clip stream.
+
+        A ready channel (state READY, already dialed by warmup/a prior clip) is
+        reported connected immediately. Otherwise this actively dials with a
+        short timeout, so a down or still-loading NIM shows up as disconnected
+        instead of the stale "ready" a cached client object would otherwise imply.
+        """
+        try:
+            channel = self._get_channel()
+            if channel.get_state(try_to_connect=False) == grpc.ChannelConnectivity.READY:
+                return True
+            await asyncio.wait_for(channel.channel_ready(), timeout=timeout)
+            return True
+        except Exception:
+            return False
 
     async def open_stream(self, sample_rate: int, on_batch: OnBatch) -> A2FStreamSession:
         session = A2FStreamSession(sample_rate, on_batch, metadata=self._metadata)

@@ -1,17 +1,13 @@
-"""MARI · Voice — provider adapters (no LiveKit, no s2s runtime).
+"""Provider adapters for the external speech and language services.
 
-Public surface used by server/app.py:
+  stt(wav, lang) -> str            transcribe with the configured STT adapter
+  get_tts_provider(lang, avatar)   the configured TTS adapter (used by server/agent/speech.py)
+  llm                              chat-completions client (server/providers/llm.py)
+  warm(lang)                       preload local-model adapters at startup
+  SonioxStream                     live streaming STT for /ws
+  wav_to_pcm16 / pcm16_to_wav      WAV <-> PCM helpers
 
-  stt(wav, lang) -> str                    dispatch to the configured STT adapter
-  tts(text, lang) -> (bytes, mime)         dispatch to the configured TTS adapter
-  warm(lang)                               preload local-model adapters at startup
-  SonioxStream                             live streaming STT (used by /ws)
-  wav_to_pcm16 / pcm16_to_wav              WAV<->PCM helpers used by /ws
-
-Each adapter (SonioxSTT, WhisperLocalSTT, WhisperRemoteSTT, UpliftTTS,
-KokoroLocalTTS, KokoroRemoteTTS) implements the STTProvider/TTSProvider Protocol in
-``base.py``, so mari_s2s/handlers/*.py reuse the exact same classes instead of
-reimplementing the Soniox/Uplift network calls.
+Adapters implement the Protocols in ``base.py`` and are shared with mari_s2s/handlers/.
 """
 
 from __future__ import annotations
@@ -28,7 +24,7 @@ from .stt import (
     stt,
     wav_to_pcm16,
 )
-from .tts import KokoroLocalTTS, KokoroRemoteTTS, UpliftTTS, get_tts_provider, tts
+from .tts import KokoroLocalTTS, KokoroRemoteTTS, MatchaTTS, UpliftTTS, get_tts_provider
 
 __all__ = [
     "STTProvider",
@@ -39,20 +35,21 @@ __all__ = [
     "WhisperRemoteSTT",
     "KokoroLocalTTS",
     "KokoroRemoteTTS",
+    "MatchaTTS",
     "UpliftTTS",
     "get_stt_provider",
     "get_tts_provider",
     "pcm16_to_wav",
     "wav_to_pcm16",
     "stt",
-    "tts",
     "warm",
 ]
 
 
 async def warm(lang: str = "en") -> None:
     """Preload local-model adapters (Whisper/Kokoro) in the background so the first
-    turn in that language isn't slowed by model load. No-op for remote adapters."""
+    turn in that language isn't slowed by model load, and check the Matcha-TTS server is
+    up. No-op for remote adapters."""
     import asyncio
 
     stt_provider = get_stt_provider(lang)
