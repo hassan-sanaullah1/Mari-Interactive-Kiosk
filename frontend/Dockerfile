@@ -2,7 +2,7 @@
 # output (next.config.ts: output: "standalone") so the runtime image only needs
 # node + the traced production deps, not the full node_modules tree.
 
-FROM node:24-slim AS deps
+FROM node:25-slim AS deps
 WORKDIR /app
 # Next's anonymous telemetry spawns a detached child process to flush its event
 # file (next/dist/telemetry/storage.js). Harmless on a workstation; in a slim
@@ -19,7 +19,7 @@ RUN npm ci
 # If it fails: `npm audit --omit=dev` in frontend/, upgrade what it names, redeploy.
 RUN npm audit --omit=dev --audit-level=critical
 
-FROM node:24-slim AS builder
+FROM node:25-slim AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 # Cap the build's heap. Without a limit V8 sizes the old space from the HOST's
@@ -53,7 +53,7 @@ ARG NEXT_PUBLIC_MARI_WS=""
 ENV NEXT_PUBLIC_MARI_WS=${NEXT_PUBLIC_MARI_WS}
 RUN npm run build
 
-FROM node:24-slim AS runner
+FROM node:25-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
