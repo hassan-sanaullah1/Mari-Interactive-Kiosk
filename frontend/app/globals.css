@@ -5,8 +5,14 @@
    per-breakpoint coordinates. */
 
 :root {
-  /* 1 reference unit, clamped so the controls stay usable on small screens. */
-  --s: clamp(0.62px, min(calc(100vw / 2000), calc(100vh / 1125)), 1.15px);
+  /* 1 reference unit, clamped so the controls stay usable on small screens. The
+     upper bound is high enough for a 4K screen at 100% scaling (3840x2160 needs
+     1.92px) — at the old 1.15px cap the whole composition stopped growing at 60%
+     there, leaving a small presenter in a mostly empty frame.
+     The floor gives way on narrow landscape screens (a phone on its side): the
+     bottom row needs ~1514 units across before the language bar runs into the
+     dock, so below 992px wide the floor follows the width (vw / 1600) instead. */
+  --s: clamp(min(0.62px, calc(100vw / 1600)), min(calc(100vw / 2000), calc(100dvh / 1125)), 2.5px);
 
   /* Palette sampled from the reference image. */
   --blue: #0077dc;
@@ -38,11 +44,18 @@
   --edge-y: calc(52 * var(--s));
 }
 
-/* --- phones: a separate 402x874 design space, measured off mobile_UI.png ---
-   --s is redefined here, so every calc() below is in mobile reference units. */
-@media (max-width: 760px) {
+/* --- portrait: a separate 402x874 design space, measured off mobile_UI.png ---
+   --s is redefined here, so every calc() below is in mobile reference units.
+   Chosen by SHAPE, not width: phones, portrait tablets and a portrait kiosk
+   screen all get this layout, and a phone on its side keeps the landscape one.
+   6/5 rather than 1/1 so a portrait tablet does not flip layouts when its
+   on-screen keyboard opens and the viewport briefly becomes wider than tall.
+   Every file that switches layout repeats this exact query.
+   No upper cap: a 1080x1920 kiosk needs 2.2px, and a cap is what used to leave
+   the presenter at a third of the screen there. */
+@media (max-aspect-ratio: 6/5) {
   :root {
-    --s: min(calc(100vw / 402), calc(100vh / 874), 1.35px);
+    --s: min(calc(100vw / 402), calc(100dvh / 874));
 
     --mic: calc(64 * var(--s));
     --mic-ring1: 1.1875; /* mobile shows a two-tone halo: dense inner ring... */

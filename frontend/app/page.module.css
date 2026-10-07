@@ -23,7 +23,8 @@
   background-image: url("/bg-desktop-light.png");
 }
 
-@media (max-width: 760px) {
+/* Same layout switch as globals.css. */
+@media (max-aspect-ratio: 6/5) {
   .bg {
     background-image: url("/bg-mobile-dark.png");
   }
@@ -70,10 +71,10 @@
   cursor: pointer;
 }
 
-/* Phones follow mobile_UI.png: the dock sits above a single bottom row holding
-   the language pill + theme switch on the left and the chat launcher on the
-   right. Positions come from --edge-x/--edge-y/--dock-bottom in globals.css. */
-@media (max-width: 760px) {
+/* Portrait screens follow mobile_UI.png: the dock sits above a single bottom row
+   holding the language pill + theme switch on the left and the chat launcher on
+   the right. Positions come from --edge-x/--edge-y/--dock-bottom in globals.css. */
+@media (max-aspect-ratio: 6/5) {
   .toast {
     bottom: calc(220 * var(--s));
     font-size: calc(13 * var(--s));

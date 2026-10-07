@@ -168,7 +168,16 @@ python scripts/rag_ingest.py --recreate
 python eval/run_eval.py --k 5
 python eval/run_eval.py --lang ur --show-failures 20
 python eval/calibrate.py                     # threshold sweep
+python eval/run_answers.py --score-only      # answer scoring, no services needed
+python eval/run_answers.py --repeat 3        # answer scoring against the live LLM
 ```
+
+`run_eval.py` and `run_answers.py` answer different questions and both are needed.
+Retrieval can be perfect while the reply leaves half the retrieved section unsaid — that
+is the single most common failure in the tester's evaluation, and only `run_answers.py`
+can see it. It also legitimately disagrees with `run_eval.py` about retrieval, because it
+goes through `server/rag.py` with query rewriting on, as production does, while
+`run_eval.py`'s backend deliberately skips the rewriter.
 
 ---
 
@@ -532,6 +541,11 @@ must answer, or visibly say it cannot, but it must never fail to speak.
 eval/questions.yaml   150 questions: 134 answerable, 16 deliberately unanswerable
 eval/run_eval.py      hit@k, MRR, fact recall, abstain rate, latency p50/p95 + per stage
 eval/calibrate.py     threshold sweep — the recall/abstention trade, explicitly
+eval/answers.yaml     answer-level cases: the facts a reply must carry, from the tester's
+                      spreadsheet, with their grade and the reply they graded
+eval/run_answers.py   grades live replies on the tester's scale and blames each missing
+                      fact on retrieval, generation or the reply token cap
+eval/factcheck.py     the matching rules (offline; pinned by tests/test_factcheck.py)
 ```
 
 Two independent expectations per question, because they fail differently:

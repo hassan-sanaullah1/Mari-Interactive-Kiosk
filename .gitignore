@@ -81,3 +81,11 @@ CODE_CLEANLINESS_REPORT.md
 
 # Claude-generated reports, kept locally
 /claude_reports/
+
+# Answer-eval run output (eval/run_answers.py). Derived data: a run is reproducible
+# from the fixture, the branch and the recorded header, and the JSONL carries full
+# reply text that would bloat the history.
+/eval/runs/
+
+# New-machine setup kit: holds real API keys (.env, NGC key) — never commit.
+/new-machine-setup/

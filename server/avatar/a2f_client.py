@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 try:  # nvidia-ace wheel / grpcio not installed → lipsync degrades to "off"
     import grpc
-    from nvidia_ace.a2f.v1_pb2 import AudioWithEmotion
+    from nvidia_ace.a2f.v1_pb2 import AudioWithEmotion, BlendShapeParameters, FaceParameters
     from nvidia_ace.audio.v1_pb2 import AudioHeader
     from nvidia_ace.controller.v1_pb2 import AudioStream, AudioStreamHeader
     from nvidia_ace.services.a2f_controller.v1_pb2_grpc import A2FControllerServiceStub
@@ -48,6 +48,48 @@ except ImportError as exc:  # pragma: no cover - depends on the deployment
 
 
 A2F_SAMPLE_RATE = 16000
+
+# Per-avatar A2F tuning, sent in each clip's stream header. An avatar missing
+# from these tables gets the NIM's stylization defaults, which is what the female
+# rig is tuned against, so she gets nothing here.
+#
+# The male: viewers found his mouth unnatural. scripts/lipsync_audit.py measured
+# why on real speech, against the female as the reference: his lip-parting shapes
+# (mouthLowerDown/UpperUp) are sculpted 4-6x weaker and his spreading shapes
+# (stretch/smile/dimple) stronger, so his lips pressed into each other in 20% of
+# frames (hers 5%), squashed 1.8mm on m/b/p (hers 0.6mm), stayed shut in pauses
+# and spread sideways twice as far. The values below were fitted by that audit
+# and checked through the live NIM: overlap 5%, m/b/p contact 0.63mm, spread
+# 4.3 (hers 3.6). Re-run the audit after any re-export of his model.
+
+# FaceParameters.float_params (camelCase). lipOpenOffset (default -0.02) sets how
+# closed the lips sit; +0.04 is what stops his pressing.
+A2F_FACE_PARAMS: dict[str, dict[str, float]] = {
+    "male": {"lipOpenOffset": 0.04},
+}
+
+# BlendShapeParameters.bs_weight_multipliers (PascalCase ARKit names). A value
+# here REPLACES the NIM's default for that shape and unlisted shapes keep theirs;
+# JawOpen's default is 3.0, so 2.18 is 0.73x of it.
+A2F_BLENDSHAPE_MULTIPLIERS: dict[str, dict[str, float]] = {
+    "male": {
+        "JawOpen": 2.18,
+        "MouthFunnel": 0.84,
+        "MouthPucker": 0.68,
+        "MouthShrugLower": 1.2,
+        "MouthShrugUpper": 1.05,
+        "MouthStretchLeft": 0.79,
+        "MouthStretchRight": 0.79,
+        "MouthSmileLeft": 0.9,
+        "MouthSmileRight": 0.9,
+        "MouthDimpleLeft": 0.87,
+        "MouthDimpleRight": 0.87,
+        "MouthFrownLeft": 0.83,
+        "MouthFrownRight": 0.83,
+        "MouthUpperUpLeft": 1.05,
+        "MouthUpperUpRight": 1.05,
+    },
+}
 
 # Frames per published batch: 3 ≈ 100ms at the NIM's 30fps — the lipsync
 # latency granularity. The FIRST frame ships alone so lips engage the moment
@@ -80,8 +122,17 @@ class A2FStreamSession:
     speech-relative.
     """
 
-    def __init__(self, sample_rate: int, on_batch: OnBatch, metadata: tuple | None = None) -> None:
+    def __init__(
+        self,
+        sample_rate: int,
+        on_batch: OnBatch,
+        metadata: tuple | None = None,
+        face_params: dict[str, float] | None = None,
+        bs_multipliers: dict[str, float] | None = None,
+    ) -> None:
         self._in_rate = sample_rate
+        self._face_params = face_params
+        self._bs_multipliers = bs_multipliers
         self._on_batch = on_batch
         self._metadata = metadata
         self._stream = None
@@ -100,18 +151,23 @@ class A2FStreamSession:
         stub = A2FControllerServiceStub(channel)
         self._stream = stub.ProcessAudioStream(metadata=self._metadata)
         self._t_start = time.monotonic()
-        await self._stream.write(
-            AudioStream(
-                audio_stream_header=AudioStreamHeader(
-                    audio_header=AudioHeader(
-                        samples_per_second=A2F_SAMPLE_RATE,
-                        bits_per_sample=16,
-                        channel_count=1,
-                        audio_format=AudioHeader.AUDIO_FORMAT_PCM,
-                    ),
-                )
-            )
+        header = AudioStreamHeader(
+            audio_header=AudioHeader(
+                samples_per_second=A2F_SAMPLE_RATE,
+                bits_per_sample=16,
+                channel_count=1,
+                audio_format=AudioHeader.AUDIO_FORMAT_PCM,
+            ),
         )
+        # Per-stream face tuning (see A2F_FACE_PARAMS). Left unset, the NIM uses
+        # its stylization defaults — which is exactly what the female rig gets.
+        if self._face_params:
+            header.face_params.CopyFrom(FaceParameters(float_params=self._face_params))
+        if self._bs_multipliers:
+            header.blendshape_params.CopyFrom(
+                BlendShapeParameters(bs_weight_multipliers=self._bs_multipliers)
+            )
+        await self._stream.write(AudioStream(audio_stream_header=header))
         self._read_task = asyncio.create_task(self._read_loop())
 
     def start_priming(self) -> None:
@@ -328,8 +384,17 @@ class A2FClient:
         except Exception:
             return False
 
-    async def open_stream(self, sample_rate: int, on_batch: OnBatch) -> A2FStreamSession:
-        session = A2FStreamSession(sample_rate, on_batch, metadata=self._metadata)
+    async def open_stream(
+        self,
+        sample_rate: int,
+        on_batch: OnBatch,
+        face_params: dict[str, float] | None = None,
+        bs_multipliers: dict[str, float] | None = None,
+    ) -> A2FStreamSession:
+        session = A2FStreamSession(
+            sample_rate, on_batch, metadata=self._metadata,
+            face_params=face_params, bs_multipliers=bs_multipliers,
+        )
         try:
             await session.start(self._get_channel())
         except Exception:

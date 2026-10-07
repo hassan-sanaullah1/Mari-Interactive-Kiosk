@@ -120,8 +120,18 @@ class LipsyncTurn:
                        if that sentence produced none.
     """
 
-    def __init__(self, client: A2FClient, send: Send, turn_id: str) -> None:
+    def __init__(
+        self,
+        client: A2FClient,
+        send: Send,
+        turn_id: str,
+        face_params: dict[str, float] | None = None,
+        bs_multipliers: dict[str, float] | None = None,
+    ) -> None:
         self._client = client
+        # Per-avatar A2F tuning for every clip of this turn; None = NIM defaults.
+        self._face_params = face_params
+        self._bs_multipliers = bs_multipliers
         self._send = send
         self._turn_id = turn_id
         # Shared across turns: the NIM's slot count is global, so a per-turn
@@ -174,7 +184,10 @@ class LipsyncTurn:
             try:
                 session = await asyncio.wait_for(
                     self._client.open_stream(
-                        sample_rate=A2F_SAMPLE_RATE, on_batch=publisher.publish
+                        sample_rate=A2F_SAMPLE_RATE,
+                        on_batch=publisher.publish,
+                        face_params=self._face_params,
+                        bs_multipliers=self._bs_multipliers,
                     ),
                     timeout=_OPEN_TIMEOUT_S,
                 )
@@ -221,7 +234,12 @@ class LipsyncTurn:
                 self._sessions.discard(session)
                 await asyncio.sleep(0.3)
                 session = await asyncio.wait_for(
-                    self._client.open_stream(sample_rate=A2F_SAMPLE_RATE, on_batch=publisher.publish),
+                    self._client.open_stream(
+                        sample_rate=A2F_SAMPLE_RATE,
+                        on_batch=publisher.publish,
+                        face_params=self._face_params,
+                        bs_multipliers=self._bs_multipliers,
+                    ),
                     timeout=_OPEN_TIMEOUT_S,
                 )
                 self._sessions.add(session)

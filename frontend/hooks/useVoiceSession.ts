@@ -574,6 +574,7 @@ export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
             type: "start",
             lang: langRef.current,
             avatar: avatarRef.current,
+            a2fPreset: new URLSearchParams(window.location.search).get("male"), // TEMP male preset
             history: historyPayload(),
           }),
         );
@@ -852,6 +853,7 @@ export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
               text: body,
               lang: langRef.current,
               avatar: avatarRef.current,
+              a2fPreset: new URLSearchParams(window.location.search).get("male"), // TEMP male preset
               history,
             }),
           );

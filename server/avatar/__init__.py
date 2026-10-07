@@ -15,12 +15,14 @@ from __future__ import annotations
 import logging
 
 from .. import config as C
-from .a2f_client import AVAILABLE, IMPORT_ERROR, A2FClient, A2FStreamSession
+from .a2f_client import A2F_BLENDSHAPE_MULTIPLIERS, A2F_FACE_PARAMS, AVAILABLE, IMPORT_ERROR, A2FClient, A2FStreamSession
 from .lipsync import LipsyncTurn, decode_to_pcm16_16k
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "A2F_BLENDSHAPE_MULTIPLIERS",
+    "A2F_FACE_PARAMS",
     "A2FClient",
     "A2FStreamSession",
     "LipsyncTurn",

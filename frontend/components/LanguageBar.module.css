@@ -127,9 +127,9 @@
   height: 52%;
 }
 
-/* Matches app/page.module.css's phone breakpoint, where the cluster shares a
+/* Matches the portrait layout switch in globals.css, where the cluster shares a
    row with the chat launcher and the two-segment pill no longer fits. */
-@media (max-width: 760px) {
+@media (max-aspect-ratio: 6/5) {
   .pill.iconPill {
     display: none;
   }

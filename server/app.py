@@ -151,6 +151,7 @@ async def ws(sock: WebSocket) -> None:
     await sock.accept()
     lang = "en"
     avatar_id = "female"
+    a2f_preset = None  # TEMP male preset
     pcm = bytearray()
     stream: providers.SonioxStream | None = None
     # The browser's copy of the conversation; nothing about the visitor is kept here.
@@ -182,6 +183,7 @@ async def ws(sock: WebSocket) -> None:
                 lang = lang if lang in C.LANGS else "en"
                 if evt.get("avatar") in AVATARS:
                     avatar_id = evt["avatar"]
+                a2f_preset = evt.get("a2fPreset")  # TEMP male preset
                 history = evt.get("history") or []
                 pcm.clear()
                 if lang == "ur" and C.SONIOX_KEY:
@@ -197,13 +199,15 @@ async def ws(sock: WebSocket) -> None:
                     lang = want
                 if evt.get("avatar") in AVATARS:
                     avatar_id = evt["avatar"]
+                a2f_preset = evt.get("a2fPreset")  # TEMP male preset
                 history = evt.get("history") or []
                 if stream is not None:
                     await stream.close()
                     stream = None
                 rag.prestart(typed)
                 await run_reply(
-                    sock, typed, lang, echo_transcript=False, history=history, avatar_id=avatar_id
+                    sock, typed, lang, echo_transcript=False, history=history, avatar_id=avatar_id,
+                    a2f_preset=a2f_preset,  # TEMP male preset
                 )
                 break
             elif evt.get("type") == "end":
@@ -222,6 +226,7 @@ async def ws(sock: WebSocket) -> None:
                 await run_reply(
                     sock, transcript, lang, history=history, avatar_id=avatar_id,
                     spoke=bool(evt.get("spoke", True)),
+                    a2f_preset=a2f_preset,  # TEMP male preset
                 )
                 break
     except WebSocketDisconnect:

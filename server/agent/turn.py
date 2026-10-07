@@ -33,6 +33,11 @@ _LOOKAHEAD = 2
 
 _turn_seq = 0
 
+_MALE_PRESETS = {  # TEMP male preset
+    "b": (avatar.A2F_FACE_PARAMS["male"], avatar.A2F_BLENDSHAPE_MULTIPLIERS["male"]),  # TEMP male preset
+    "c": ({"lipOpenOffset": 0.04}, {"JawForward": 0.87, "JawLeft": 0.66, "JawRight": 0.66, "JawOpen": 2.17, "MouthClose": 0.55, "MouthFunnel": 0.74, "MouthPucker": 0.88, "MouthLeft": 1.29, "MouthRight": 1.29, "MouthSmileLeft": 1.5, "MouthSmileRight": 1.5, "MouthFrownLeft": 0.4, "MouthFrownRight": 0.4, "MouthDimpleLeft": 0.65, "MouthDimpleRight": 0.65, "MouthStretchLeft": 0.4, "MouthStretchRight": 0.4, "MouthRollLower": 1.1, "MouthRollUpper": 1.1, "MouthShrugLower": 0.74, "MouthShrugUpper": 0.73, "MouthPressLeft": 1.1, "MouthPressRight": 1.1, "MouthLowerDownLeft": 1.0, "MouthLowerDownRight": 1.0, "MouthUpperUpLeft": 1.11, "MouthUpperUpRight": 1.11}),  # TEMP male preset
+}  # TEMP male preset
+
 
 async def run_reply(
     sock: WebSocket,
@@ -42,6 +47,7 @@ async def run_reply(
     history: list | None = None,
     avatar_id: str = "female",
     spoke: bool = True,
+    a2f_preset: str | None = None,  # TEMP male preset
 ) -> None:
     """Speak the reply to ``transcript`` (spoken or typed) on this socket.
 
@@ -68,7 +74,15 @@ async def run_reply(
             await sock.send_bytes(audio)
 
     a2f = avatar.get_a2f_client()
-    lips = avatar.LipsyncTurn(a2f, send_json, turn_id) if a2f is not None else None
+    face_params = avatar.A2F_FACE_PARAMS.get(avatar_id)
+    bs_multipliers = avatar.A2F_BLENDSHAPE_MULTIPLIERS.get(avatar_id)
+    if avatar_id == "male" and a2f_preset in _MALE_PRESETS:  # TEMP male preset
+        face_params, bs_multipliers = _MALE_PRESETS[a2f_preset]  # TEMP male preset
+    lips = (
+        avatar.LipsyncTurn(a2f, send_json, turn_id, face_params, bs_multipliers)
+        if a2f is not None
+        else None
+    )
 
     t_turn = time.perf_counter()
     first_audio_ms: float | None = None

@@ -52,10 +52,13 @@
 .panel {
   position: absolute;
   right: calc(21 * var(--s));
-  top: calc(261 * var(--s));
+  /* The reference top, unless the screen is too short to fit the whole panel
+     under it (wider than 16:9, or the --s floor) — then it slides up, down to
+     a 21-unit margin, before it starts to shrink. */
+  top: max(calc(21 * var(--s)), min(calc(261 * var(--s)), calc(100% - 852 * var(--s))));
   width: calc(393 * var(--s));
   height: calc(831 * var(--s));
-  max-height: calc(100% - 40 * var(--s));
+  max-height: calc(100% - 42 * var(--s));
   z-index: 30;
   display: flex;
   flex-direction: column;
@@ -233,16 +236,17 @@
   height: calc(20 * var(--s));
 }
 
-/* Narrow screens: the panel takes the lower sheet instead of a fixed column. */
-@media (max-width: 760px) {
+/* Portrait screens (same switch as globals.css): the panel takes the lower
+   sheet instead of a fixed column. */
+@media (max-aspect-ratio: 6/5) {
   .panel {
     right: calc(10 * var(--s));
     left: calc(10 * var(--s));
     top: auto;
     bottom: calc(10 * var(--s));
     width: auto;
-    height: 72vh;
-    max-height: 72vh;
+    height: 72dvh;
+    max-height: 72dvh;
   }
 
   .composer {

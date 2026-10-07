@@ -14,7 +14,7 @@ export const COPY = {
     you: "You",
     mari: "MARI",
     micDenied: "Microphone access is needed to talk to MARI.",
-    noSpeech: "Didn't catch that — tap the mic to try again.",
+    noSpeech: "Didn't catch that - tap the mic to try again.",
   },
   ur: {
     dir: "rtl",
