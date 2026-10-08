@@ -53,6 +53,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import itertools
 import json
 import os
 import shutil
@@ -70,7 +71,7 @@ FPS = 30.0
 # sampled: each segment is a self-contained loop and transitions crossfade
 # between them rather than playing through. Given as inclusive frame numbers IN
 # THE CLIP'S OWN FRAME RATE, which is read off the key spacing (see clip_fps) —
-# girl15 is 30fps, male_inital03 is 24fps.
+# girl15 is 30fps, male_initial03 is 24fps.
 #
 # These are the DEFAULT because girl15 is what this script was written for. Any
 # other rig has its own windows cut from its own curves and MUST pass them with
@@ -93,7 +94,7 @@ NCOMP = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}
 
 def read_glb(path):
     with open(path, "rb") as f:
-        magic, version, _total = struct.unpack("<III", f.read(12))
+        magic, _version, _total = struct.unpack("<III", f.read(12))
         if magic != 0x46546C67:
             raise SystemExit(f"{path}: not a GLB")
         chunks = {}
@@ -140,7 +141,7 @@ def accessor_bytes(gltf, binary, idx):
 
 def quant_short(x: float) -> int:
     """Float in [-1,1] -> glTF normalized signed short."""
-    return max(-32767, min(32767, int(round(x * 32767.0))))
+    return max(-32767, min(32767, round(x * 32767.0)))
 
 
 class BinBuilder:
@@ -167,7 +168,7 @@ class BinBuilder:
 def clip_fps(gltf, binary) -> float:
     """The clip's frame rate, from the spacing of its densest keyframe curve.
 
-    Not assumed: male_inital03.glb is the same animation as male_inital02.glb
+    Not assumed: male_initial03.glb is the same animation as male_initial02.glb
     re-exported at 24fps, and trimming it by 30fps frame numbers keeps the wrong
     keys with no error until the body seeks into one that is gone.
     """
@@ -178,7 +179,7 @@ def clip_fps(gltf, binary) -> float:
                 longest = [t for (t,) in accessor_bytes(gltf, binary, samp["input"])[0]]
     if len(longest) < 3:
         return FPS
-    steps = sorted(b - a for a, b in zip(longest, longest[1:]))
+    steps = sorted(b - a for a, b in itertools.pairwise(longest))
     return float(round(1.0 / steps[len(steps) // 2]))
 
 
@@ -213,7 +214,7 @@ def optimize(src, dst, drop_morph_normals=True, quantize=True,
     anim_kept = anim_total = 0
     new_acc = []          # accessors rebuilt as (data, accessor-json)
     acc_map = {}          # old accessor idx -> new idx
-    quantised = [0, 0]    # [rotation channels, translation channels]
+    quantised_rotations = 0    # animation channels halved to normalized shorts
 
     # A sampler carries no path of its own; only the channel that points at it
     # knows whether it drives rotation or translation. Only cloth joints are
@@ -247,7 +248,7 @@ def optimize(src, dst, drop_morph_normals=True, quantize=True,
                 # starting at t=0.
                 t0 = times[0][0]
                 sel = [i for i, (t,) in enumerate(times)
-                       if wanted(int(round((t - t0) * fps)) + int(round(t0 * fps)))]
+                       if wanted(round((t - t0) * fps) + round(t0 * fps))]
                 if len(sel) < 2:
                     sel = [0, len(times) - 1]
             anim_kept += len(sel)
@@ -275,27 +276,24 @@ def optimize(src, dst, drop_morph_normals=True, quantize=True,
                     and path == "rotation"
                     and samp.get("interpolation") != "CUBICSPLINE"):
                 # Rotations are unit quaternions, so they already live in [-1,1]
-                # and glTF's "normalized short" encoding applies directly.
-                # Translations are not bounded, so they are scaled into that range
-                # by the node's own TRS: the curve is divided by its peak magnitude
-                # and the node keeps that factor. Both are exactly the encodings
-                # glTF defines for animation output, and three.js dequantises them
-                # in the loader — there is no runtime cost and no shader change.
-                if path == "rotation":
-                    data = b"".join(
-                        struct.pack("<4h", *(quant_short(c) for c in row)) for row in rows)
-                    va = OrderedDict(componentType=5122, count=len(rows),
-                                     type="VEC4", normalized=True)
-                    samp["output"] = emit(data, va)
-                    quantised[0] += 1
-                    continue
-                # Translation is deliberately NOT quantised. A normalized short
-                # output decodes into [-1,1] and is read straight as metres, but
-                # these curves reach 141 (the rig is authored in centimetres under
-                # a 0.01-scaled root), so the encoding cannot represent them.
-                # glTF has no per-channel scale to borrow, and folding one into
-                # the node's own scale would rescale its children and its mesh
-                # too. So translation keeps float32 and only rotation is halved.
+                # and glTF's "normalized short" encoding applies directly. It is
+                # one of the encodings glTF defines for animation output and
+                # three.js dequantises it in the loader, so there is no runtime
+                # cost and no shader change.
+                #
+                # Only rotation: a normalized short decodes into [-1,1] and is read
+                # straight as metres, but the translation curves reach 141 (the rig
+                # is authored in centimetres under a 0.01-scaled root), so the
+                # encoding cannot represent them. glTF has no per-channel scale to
+                # borrow, and folding one into the node's own scale would rescale
+                # its children and its mesh too.
+                data = b"".join(
+                    struct.pack("<4h", *(quant_short(c) for c in row)) for row in rows)
+                va = OrderedDict(componentType=5122, count=len(rows),
+                                 type="VEC4", normalized=True)
+                samp["output"] = emit(data, va)
+                quantised_rotations += 1
+                continue
 
             out = [struct.pack(fmt, *row) for row in rows]
             va = OrderedDict(componentType=vacc["componentType"], count=len(rows),
@@ -342,7 +340,7 @@ def optimize(src, dst, drop_morph_normals=True, quantize=True,
         if "bufferView" in acc:
             bv = gltf["bufferViews"][acc["bufferView"]]
             ncomp = NCOMP[acc["type"]]
-            ch, csize = CTYPE[acc["componentType"]]
+            _ch, csize = CTYPE[acc["componentType"]]
             elem = ncomp * csize
             base = bv.get("byteOffset", 0) + acc.get("byteOffset", 0)
             stride = bv.get("byteStride") or elem
@@ -467,7 +465,7 @@ def optimize(src, dst, drop_morph_normals=True, quantize=True,
 
     print(f"  animation keyframes : {anim_total} -> {anim_kept} "
           f"({100 * anim_kept / max(anim_total, 1):.0f}%)")
-    print(f"  quantised channels  : {quantised[0]} rotation, {quantised[1]} translation")
+    print(f"  quantised rotations : {quantised_rotations} channels")
     print(f"  morph deltas dropped: {dropped}")
     print(f"  binary              : {before / 1e6:.1f} MB -> {len(new_bin) / 1e6:.1f} MB")
 

@@ -67,7 +67,7 @@ const nextConfig: NextConfig = {
       },
       {
         // The avatar .glb: large, versioned by filename (girl15.glb,
-        // male_inital12.glb) and never mutated in place — a rename accompanies any
+        // male_initial13.glb) and never mutated in place — a rename accompanies any
         // actual model change. Safe to cache immutably so returning visitors skip
         // the re-download entirely instead of even doing a revalidation round trip.
         //
@@ -75,9 +75,9 @@ const nextConfig: NextConfig = {
         // own. Confirmed against the built manifest rather than read off the
         // pattern — `/models/:file*.glb` compiles to
         // ^/models(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))?\.glb(?:/)?$, which matches
-        // /models/male_inital12.glb.
+        // /models/male_initial13.glb.
         //
-        // The rename convention is load-bearing HERE, and male_inital12.glb is the
+        // The rename convention is load-bearing HERE, and male_initial13.glb is the
         // rig most likely to break it: it is the raw export, still being iterated
         // on (see models.ts). Re-exporting over that filename hands every returning
         // visitor a year-stale model with no way to revalidate. Bump the name.

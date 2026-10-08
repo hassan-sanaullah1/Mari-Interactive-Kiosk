@@ -1,0 +1,2238 @@
+{
+ "scenarios": {
+  "spoken/en/female": {
+   "socket": [
+    {
+     "type": "stt",
+     "text": "What is Mari's net profit?",
+     "lang": "en"
+    },
+    {
+     "type": "reply",
+     "text": "Hello!",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 9644
+    },
+    {
+     "type": "reply",
+     "text": "I'm Maryam of Mari Energies.",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 44844
+    },
+    {
+     "type": "reply",
+     "text": "Our net profit was PKR 65.14bn.",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 49644
+    },
+    {
+     "type": "done",
+     "spoken": true
+    }
+   ]
+  },
+  "spoken/en/female/a2f": {
+   "socket": [
+    {
+     "type": "stt",
+     "text": "What is Mari's net profit?",
+     "lang": "en"
+    },
+    {
+     "type": "reply",
+     "text": "Hello!",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav",
+     "clip": "t1c1"
+    },
+    {
+     "bytes": 9644
+    },
+    {
+     "type": "reply",
+     "text": "I'm Maryam of Mari Energies.",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav",
+     "clip": "t1c2"
+    },
+    {
+     "bytes": 44844
+    },
+    {
+     "type": "reply",
+     "text": "Our net profit was PKR 65.14bn.",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav",
+     "clip": "t1c3"
+    },
+    {
+     "bytes": 49644
+    },
+    {
+     "type": "done",
+     "spoken": true
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c1",
+     "frames": [],
+     "names": [
+      "JawOpen",
+      "MouthClose",
+      "MouthFunnel",
+      "MouthSmileLeft"
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c1",
+     "frames": [
+      [
+       0.0,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c1",
+     "frames": [
+      [
+       0.1,
+       0.1,
+       0.2,
+       0.3,
+       0.4
+      ],
+      [
+       0.2,
+       0.2,
+       0.3,
+       0.4,
+       0.5
+      ],
+      [
+       0.3,
+       0.3,
+       0.4,
+       0.5,
+       0.6
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [],
+     "names": [
+      "JawOpen",
+      "MouthClose",
+      "MouthFunnel",
+      "MouthSmileLeft"
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       0.0,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       0.1,
+       0.1,
+       0.2,
+       0.3,
+       0.4
+      ],
+      [
+       0.2,
+       0.2,
+       0.3,
+       0.4,
+       0.5
+      ],
+      [
+       0.3,
+       0.3,
+       0.4,
+       0.5,
+       0.6
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       0.4,
+       0.4,
+       0.5,
+       0.6,
+       0.0
+      ],
+      [
+       0.5,
+       0.5,
+       0.6,
+       0.0,
+       0.1
+      ],
+      [
+       0.6,
+       0.6,
+       0.0,
+       0.1,
+       0.2
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       0.7,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ],
+      [
+       0.8,
+       0.1,
+       0.2,
+       0.3,
+       0.4
+      ],
+      [
+       0.9,
+       0.2,
+       0.3,
+       0.4,
+       0.5
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       1.0,
+       0.3,
+       0.4,
+       0.5,
+       0.6
+      ],
+      [
+       1.1,
+       0.4,
+       0.5,
+       0.6,
+       0.0
+      ],
+      [
+       1.2,
+       0.5,
+       0.6,
+       0.0,
+       0.1
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       1.3,
+       0.6,
+       0.0,
+       0.1,
+       0.2
+      ],
+      [
+       1.4,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c3",
+     "frames": [],
+     "names": [
+      "JawOpen",
+      "MouthClose",
+      "MouthFunnel",
+      "MouthSmileLeft"
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c3",
+     "frames": [
+      [
+       0.0,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c3",
+     "frames": [
+      [
+       0.1,
+       0.1,
+       0.2,
+       0.3,
+       0.4
+      ],
+      [
+       0.2,
+       0.2,
+       0.3,
+       0.4,
+       0.5
+      ],
+      [
+       0.3,
+       0.3,
+       0.4,
+       0.5,
+       0.6
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c3",
+     "frames": [
+      [
+       0.4,
+       0.4,
+       0.5,
+       0.6,
+       0.0
+      ],
+      [
+       0.5,
+       0.5,
+       0.6,
+       0.0,
+       0.1
+      ],
+      [
+       0.6,
+       0.6,
+       0.0,
+       0.1,
+       0.2
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c3",
+     "frames": [
+      [
+       0.7,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ],
+      [
+       0.8,
+       0.1,
+       0.2,
+       0.3,
+       0.4
+      ],
+      [
+       0.9,
+       0.2,
+       0.3,
+       0.4,
+       0.5
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c3",
+     "frames": [
+      [
+       1.0,
+       0.3,
+       0.4,
+       0.5,
+       0.6
+      ],
+      [
+       1.1,
+       0.4,
+       0.5,
+       0.6,
+       0.0
+      ],
+      [
+       1.2,
+       0.5,
+       0.6,
+       0.0,
+       0.1
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c3",
+     "frames": [
+      [
+       1.3,
+       0.6,
+       0.0,
+       0.1,
+       0.2
+      ],
+      [
+       1.4,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ],
+      [
+       1.5,
+       0.1,
+       0.2,
+       0.3,
+       0.4
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c3",
+     "frames": [
+      [
+       1.6,
+       0.2,
+       0.3,
+       0.4,
+       0.5
+      ]
+     ]
+    }
+   ],
+   "a2f_opens": [
+    {
+     "sample_rate": 16000,
+     "face_params": null,
+     "bs_multipliers": null
+    },
+    {
+     "sample_rate": 16000,
+     "face_params": null,
+     "bs_multipliers": null
+    },
+    {
+     "sample_rate": 16000,
+     "face_params": null,
+     "bs_multipliers": null
+    }
+   ]
+  },
+  "spoken/ur/male": {
+   "socket": [
+    {
+     "type": "partial",
+     "text": "ماری"
+    },
+    {
+     "type": "partial",
+     "text": "ماری انرجیز"
+    },
+    {
+     "type": "partial",
+     "text": "ماری انرجیز کا منافع"
+    },
+    {
+     "type": "stt",
+     "text": "ماری انرجیز کا منافع کتنا ہے؟",
+     "lang": "ur"
+    },
+    {
+     "type": "reply",
+     "text": "وعلیکم السلام، میں مریم ہوں۔",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 44844
+    },
+    {
+     "type": "reply",
+     "text": "ہم نے 1954 میں Mari Gas Field دریافت کیا۔",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 64044
+    },
+    {
+     "type": "done",
+     "spoken": true
+    }
+   ]
+  },
+  "spoken/ur/male/a2f": {
+   "socket": [
+    {
+     "type": "partial",
+     "text": "ماری"
+    },
+    {
+     "type": "partial",
+     "text": "ماری انرجیز"
+    },
+    {
+     "type": "partial",
+     "text": "ماری انرجیز کا منافع"
+    },
+    {
+     "type": "stt",
+     "text": "ماری انرجیز کا منافع کتنا ہے؟",
+     "lang": "ur"
+    },
+    {
+     "type": "reply",
+     "text": "وعلیکم السلام، میں مریم ہوں۔",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav",
+     "clip": "t1c1"
+    },
+    {
+     "bytes": 44844
+    },
+    {
+     "type": "reply",
+     "text": "ہم نے 1954 میں Mari Gas Field دریافت کیا۔",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav",
+     "clip": "t1c2"
+    },
+    {
+     "bytes": 64044
+    },
+    {
+     "type": "done",
+     "spoken": true
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c1",
+     "frames": [],
+     "names": [
+      "JawOpen",
+      "MouthClose",
+      "MouthFunnel",
+      "MouthSmileLeft"
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c1",
+     "frames": [
+      [
+       0.0,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c1",
+     "frames": [
+      [
+       0.1,
+       0.1,
+       0.2,
+       0.3,
+       0.4
+      ],
+      [
+       0.2,
+       0.2,
+       0.3,
+       0.4,
+       0.5
+      ],
+      [
+       0.3,
+       0.3,
+       0.4,
+       0.5,
+       0.6
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c1",
+     "frames": [
+      [
+       0.4,
+       0.4,
+       0.5,
+       0.6,
+       0.0
+      ],
+      [
+       0.5,
+       0.5,
+       0.6,
+       0.0,
+       0.1
+      ],
+      [
+       0.6,
+       0.6,
+       0.0,
+       0.1,
+       0.2
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c1",
+     "frames": [
+      [
+       0.7,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ],
+      [
+       0.8,
+       0.1,
+       0.2,
+       0.3,
+       0.4
+      ],
+      [
+       0.9,
+       0.2,
+       0.3,
+       0.4,
+       0.5
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c1",
+     "frames": [
+      [
+       1.0,
+       0.3,
+       0.4,
+       0.5,
+       0.6
+      ],
+      [
+       1.1,
+       0.4,
+       0.5,
+       0.6,
+       0.0
+      ],
+      [
+       1.2,
+       0.5,
+       0.6,
+       0.0,
+       0.1
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c1",
+     "frames": [
+      [
+       1.3,
+       0.6,
+       0.0,
+       0.1,
+       0.2
+      ],
+      [
+       1.4,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [],
+     "names": [
+      "JawOpen",
+      "MouthClose",
+      "MouthFunnel",
+      "MouthSmileLeft"
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       0.0,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       0.1,
+       0.1,
+       0.2,
+       0.3,
+       0.4
+      ],
+      [
+       0.2,
+       0.2,
+       0.3,
+       0.4,
+       0.5
+      ],
+      [
+       0.3,
+       0.3,
+       0.4,
+       0.5,
+       0.6
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       0.4,
+       0.4,
+       0.5,
+       0.6,
+       0.0
+      ],
+      [
+       0.5,
+       0.5,
+       0.6,
+       0.0,
+       0.1
+      ],
+      [
+       0.6,
+       0.6,
+       0.0,
+       0.1,
+       0.2
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       0.7,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ],
+      [
+       0.8,
+       0.1,
+       0.2,
+       0.3,
+       0.4
+      ],
+      [
+       0.9,
+       0.2,
+       0.3,
+       0.4,
+       0.5
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       1.0,
+       0.3,
+       0.4,
+       0.5,
+       0.6
+      ],
+      [
+       1.1,
+       0.4,
+       0.5,
+       0.6,
+       0.0
+      ],
+      [
+       1.2,
+       0.5,
+       0.6,
+       0.0,
+       0.1
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       1.3,
+       0.6,
+       0.0,
+       0.1,
+       0.2
+      ],
+      [
+       1.4,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ],
+      [
+       1.5,
+       0.1,
+       0.2,
+       0.3,
+       0.4
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       1.6,
+       0.2,
+       0.3,
+       0.4,
+       0.5
+      ],
+      [
+       1.7,
+       0.3,
+       0.4,
+       0.5,
+       0.6
+      ],
+      [
+       1.8,
+       0.4,
+       0.5,
+       0.6,
+       0.0
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       1.9,
+       0.5,
+       0.6,
+       0.0,
+       0.1
+      ],
+      [
+       2.0,
+       0.6,
+       0.0,
+       0.1,
+       0.2
+      ]
+     ]
+    }
+   ],
+   "a2f_opens": [
+    {
+     "sample_rate": 16000,
+     "face_params": {
+      "lipOpenOffset": 0.04
+     },
+     "bs_multipliers": {
+      "JawOpen": 2.17,
+      "JawForward": 0.87,
+      "JawLeft": 0.66,
+      "JawRight": 0.66,
+      "MouthClose": 0.55,
+      "MouthFunnel": 0.74,
+      "MouthPucker": 0.9,
+      "MouthLeft": 1.29,
+      "MouthRight": 1.29,
+      "MouthSmileLeft": 1.5,
+      "MouthSmileRight": 1.5,
+      "MouthFrownLeft": 0.4,
+      "MouthFrownRight": 0.4,
+      "MouthDimpleLeft": 0.65,
+      "MouthDimpleRight": 0.65,
+      "MouthStretchLeft": 0.4,
+      "MouthStretchRight": 0.4,
+      "MouthRollLower": 1.1,
+      "MouthRollUpper": 1.1,
+      "MouthShrugLower": 0.74,
+      "MouthShrugUpper": 0.73,
+      "MouthPressLeft": 1.1,
+      "MouthPressRight": 1.1,
+      "MouthLowerDownLeft": 1.0,
+      "MouthLowerDownRight": 1.0,
+      "MouthUpperUpLeft": 1.11,
+      "MouthUpperUpRight": 1.11
+     }
+    },
+    {
+     "sample_rate": 16000,
+     "face_params": {
+      "lipOpenOffset": 0.04
+     },
+     "bs_multipliers": {
+      "JawOpen": 2.17,
+      "JawForward": 0.87,
+      "JawLeft": 0.66,
+      "JawRight": 0.66,
+      "MouthClose": 0.55,
+      "MouthFunnel": 0.74,
+      "MouthPucker": 0.9,
+      "MouthLeft": 1.29,
+      "MouthRight": 1.29,
+      "MouthSmileLeft": 1.5,
+      "MouthSmileRight": 1.5,
+      "MouthFrownLeft": 0.4,
+      "MouthFrownRight": 0.4,
+      "MouthDimpleLeft": 0.65,
+      "MouthDimpleRight": 0.65,
+      "MouthStretchLeft": 0.4,
+      "MouthStretchRight": 0.4,
+      "MouthRollLower": 1.1,
+      "MouthRollUpper": 1.1,
+      "MouthShrugLower": 0.74,
+      "MouthShrugUpper": 0.73,
+      "MouthPressLeft": 1.1,
+      "MouthPressRight": 1.1,
+      "MouthLowerDownLeft": 1.0,
+      "MouthLowerDownRight": 1.0,
+      "MouthUpperUpLeft": 1.11,
+      "MouthUpperUpRight": 1.11
+     }
+    }
+   ]
+  },
+  "typed/en/female": {
+   "socket": [
+    {
+     "type": "reply",
+     "text": "Hello!",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 9644
+    },
+    {
+     "type": "reply",
+     "text": "I'm Maryam of Mari Energies.",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 44844
+    },
+    {
+     "type": "reply",
+     "text": "Our net profit was PKR 65.14bn.",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 49644
+    },
+    {
+     "type": "done",
+     "spoken": true
+    }
+   ]
+  },
+  "typed/en/female/a2f": {
+   "socket": [
+    {
+     "type": "reply",
+     "text": "Hello!",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav",
+     "clip": "t1c1"
+    },
+    {
+     "bytes": 9644
+    },
+    {
+     "type": "reply",
+     "text": "I'm Maryam of Mari Energies.",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav",
+     "clip": "t1c2"
+    },
+    {
+     "bytes": 44844
+    },
+    {
+     "type": "reply",
+     "text": "Our net profit was PKR 65.14bn.",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav",
+     "clip": "t1c3"
+    },
+    {
+     "bytes": 49644
+    },
+    {
+     "type": "done",
+     "spoken": true
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c1",
+     "frames": [],
+     "names": [
+      "JawOpen",
+      "MouthClose",
+      "MouthFunnel",
+      "MouthSmileLeft"
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c1",
+     "frames": [
+      [
+       0.0,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c1",
+     "frames": [
+      [
+       0.1,
+       0.1,
+       0.2,
+       0.3,
+       0.4
+      ],
+      [
+       0.2,
+       0.2,
+       0.3,
+       0.4,
+       0.5
+      ],
+      [
+       0.3,
+       0.3,
+       0.4,
+       0.5,
+       0.6
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [],
+     "names": [
+      "JawOpen",
+      "MouthClose",
+      "MouthFunnel",
+      "MouthSmileLeft"
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       0.0,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       0.1,
+       0.1,
+       0.2,
+       0.3,
+       0.4
+      ],
+      [
+       0.2,
+       0.2,
+       0.3,
+       0.4,
+       0.5
+      ],
+      [
+       0.3,
+       0.3,
+       0.4,
+       0.5,
+       0.6
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       0.4,
+       0.4,
+       0.5,
+       0.6,
+       0.0
+      ],
+      [
+       0.5,
+       0.5,
+       0.6,
+       0.0,
+       0.1
+      ],
+      [
+       0.6,
+       0.6,
+       0.0,
+       0.1,
+       0.2
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       0.7,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ],
+      [
+       0.8,
+       0.1,
+       0.2,
+       0.3,
+       0.4
+      ],
+      [
+       0.9,
+       0.2,
+       0.3,
+       0.4,
+       0.5
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       1.0,
+       0.3,
+       0.4,
+       0.5,
+       0.6
+      ],
+      [
+       1.1,
+       0.4,
+       0.5,
+       0.6,
+       0.0
+      ],
+      [
+       1.2,
+       0.5,
+       0.6,
+       0.0,
+       0.1
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       1.3,
+       0.6,
+       0.0,
+       0.1,
+       0.2
+      ],
+      [
+       1.4,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c3",
+     "frames": [],
+     "names": [
+      "JawOpen",
+      "MouthClose",
+      "MouthFunnel",
+      "MouthSmileLeft"
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c3",
+     "frames": [
+      [
+       0.0,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c3",
+     "frames": [
+      [
+       0.1,
+       0.1,
+       0.2,
+       0.3,
+       0.4
+      ],
+      [
+       0.2,
+       0.2,
+       0.3,
+       0.4,
+       0.5
+      ],
+      [
+       0.3,
+       0.3,
+       0.4,
+       0.5,
+       0.6
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c3",
+     "frames": [
+      [
+       0.4,
+       0.4,
+       0.5,
+       0.6,
+       0.0
+      ],
+      [
+       0.5,
+       0.5,
+       0.6,
+       0.0,
+       0.1
+      ],
+      [
+       0.6,
+       0.6,
+       0.0,
+       0.1,
+       0.2
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c3",
+     "frames": [
+      [
+       0.7,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ],
+      [
+       0.8,
+       0.1,
+       0.2,
+       0.3,
+       0.4
+      ],
+      [
+       0.9,
+       0.2,
+       0.3,
+       0.4,
+       0.5
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c3",
+     "frames": [
+      [
+       1.0,
+       0.3,
+       0.4,
+       0.5,
+       0.6
+      ],
+      [
+       1.1,
+       0.4,
+       0.5,
+       0.6,
+       0.0
+      ],
+      [
+       1.2,
+       0.5,
+       0.6,
+       0.0,
+       0.1
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c3",
+     "frames": [
+      [
+       1.3,
+       0.6,
+       0.0,
+       0.1,
+       0.2
+      ],
+      [
+       1.4,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ],
+      [
+       1.5,
+       0.1,
+       0.2,
+       0.3,
+       0.4
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c3",
+     "frames": [
+      [
+       1.6,
+       0.2,
+       0.3,
+       0.4,
+       0.5
+      ]
+     ]
+    }
+   ],
+   "a2f_opens": [
+    {
+     "sample_rate": 16000,
+     "face_params": null,
+     "bs_multipliers": null
+    },
+    {
+     "sample_rate": 16000,
+     "face_params": null,
+     "bs_multipliers": null
+    },
+    {
+     "sample_rate": 16000,
+     "face_params": null,
+     "bs_multipliers": null
+    }
+   ]
+  },
+  "empty/spoke": {
+   "socket": [
+    {
+     "type": "stt",
+     "text": "",
+     "lang": "en"
+    },
+    {
+     "type": "reply",
+     "text": "Sorry, I didn't catch that. Could you say it again?",
+     "demo": true
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 64044
+    },
+    {
+     "type": "done",
+     "spoken": true
+    }
+   ]
+  },
+  "empty/silent": {
+   "socket": [
+    {
+     "type": "stt",
+     "text": "",
+     "lang": "en"
+    },
+    {
+     "type": "done",
+     "spoken": false
+    }
+   ]
+  },
+  "legacy/bare_end": {
+   "socket": [
+    {
+     "type": "stt",
+     "text": "",
+     "lang": "en"
+    },
+    {
+     "type": "reply",
+     "text": "Sorry, I didn't catch that. Could you say it again?",
+     "demo": true
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 64044
+    },
+    {
+     "type": "done",
+     "spoken": true
+    }
+   ]
+  },
+  "error/stt": {
+   "socket": [
+    {
+     "type": "error",
+     "message": "stt: whisper unreachable"
+    }
+   ]
+  },
+  "error/soniox_open": {
+   "socket": [
+    {
+     "type": "error",
+     "message": "stt: soniox unreachable"
+    }
+   ]
+  },
+  "error/llm_error_frame": {
+   "socket": [
+    {
+     "type": "stt",
+     "text": "What is Mari's net profit?",
+     "lang": "en"
+    },
+    {
+     "type": "reply",
+     "text": "I heard you, but the language model isn't reachable from here, so I can't answer from the Mari Energies knowledge base right now.",
+     "demo": true
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 64044
+    },
+    {
+     "type": "reply",
+     "text": "You'll find the same information at marienergies.",
+     "demo": true
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 64044
+    },
+    {
+     "type": "reply",
+     "text": "com.",
+     "demo": true
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 6444
+    },
+    {
+     "type": "reply",
+     "text": "pk.",
+     "demo": true
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 4844
+    },
+    {
+     "type": "done",
+     "spoken": true
+    }
+   ]
+  },
+  "error/llm_midstream_fail": {
+   "socket": [
+    {
+     "type": "stt",
+     "text": "What is Mari's net profit?",
+     "lang": "en"
+    },
+    {
+     "type": "reply",
+     "text": "Hello!",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 9644
+    },
+    {
+     "type": "reply",
+     "text": "I'm Maryam of Mari Energie",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 41644
+    },
+    {
+     "type": "done",
+     "spoken": true
+    }
+   ]
+  },
+  "error/llm_connect_fail": {
+   "socket": [
+    {
+     "type": "stt",
+     "text": "What is Mari's net profit?",
+     "lang": "en"
+    },
+    {
+     "type": "reply",
+     "text": "I heard you, but the language model isn't reachable from here, so I can't answer from the Mari Energies knowledge base right now.",
+     "demo": true
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 64044
+    },
+    {
+     "type": "reply",
+     "text": "You'll find the same information at marienergies.",
+     "demo": true
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 64044
+    },
+    {
+     "type": "reply",
+     "text": "com.",
+     "demo": true
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 6444
+    },
+    {
+     "type": "reply",
+     "text": "pk.",
+     "demo": true
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 4844
+    },
+    {
+     "type": "done",
+     "spoken": true
+    }
+   ]
+  },
+  "error/tts_one_sentence": {
+   "socket": [
+    {
+     "type": "stt",
+     "text": "What is Mari's net profit?",
+     "lang": "en"
+    },
+    {
+     "type": "reply",
+     "text": "Hello!",
+     "demo": false
+    },
+    {
+     "type": "warn",
+     "message": "tts: tts refused"
+    },
+    {
+     "type": "reply",
+     "text": "I'm Maryam of Mari Energies.",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav",
+     "clip": "t1c2"
+    },
+    {
+     "bytes": 44844
+    },
+    {
+     "type": "reply",
+     "text": "Our net profit was PKR 65.14bn.",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav",
+     "clip": "t1c3"
+    },
+    {
+     "bytes": 49644
+    },
+    {
+     "type": "done",
+     "spoken": true
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [],
+     "names": [
+      "JawOpen",
+      "MouthClose",
+      "MouthFunnel",
+      "MouthSmileLeft"
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       0.0,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       0.1,
+       0.1,
+       0.2,
+       0.3,
+       0.4
+      ],
+      [
+       0.2,
+       0.2,
+       0.3,
+       0.4,
+       0.5
+      ],
+      [
+       0.3,
+       0.3,
+       0.4,
+       0.5,
+       0.6
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       0.4,
+       0.4,
+       0.5,
+       0.6,
+       0.0
+      ],
+      [
+       0.5,
+       0.5,
+       0.6,
+       0.0,
+       0.1
+      ],
+      [
+       0.6,
+       0.6,
+       0.0,
+       0.1,
+       0.2
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       0.7,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ],
+      [
+       0.8,
+       0.1,
+       0.2,
+       0.3,
+       0.4
+      ],
+      [
+       0.9,
+       0.2,
+       0.3,
+       0.4,
+       0.5
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       1.0,
+       0.3,
+       0.4,
+       0.5,
+       0.6
+      ],
+      [
+       1.1,
+       0.4,
+       0.5,
+       0.6,
+       0.0
+      ],
+      [
+       1.2,
+       0.5,
+       0.6,
+       0.0,
+       0.1
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c2",
+     "frames": [
+      [
+       1.3,
+       0.6,
+       0.0,
+       0.1,
+       0.2
+      ],
+      [
+       1.4,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c3",
+     "frames": [],
+     "names": [
+      "JawOpen",
+      "MouthClose",
+      "MouthFunnel",
+      "MouthSmileLeft"
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c3",
+     "frames": [
+      [
+       0.0,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c3",
+     "frames": [
+      [
+       0.1,
+       0.1,
+       0.2,
+       0.3,
+       0.4
+      ],
+      [
+       0.2,
+       0.2,
+       0.3,
+       0.4,
+       0.5
+      ],
+      [
+       0.3,
+       0.3,
+       0.4,
+       0.5,
+       0.6
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c3",
+     "frames": [
+      [
+       0.4,
+       0.4,
+       0.5,
+       0.6,
+       0.0
+      ],
+      [
+       0.5,
+       0.5,
+       0.6,
+       0.0,
+       0.1
+      ],
+      [
+       0.6,
+       0.6,
+       0.0,
+       0.1,
+       0.2
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c3",
+     "frames": [
+      [
+       0.7,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ],
+      [
+       0.8,
+       0.1,
+       0.2,
+       0.3,
+       0.4
+      ],
+      [
+       0.9,
+       0.2,
+       0.3,
+       0.4,
+       0.5
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c3",
+     "frames": [
+      [
+       1.0,
+       0.3,
+       0.4,
+       0.5,
+       0.6
+      ],
+      [
+       1.1,
+       0.4,
+       0.5,
+       0.6,
+       0.0
+      ],
+      [
+       1.2,
+       0.5,
+       0.6,
+       0.0,
+       0.1
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c3",
+     "frames": [
+      [
+       1.3,
+       0.6,
+       0.0,
+       0.1,
+       0.2
+      ],
+      [
+       1.4,
+       0.0,
+       0.1,
+       0.2,
+       0.3
+      ],
+      [
+       1.5,
+       0.1,
+       0.2,
+       0.3,
+       0.4
+      ]
+     ]
+    },
+    {
+     "type": "lipsync",
+     "uid": "t1c3",
+     "frames": [
+      [
+       1.6,
+       0.2,
+       0.3,
+       0.4,
+       0.5
+      ]
+     ]
+    }
+   ],
+   "a2f_opens": [
+    {
+     "sample_rate": 16000,
+     "face_params": null,
+     "bs_multipliers": null
+    },
+    {
+     "sample_rate": 16000,
+     "face_params": null,
+     "bs_multipliers": null
+    },
+    {
+     "sample_rate": 16000,
+     "face_params": null,
+     "bs_multipliers": null
+    }
+   ]
+  },
+  "disconnect/before_end": {
+   "socket": []
+  },
+  "fallback/unknown_avatar": {
+   "socket": [
+    {
+     "type": "stt",
+     "text": "hello",
+     "lang": "en"
+    },
+    {
+     "type": "reply",
+     "text": "Hello!",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 9644
+    },
+    {
+     "type": "reply",
+     "text": "I'm Maryam of Mari Energies.",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 44844
+    },
+    {
+     "type": "reply",
+     "text": "Our net profit was PKR 65.14bn.",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 49644
+    },
+    {
+     "type": "done",
+     "spoken": true
+    }
+   ]
+  },
+  "fallback/unknown_lang": {
+   "socket": [
+    {
+     "type": "stt",
+     "text": "hello",
+     "lang": "en"
+    },
+    {
+     "type": "reply",
+     "text": "Hello!",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 9644
+    },
+    {
+     "type": "reply",
+     "text": "I'm Maryam of Mari Energies.",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 44844
+    },
+    {
+     "type": "reply",
+     "text": "Our net profit was PKR 65.14bn.",
+     "demo": false
+    },
+    {
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 49644
+    },
+    {
+     "type": "done",
+     "spoken": true
+    }
+   ]
+  }
+ }
+}

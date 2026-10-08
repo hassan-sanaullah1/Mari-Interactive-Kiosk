@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 import re
 
-from ..services.generation import CONTEXT_HEADER
+from ..rag.generation import CONTEXT_HEADER
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ def history_messages(history) -> list[dict]:
 
 
 def fit_history(system_prompt: str, question: str, history: list[dict],
-                reply_tokens: int, lang: str = "ur") -> list[dict]:
+                reply_tokens: int) -> list[dict]:
     """Drop the oldest history messages until the request fits.
 
     The system prompt and question are never trimmed here. If they alone overflow,
@@ -108,8 +108,7 @@ def fit_history(system_prompt: str, question: str, history: list[dict],
     return kept
 
 
-def fit_system_prompt(system_prompt: str, question: str, reply_tokens: int,
-                      lang: str = "ur") -> str:
+def fit_system_prompt(system_prompt: str, question: str, reply_tokens: int) -> str:
     """Trim the tail of the retrieved context until the prompt itself fits.
 
     The Urdu prompt can overflow with no history at all. Retrieved sections arrive

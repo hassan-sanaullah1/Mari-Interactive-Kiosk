@@ -83,10 +83,7 @@ def heading_matches(heading_path: str, want: str) -> bool:
     """
     if not heading_path:
         return False
-    for level in heading_path.split(" > "):
-        if level.strip().startswith(want):
-            return True
-    return False
+    return any(level.strip().startswith(want) for level in heading_path.split(" > "))
 
 
 # ── backends ────────────────────────────────────────────────────────
@@ -106,7 +103,7 @@ class HybridBackend:
     def __init__(self, top_k: int = 5) -> None:
         import asyncio
 
-        from server.services.retriever import get_retriever
+        from server.rag.retriever import get_retriever
 
         self._asyncio = asyncio
         self._loop = asyncio.new_event_loop()
@@ -240,6 +237,47 @@ def print_report(report: dict, k: int, show_failures: int) -> None:
                 print(f"        got  {g}")
 
 
+# ── regression gate ─────────────────────────────────────────────────
+
+# Per-metric tolerance against a recorded baseline. hit@1 gets the widest band because
+# near-tied chunks swap places between runs for reasons that have nothing to do with a
+# change (README-RAG.md puts that noise at about +-2 points); the rest are steadier.
+TOLERANCE = {
+    "hit@1": 0.02,
+    "hit@3": 0.01,
+    "hit@5": 0.01,
+    "mrr": 0.01,
+    "fact_recall": 0.01,
+    "abstain_rate": 0.0,
+}
+# Retrieval latency is allowed to drift this much before it counts as a regression.
+LATENCY_TOLERANCE = 1.10
+
+
+def compare_to_baseline(report: dict, baseline: dict) -> list[str]:
+    """Metrics that fell further than their tolerance allows, as readable lines."""
+    regressions = []
+    for metric, slack in TOLERANCE.items():
+        if metric not in report or metric not in baseline:
+            continue
+        now, before = report[metric], baseline[metric]
+        if now < before - slack:
+            regressions.append(
+                f"{metric}: {now:.1%} vs baseline {before:.1%} "
+                f"(down {(before - now) * 100:.1f} points, tolerance {slack * 100:.0f})"
+            )
+
+    now_p50 = report.get("latency_ms", {}).get("p50")
+    was_p50 = baseline.get("latency_ms", {}).get("p50")
+    if now_p50 and was_p50 and now_p50 > was_p50 * LATENCY_TOLERANCE:
+        regressions.append(
+            f"retrieve p50: {now_p50:.0f} ms vs baseline {was_p50:.0f} ms "
+            f"(+{(now_p50 / was_p50 - 1) * 100:.0f}%, tolerance "
+            f"+{(LATENCY_TOLERANCE - 1) * 100:.0f}%)"
+        )
+    return regressions
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--backend", action="append", choices=list(BACKENDS),
@@ -247,6 +285,10 @@ def main() -> int:
     ap.add_argument("--k", type=int, default=5, help="top_k passed to the retriever")
     ap.add_argument("--json", type=Path, help="write the full report (incl. failures) here")
     ap.add_argument("--show-failures", type=int, default=15)
+    ap.add_argument("--baseline", type=Path, metavar="FILE",
+                    help="a report written earlier by --json. Metrics are compared "
+                         "against it and a fall beyond tolerance exits non-zero, so "
+                         "this can gate a refactor or CI.")
     ap.add_argument("--lang", choices=["en", "ur"], help="score only this language")
     ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
                     help="override a RagSettings field for this run, e.g. "
@@ -255,7 +297,7 @@ def main() -> int:
     args = ap.parse_args()
 
     if args.set:
-        from server.services.settings import get_settings
+        from server.rag.settings import get_settings
 
         settings = get_settings()
         for pair in args.set:
@@ -283,8 +325,27 @@ def main() -> int:
         args.json.write_text(json.dumps(reports, indent=2, ensure_ascii=False))
         print(f"\nwrote {args.json}")
 
-    # Non-zero exit when the primary backend regresses below the floor the README
-    # documents, so this can gate CI rather than only informing a human.
+    if args.baseline:
+        recorded = json.loads(args.baseline.read_text())
+        # --json writes a list, one report per backend; compare like with like.
+        by_backend = {r["backend"]: r for r in (recorded if isinstance(recorded, list) else [recorded])}
+        failed = False
+        for report in reports:
+            base = by_backend.get(report["backend"])
+            if base is None:
+                print(f"\n  {report['backend']}: not in {args.baseline}, nothing to compare")
+                continue
+            regressions = compare_to_baseline(report, base)
+            if regressions:
+                failed = True
+                print(f"\n  REGRESSED against {args.baseline} ({report['backend']}):")
+                for line in regressions:
+                    print(f"    - {line}")
+            else:
+                print(f"\n  {report['backend']}: within tolerance of {args.baseline}")
+        if failed:
+            return 1
+
     return 0
 
 

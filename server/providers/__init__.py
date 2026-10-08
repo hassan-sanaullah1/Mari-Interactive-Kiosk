@@ -7,12 +7,11 @@
   SonioxStream                     live streaming STT for /ws
   wav_to_pcm16 / pcm16_to_wav      WAV <-> PCM helpers
 
-Adapters implement the Protocols in ``base.py`` and are shared with mari_s2s/handlers/.
+Adapters implement the Protocols in ``base.py``.
 """
 
 from __future__ import annotations
 
-from .. import config as C
 from .base import STTProvider, TTSProvider
 from .stt import (
     SonioxStream,
@@ -27,22 +26,22 @@ from .stt import (
 from .tts import KokoroLocalTTS, KokoroRemoteTTS, MatchaTTS, UpliftTTS, get_tts_provider
 
 __all__ = [
-    "STTProvider",
-    "TTSProvider",
-    "SonioxStream",
-    "SonioxSTT",
-    "WhisperLocalSTT",
-    "WhisperRemoteSTT",
     "KokoroLocalTTS",
     "KokoroRemoteTTS",
     "MatchaTTS",
+    "STTProvider",
+    "SonioxSTT",
+    "SonioxStream",
+    "TTSProvider",
     "UpliftTTS",
+    "WhisperLocalSTT",
+    "WhisperRemoteSTT",
     "get_stt_provider",
     "get_tts_provider",
     "pcm16_to_wav",
-    "wav_to_pcm16",
     "stt",
     "warm",
+    "wav_to_pcm16",
 ]
 
 

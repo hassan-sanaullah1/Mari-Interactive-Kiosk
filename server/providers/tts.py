@@ -17,7 +17,8 @@ import logging
 
 import httpx
 
-from .. import config as C
+from .. import config
+from ..personas import all_personas, get_persona, tts_engine
 from .base import TTSProvider
 
 logger = logging.getLogger(__name__)
@@ -39,15 +40,15 @@ class UpliftTTS(TTSProvider):
         speed: float = 1.0,
         lang: str = "ur",
     ):
-        self.api_key = api_key or C.UPLIFT_KEY
-        self.base = (base or C.UPLIFT_BASE).rstrip("/")
-        self.path = path or C.UPLIFT_PATH
-        self.voice = voice or C.UPLIFT_VOICE
-        self.output_format = output_format or C.UPLIFT_FORMAT
+        self.api_key = api_key or config.UPLIFT_KEY
+        self.base = (base or config.UPLIFT_BASE).rstrip("/")
+        self.path = path or config.UPLIFT_PATH
+        self.voice = voice or config.UPLIFT_VOICE
+        self.output_format = output_format or config.UPLIFT_FORMAT
         self.lang = lang
         # 1.0 means "not set by the caller": use the configured per-language rate.
         self.speed = speed if speed != 1.0 else (
-            C.UPLIFT_SPEED_EN if lang == "en" else C.UPLIFT_SPEED
+            config.UPLIFT_SPEED_EN if lang == "en" else config.UPLIFT_SPEED
         )
 
     async def synthesize(self, text: str) -> tuple[bytes, str]:
@@ -94,7 +95,7 @@ class MatchaTTS(TTSProvider):
     lang = "ur"
 
     def __init__(self, base: str = "", client: httpx.AsyncClient | None = None):
-        self.base = (base or C.MATCHA_URL).rstrip("/")
+        self.base = (base or config.MATCHA_URL).rstrip("/")
         self._client = client
         self._uplift: UpliftTTS | None = None
 
@@ -105,13 +106,13 @@ class MatchaTTS(TTSProvider):
         client = self._client or _matcha_client()
         try:
             r = await client.post(
-                f"{self.base}/v1/tts", json={"text": text, "speed": C.MATCHA_SPEED}
+                f"{self.base}/v1/tts", json={"text": text, "speed": config.MATCHA_SPEED}
             )
         except httpx.TransportError as exc:
-            if not C.MATCHA_FALLBACK:
+            if not config.MATCHA_FALLBACK:
                 raise
             return await self._fallback(text, exc)
-        if r.status_code >= 500 and C.MATCHA_FALLBACK:
+        if r.status_code >= 500 and config.MATCHA_FALLBACK:
             return await self._fallback(text, f"HTTP {r.status_code}")
         # A 4xx means we sent something wrong; hiding it behind Uplift would hide the bug.
         r.raise_for_status()
@@ -122,12 +123,15 @@ class MatchaTTS(TTSProvider):
         )
         return r.content, "audio/wav"
 
-    async def _fallback(self, text: str, why) -> tuple[bytes, str]:
+    async def _fallback(self, text: str, reason: object) -> tuple[bytes, str]:
         from ..normalization import normalize_for_tts
 
-        logger.warning("Matcha-TTS failed (%s), speaking this sentence with Uplift", why)
+        logger.warning("Matcha-TTS failed (%s), speaking this sentence with Uplift", reason)
         if self._uplift is None:
-            self._uplift = UpliftTTS(voice=C.UPLIFT_VOICE)
+            # Only a persona that lists matcha reaches this adapter, so its own Uplift
+            # Urdu voice is the right stand-in.
+            persona = next(p for p in all_personas().values() if "matcha" in p.urdu_engines)
+            self._uplift = UpliftTTS(voice=persona.voice("ur", "uplift"))
         # speech.speak skipped normalization for this adapter; Uplift needs it.
         return await self._uplift.synthesize(normalize_for_tts(text, "ur", "uplift"))
 
@@ -140,7 +144,7 @@ class MatchaTTS(TTSProvider):
             ready = False
         if ready:
             logger.info("Matcha-TTS ready at %s", self.base)
-        elif C.MATCHA_FALLBACK:
+        elif config.MATCHA_FALLBACK:
             logger.warning("Matcha-TTS not reachable at %s, Urdu will fall back to Uplift", self.base)
         else:
             logger.warning("Matcha-TTS not reachable at %s, and fallback is off", self.base)
@@ -154,7 +158,7 @@ class KokoroLocalTTS(TTSProvider):
     _pipe = None  # one pipeline per process
 
     def __init__(self, voice: str = ""):
-        self.voice = voice or C.VOICE_EN
+        self.voice = voice or config.VOICE_EN
 
     def _get_pipe(self):
         if KokoroLocalTTS._pipe is None:
@@ -197,12 +201,12 @@ class KokoroRemoteTTS(TTSProvider):
     engine = "kokoro"
 
     def __init__(self, base: str = "", path: str = "", token: str = "", model: str = "", voice: str = "", fmt: str = ""):
-        self.base = (base or C.KOKORO_BASE).rstrip("/")
-        self.path = path or C.KOKORO_PATH
-        self.token = token or C.KOKORO_TOKEN
-        self.model = model or C.KOKORO_MODEL
-        self.voice = voice or C.VOICE_EN
-        self.fmt = fmt or C.KOKORO_FORMAT
+        self.base = (base or config.KOKORO_BASE).rstrip("/")
+        self.path = path or config.KOKORO_PATH
+        self.token = token or config.KOKORO_TOKEN
+        self.model = model or config.KOKORO_MODEL
+        self.voice = voice or config.VOICE_EN
+        self.fmt = fmt or config.KOKORO_FORMAT
 
     async def synthesize(self, text: str) -> tuple[bytes, str]:
         text = (text or "").strip()
@@ -223,31 +227,21 @@ class KokoroRemoteTTS(TTSProvider):
 _tts_cache: dict[str, TTSProvider] = {}
 
 
-def get_tts_provider(lang: str, avatar: str = "female") -> TTSProvider:
+def get_tts_provider(lang: str, avatar: str | None = None) -> TTSProvider:
     """The configured TTS adapter for a language and presenter, cached per voice.
 
-    ``avatar`` picks the voice: the male rig uses UPLIFT_VOICE_MALE on Uplift and
-    VOICE_EN_MALE on Kokoro. It also picks the engine for Urdu, because Matcha-TTS is a
-    female voice: with APP_UR_TTS=matcha only the female presenter uses it.
+    The persona supplies both the engine and the voice id (server/personas.toml);
+    nothing here knows which presenters exist.
     """
-    male = avatar == "male"
-    if lang == "ur":
-        engine = "matcha" if C.UR_TTS == "matcha" and not male else "uplift"
-    else:
-        engine = C.EN_TTS
-    key = f"{lang}:{engine}:{'male' if male else 'female'}"
+    persona = get_persona(avatar)
+    engine = tts_engine(lang, persona)
+    key = f"{lang}:{engine}:{persona.id}"
     if key not in _tts_cache:
         if engine == "matcha":
             _tts_cache[key] = MatchaTTS()
-        elif lang == "ur":
-            _tts_cache[key] = UpliftTTS(voice=C.UPLIFT_VOICE_MALE if male else C.UPLIFT_VOICE)
-        elif C.EN_TTS == "uplift":
-            # The male Uplift voice covers both languages; there is no separate male English id.
-            _tts_cache[key] = UpliftTTS(
-                voice=C.UPLIFT_VOICE_MALE if male else C.UPLIFT_VOICE_EN, lang="en"
-            )
+        elif engine == "uplift":
+            _tts_cache[key] = UpliftTTS(voice=persona.voice(lang, "uplift"), lang=lang)
         else:
-            voice = C.VOICE_EN_MALE if male else C.VOICE_EN
-            kokoro = KokoroLocalTTS if C.EN_TTS == "local" else KokoroRemoteTTS
-            _tts_cache[key] = kokoro(voice=voice)
+            kokoro = KokoroLocalTTS if engine == "local" else KokoroRemoteTTS
+            _tts_cache[key] = kokoro(voice=persona.voice(lang, "kokoro"))
     return _tts_cache[key]

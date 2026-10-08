@@ -17,8 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from server.normalization import normalize_for_tts
-from server.normalization import _ALL_PLACES, spoken_places
+from server.normalization import _ALL_PLACES, normalize_for_tts, spoken_places
 
 
 @pytest.mark.parametrize(
@@ -200,8 +199,8 @@ def test_no_local_origin_word_in_the_corpus_is_left_in_latin() -> None:
     kb = (Path(__file__).resolve().parent.parent
           / "server" / "data" / "mari_energies_knowledge_base.md").read_text()
     try:
-        english = {w.strip().capitalize()
-                   for w in open("/usr/share/dict/words") if len(w.strip()) > 2}
+        with open("/usr/share/dict/words") as words:
+            english = {w.strip().capitalize() for w in words if len(w.strip()) > 2}
     except OSError:  # pragma: no cover - the dictionary is not installed everywhere
         pytest.skip("no system word list to separate English from local names")
 

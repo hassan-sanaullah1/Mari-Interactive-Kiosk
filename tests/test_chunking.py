@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from server.services.chunking import (
+from server.rag.chunking import (
     approx_token_count,
     chunk_markdown,
     chunk_text,
@@ -146,7 +146,7 @@ def test_an_abbreviation_period_is_not_a_sentence_end() -> None:
     """Regression: "Lt. Gen. Anwar Ali Hyder" was split after "Lt." and after "Gen.",
     which emitted a chunk whose body was the single word "Gen." and took the chairman's
     name out of the chunk that gives his role."""
-    from server.services.chunking import split_sentences
+    from server.rag.chunking import split_sentences
 
     assert split_sentences(
         "Board Chairman: Lt. Gen. Anwar Ali Hyder, HI(M), (Retd). Website follows."
@@ -154,19 +154,19 @@ def test_an_abbreviation_period_is_not_a_sentence_end() -> None:
 
 
 def test_currency_and_corporate_abbreviations_survive() -> None:
-    from server.services.chunking import split_sentences
+    from server.rag.chunking import split_sentences
 
     assert len(split_sentences("Dividend Rs. 21.70 per share. And more.")) == 2
     assert len(split_sentences("Fauji Oil Terminal and Distribution Co. Ltd is it. Next.")) == 2
 
 
 def test_real_sentence_ends_still_split() -> None:
-    from server.services.chunking import split_sentences
+    from server.rag.chunking import split_sentences
 
     assert split_sentences("One. Two! Three?  Four.") == ["One.", "Two!", "Three?", "Four."]
 
 
 def test_urdu_full_stop_still_splits() -> None:
-    from server.services.chunking import split_sentences
+    from server.rag.chunking import split_sentences
 
     assert len(split_sentences("اردو جملہ۔ دوسرا جملہ۔")) == 2

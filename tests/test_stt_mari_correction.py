@@ -15,7 +15,6 @@ import pytest
 
 from server.providers.stt import _fix_misheard_mari
 
-
 # ── followed by a word from the company's own name ──────────────────
 
 @pytest.mark.parametrize(

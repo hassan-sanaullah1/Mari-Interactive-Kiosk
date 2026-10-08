@@ -92,13 +92,61 @@ def test_the_pronunciation_fixes_reach_the_reply_again() -> None:
     assert "میری" not in said and "ایچ آئی" not in said
 
 
-def test_the_responder_applies_it_to_every_sentence() -> None:
-    import inspect
+def test_the_responder_applies_it_to_every_sentence(monkeypatch) -> None:
+    """Every streamed sentence gets the fix, not just the first.
+
+    Asserted by streaming a reply through the real responder rather than by reading
+    its source: the fix moved into a helper once and this test was the only thing
+    that noticed, which told us nothing about the kiosk.
+    """
+    import asyncio
 
     from server.agent import responder
 
-    assert "latin_terms(sentence, lang)" in inspect.getsource(responder.respond_sentences)
-    assert "latin_terms(reply, lang)" in inspect.getsource(responder.respond)
+    # Two sentences, each carrying a term that only latin_terms() can repair.
+    sentences = [
+        "میری انرجیز کا بورڈ۔ ",
+        "ذخائر 952 ایم ایم بی او ای ہیں۔",
+    ]
+
+    async def fake_stream(messages, reply_tokens):
+        for sentence in sentences:
+            yield sentence
+
+    async def fake_prompt(*args, **kwargs):
+        return "system"
+
+    monkeypatch.setattr(responder.llm, "stream", fake_stream)
+    monkeypatch.setattr(responder.rag, "system_prompt", fake_prompt)
+    monkeypatch.setattr(responder, "fallback_reply", lambda *a, **k: None)
+
+    async def collect() -> list[str]:
+        return [text async for text, _ in responder.respond_sentences("q", "ur")]
+
+    spoken = asyncio.run(collect())
+    assert len(spoken) == 2, f"expected one yield per sentence, got {spoken}"
+    # latin_terms() puts the brand and the initialism back into Latin script. (The
+    # "ماڑی" respelling happens later, in the TTS spoken form.)
+    assert "Mari Energies" in spoken[0], spoken[0]
+    assert "MMBOE" in spoken[1], spoken[1]
+
+
+def test_the_single_shot_reply_applies_it_too(monkeypatch) -> None:
+    import asyncio
+
+    from server.agent import responder
+
+    async def fake_complete(messages, reply_tokens):
+        return "میری انرجیز کا بورڈ۔"
+
+    async def fake_prompt(*args, **kwargs):
+        return "system"
+
+    monkeypatch.setattr(responder.llm, "complete", fake_complete)
+    monkeypatch.setattr(responder.rag, "system_prompt", fake_prompt)
+
+    reply = asyncio.run(responder.respond("q", "ur"))
+    assert "Mari Energies" in reply, reply
 
 
 @pytest.mark.parametrize(

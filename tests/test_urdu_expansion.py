@@ -21,8 +21,8 @@ from __future__ import annotations
 
 import pytest
 
-from server.services import expansion
-from server.services import expansion as K
+from server.rag import expansion
+from server.rag import expansion as K
 from tests.retrieval_cases import CASES
 
 
@@ -43,7 +43,7 @@ def test_expansion_is_wired_into_the_sparse_channel() -> None:
     assert terms, "expansion produced no terms for a question it has a phrase entry for"
     assert "ceo" in terms
     # The visitor's own words stay in front; inferred keywords are appended, never
-    # substituted. See server/services/expansion.py for why.
+    # substituted. See server/rag/expansion.py for why.
     assert text.startswith("سی ای او کون ہے؟")
 
 

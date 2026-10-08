@@ -1,6 +1,6 @@
 # Retrieval tuning notes
 
-The measurements behind the defaults in `server/services/settings.py`. Every value was
+The measurements behind the defaults in `server/rag/settings.py`. Every value was
 set with `eval/run_eval.py` / `eval/calibrate.py`; re-measure before changing one.
 
 ## Models

@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 
-from .. import config as C
+from .. import config
 from ..normalization import (
     _ACRONYMS,
     _CAPS_WORDS,
@@ -70,7 +70,7 @@ def _known_acronyms() -> frozenset[str]:
     """Acronyms the kiosk can meet: the acronym table plus every one the corpus uses."""
     known = {k for k in _ACRONYMS if re.fullmatch(r"[A-Z]{2,7}", k)}
     try:
-        corpus = C.KNOWLEDGE_FILE.read_text(encoding="utf-8")
+        corpus = config.KNOWLEDGE_FILE.read_text(encoding="utf-8")
         known |= set(re.findall(r"\b[A-Z]{2,7}\b", corpus))
     except OSError:
         pass
@@ -135,7 +135,7 @@ def _close(a: str, b: str) -> bool:
         return False
     # One insertion, deletion or substitution.
     if len(a) == len(b):
-        return sum(x != y for x, y in zip(a, b)) == 1
+        return sum(x != y for x, y in zip(a, b, strict=False)) == 1
     short, long_ = sorted((a, b), key=len)
     return any(long_[:i] + long_[i + 1:] == short for i in range(len(long_)))
 
@@ -161,7 +161,7 @@ def _trustworthy(skels: list[str], exact: list[bool]) -> bool:
     """
     if all(exact):
         return sum(map(len, skels)) >= 3
-    anchors = [s for s, e in zip(skels, exact) if e]
+    anchors = [s for s, e in zip(skels, exact, strict=False) if e]
     return len(anchors) >= 2 and any(len(s) >= 2 for s in anchors)
 
 
@@ -243,7 +243,7 @@ _MIXED_WORD_RE = re.compile(rf"(?<![{_URDU_CHAR}A-Za-z])([{''.join(_LATIN_SOUNDS
 def _corpus_words() -> dict[str, str]:
     """Every Latin word in the knowledge base, lower-cased, mapped to its usual spelling."""
     try:
-        corpus = C.KNOWLEDGE_FILE.read_text(encoding="utf-8")
+        corpus = config.KNOWLEDGE_FILE.read_text(encoding="utf-8")
     except OSError:
         return {}
     words: dict[str, str] = {}

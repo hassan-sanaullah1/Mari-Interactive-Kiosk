@@ -22,8 +22,8 @@ frontend/public/models/*
 # dead weight in the build context and in every layer of the image.
 !frontend/public/models/girl15.glb
 !frontend/public/models/girl15.glb.gz
-!frontend/public/models/male_inital12.glb
-!frontend/public/models/male_inital12.glb.gz
+!frontend/public/models/male_initial13.glb
+!frontend/public/models/male_initial13.glb.gz
 *.bin
 .DS_Store
 Thumbs.db
@@ -32,9 +32,7 @@ Thumbs.db
 deploy/a2f/.env
 .run/
 
-# Local-only scripts/docs, not for version control
-mari.sh
-ARCHITECTURE.md
+# Local-only: a per-machine compose overlay (A2F network, local Matcha).
 docker-compose.override.yml
 
 # Node / frontend
@@ -45,6 +43,10 @@ next-env.d.ts
 *.tsbuildinfo
 .env.local
 .env.*.local
+
+# Tool caches
+.pytest_cache/
+.ruff_cache/
 
 # Editors / OS
 .vscode/
@@ -76,7 +78,6 @@ server/data/.rag_metadata.sqlite*
 
 # Scratch prompt drafts, kept locally but not shared — the live copies are in
 # server/prompts/.
-/prompt related/
 CODE_CLEANLINESS_REPORT.md
 
 # Claude-generated reports, kept locally

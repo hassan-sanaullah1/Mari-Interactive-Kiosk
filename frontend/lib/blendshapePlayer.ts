@@ -25,6 +25,8 @@
  * Module-level singleton: useVoiceSession feeds it, the avatar samples it.
  */
 
+import { registerSingleton } from "./debug";
+
 export interface BlendshapeClip {
   uid: string;
   names: string[];
@@ -35,6 +37,8 @@ export interface BlendshapeClip {
 
 /** Seconds into the clip's own audio. */
 export type ClipClock = () => number;
+
+registerSingleton("blendshapePlayer");
 
 const clips = new Map<string, BlendshapeClip>();
 /** One pending waitForFrames() resolver per clip — see waitForFrames(). */

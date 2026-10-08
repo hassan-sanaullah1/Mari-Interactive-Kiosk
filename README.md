@@ -1,190 +1,154 @@
-# MARI × speech-to-speech
+# MARI Interactive Kiosk
 
-Integration of **[huggingface/speech-to-speech](https://github.com/huggingface/speech-to-speech)**
-with MARI's stack: **vLLM (Qwen3.5)** LLM, **Whisper + Soniox** STT, **Kokoro + Uplift**
-TTS. This is the "hugging voice" engine referenced by the kiosk project —
-speech-to-speech is a modular VAD→STT→LLM→TTS pipeline, and this repo wires our
-providers into it.
+A touchscreen kiosk with a 3D presenter. A visitor speaks or types, and it answers
+questions about Mari Energies from the company's own knowledge base — in English or
+Urdu, in one of two presenters' voices, with the avatar's mouth matching the speech.
 
-Companion to **`Mari-Interactive-kiosk`** (the production kiosk on FastRTC). That repo
-keeps LiveKit-vs-speech-to-speech as a benchmark; this repo is the speech-to-speech
-implementation being compared.
+```
+microphone → speech to text → retrieval → LLM → text to speech → audio + lipsync
+```
 
-This repo actually holds **two separate, independently runnable things**:
+| | |
+|---|---|
+| **Backend** | FastAPI, one process (`server/`) |
+| **Frontend** | Next.js 15 + three.js (`frontend/`) |
+| **Speech to text** | Soniox for Urdu, faster-whisper for English |
+| **LLM** | Qwen 3.5 on vLLM, or DeepSeek |
+| **Text to speech** | UpliftAI, optionally Matcha-TTS for the female Urdu voice |
+| **Retrieval** | Qdrant, hybrid dense + sparse with FastEmbed |
+| **Lipsync** | NVIDIA Audio2Face-3D, on a separate GPU host, optional |
+| **Deployed** | `docker-compose.yml`, by Coolify |
 
-- **The kiosk web app** (`server/` FastAPI backend + `frontend/` Next.js UI, optionally
-  `deploy/a2f/` for avatar lipsync) — a standalone voice UI, no GPU pipeline required.
-  This is almost certainly what you want to run/deploy. See
-  **[Running the kiosk](#running-the-kiosk)** below.
-- **The `mari_s2s` GPU pipeline** (this file's original subject, below) — plugin
-  handlers for the upstream `speech-to-speech` project, launched via
-  `scripts/run_en.sh` / `run_ur.sh`. Unrelated transport-wise to the kiosk app above;
-  see [ARCHITECTURE.md](ARCHITECTURE.md) for how the two relate.
+## Where to look
 
----
+| | |
+|---|---|
+| **How it is put together, and why** | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| **Conventions a change has to follow** | [CLAUDE.md](CLAUDE.md) |
+| **A walkthrough of the whole codebase** | [MARI_INTERACTIVE_KIOSK_GUIDE.md](MARI_INTERACTIVE_KIOSK_GUIDE.md) |
+| **Why a structural decision was made** | [docs/decisions/](docs/decisions/) |
+| **Retrieval design and measurements** | [README-RAG.md](README-RAG.md) |
+| **Quality baselines, and how to re-run them** | [eval/baselines/README.md](eval/baselines/README.md) |
 
+## Running it
 
-> **Retrieval (RAG):** hybrid dense + sparse search over Qdrant lives in
-> `server/services/`. Parameters, measured results and the reasoning behind every tuned
-> value are documented in [README-RAG.md](README-RAG.md).
-
-## Running the kiosk
-
-The kiosk is **backend** (FastAPI, `server/app.py`) + **frontend** (Next.js,
-`frontend/`), with an optional third piece, **A2F** (NVIDIA Audio2Face-3D, avatar
-lipsync, `deploy/a2f/`). Backend and frontend run fine without A2F — the avatar just
-won't move its mouth.
-
-### Option A — Docker Compose (recommended, also what Coolify deploys)
+### With Docker Compose — what Coolify deploys
 
 ```bash
-cp .env.example .env       # fill in at least the LLM (vLLM or DeepSeek) keys
+cp .env.example .env     # fill in at least the LLM keys and MARI_RAG_QDRANT_API_KEY
 docker compose up -d --build
 ```
 
-- Backend → http://localhost:8010 (health at `/healthz`)
-- Frontend → http://localhost:3000
+- Frontend: http://localhost:3000
+- Backend: http://localhost:8010, status at `/healthz`
 
-`docker-compose.yml` builds `server/Dockerfile` and `frontend/Dockerfile`. The
-frontend proxies `/api/*` to the backend server-side and opens `/ws` directly against
-it from the browser — see `frontend/next.config.ts` and `frontend/lib/endpoints.ts`.
-Because Next.js resolves both of those at **build time**, not container start,
-`MARI_API_ORIGIN` and `NEXT_PUBLIC_MARI_WS` are passed as Docker **build args** in
-`docker-compose.yml`, not runtime env vars — if you fork the compose file, keep them
-as `args:`, not `environment:`.
+**Check `/healthz` first when something is not working.** It reports which providers
+are configured and reachable, and whether retrieval has finished warming up.
 
-**Deploying to Coolify:**
-
-1. Point a Coolify "Docker Compose" resource at this repo; it'll pick up the root
-   `docker-compose.yml` and build both services.
-2. Give `backend` and `frontend` separate FQDNs in the Coolify UI (each service gets
-   its own domain — Coolify's proxy handles routing; the `ports:` block in the compose
-   file is only there so `docker compose up` also works standalone off-platform).
-3. Set `NEXT_PUBLIC_MARI_WS=wss://<your-backend-domain>/ws` as a **build-time**
-   variable on the `frontend` service before it builds — the browser opens the
-   WebSocket directly against the backend's public domain, bypassing the frontend's
-   proxy entirely, and the URL must be baked in at build time (see above). Skipping
-   this leaves the WebSocket trying to reach the frontend's own origin instead.
-4. Set the backend's env vars (LLM/STT/TTS provider keys — see `.env.example`,
-   `server/config.py`) directly in Coolify's environment-variables UI. `.env` is
-   gitignored and never committed; `docker-compose.yml`'s `env_file: .env` is a
-   local-dev convenience only (`required: false`, so it's fine if it doesn't exist).
-5. **A2F needs a GPU host** with the NVIDIA container runtime, which most Coolify
-   targets don't have — it's deliberately *not* part of the root compose file. Deploy
-   `deploy/a2f/` separately on a GPU-capable host (Coolify or otherwise), then point
-   the backend at it with `APP_A2F_URL` (e.g. `grpcs://a2f.your-domain:443` through a
-   TLS proxy that checks `APP_A2F_API_KEY` — see the security note in
-   `deploy/a2f/docker-compose.yml`). Leave `APP_A2F_URL` unset and the kiosk runs
-   fine without lipsync.
-
-### Option B — local processes (no Docker)
+Nothing is mounted into the containers, so after a change rebuild the service you
+touched:
 
 ```bash
-# backend
+docker compose up -d --build backend     # or frontend
+```
+
+**A cold start takes minutes.** The backend downloads embedding models on first boot
+and answers from its core brief until retrieval is ready. That is deliberate — see
+[ARCHITECTURE.md §7](ARCHITECTURE.md#7-the-kiosk-always-speaks).
+
+### Locally, without Docker
+
+```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements-web.txt
+pip install -r requirements.txt -r requirements-dev.txt
 cp .env.example .env
 python -m uvicorn server.app:app --host 127.0.0.1 --port 8010
 
-# frontend (separate terminal)
-cd frontend && npm install && npm run dev     # http://localhost:3000
+cd frontend && npm install && npm run dev      # http://localhost:3000
 ```
 
-Or use `./mari.sh {start|stop|restart|status}`, which manages backend, frontend, and
-the A2F Docker container together (see the script's header comment).
+Retrieval needs a Qdrant instance; the simplest route is `docker compose up -d qdrant`
+and pointing `MARI_RAG_QDRANT_HOST` at it.
 
-The legacy static UI in `web/` is untouched and still served directly at
-http://127.0.0.1:8010/ — useful for testing the backend without the Next.js frontend.
+`scripts/dev.sh {start|stop|restart|status}` starts the backend, the frontend and the
+Audio2Face container together, with logs under `.run/`.
 
-### A2F (avatar lipsync) — optional, GPU required
+### Lipsync — optional, needs a GPU
 
 ```bash
 cd deploy/a2f
-cp .env.example .env          # set NGC_API_KEY (build.nvidia.com)
+cp .env.example .env          # NGC_API_KEY from build.nvidia.com
 docker login nvcr.io -u '$oauthtoken' -p "$NGC_API_KEY"
-docker compose --profile init up nim-init    # first boot only, ~10GB model pull
+docker compose --profile init up nim-init    # first boot only, ~10 GB model pull
 docker compose up -d
 ```
 
-Then set `APP_A2F_URL=127.0.0.1:52000` in the repo-root `.env` (or wherever the
-backend runs). Full details, including the security note on why the port is
-loopback-only by default, are in `deploy/a2f/docker-compose.yml`.
+Then set `APP_A2F_URL=127.0.0.1:52000` in the root `.env`. Leave it unset and the kiosk
+runs normally with a still mouth. The port is loopback-only on purpose: the NIM has no
+authentication of its own. See `deploy/a2f/docker-compose.yml`.
 
-### Configuration reference
+## Configuration
 
-All backend settings are read from `.env` by `server/config.py` — copy
-`.env.example` and fill in what you need:
+Every setting is read from the environment — `.env` locally, Coolify's own environment
+variables in production. Copy `.env.example`, which lists them all; a test enforces
+that it stays in step with the code.
 
-| Concern | Vars |
+| Concern | Variables |
 |---|---|
-| LLM | `APP_LLM_API_BASE`/`APP_LLM_API_KEY` (DeepSeek-compatible) or `APP_VLLM_API_BASE`/`APP_VLLM_API_KEY` (vLLM Qwen) |
-| Urdu STT | `APP_SONIOX_API_KEY` |
-| Urdu/English TTS | `APP_UPLIFT_API_KEY` |
-| English STT | local by default (`faster-whisper`, no key needed) |
-| Avatar lipsync | `APP_A2F_URL` (unset = no lipsync) |
+| LLM | `APP_LLM_*` (DeepSeek-compatible) or `APP_VLLM_*` (vLLM Qwen) |
+| Urdu speech to text | `APP_SONIOX_API_KEY` |
+| Text to speech | `APP_UPLIFT_API_KEY`; `APP_UR_TTS=matcha` for the local Urdu voice |
+| English speech to text | local by default, no key needed |
+| Retrieval | `MARI_RAG_*`, including `MARI_RAG_QDRANT_API_KEY` (required) |
+| Lipsync | `APP_A2F_URL` — unset means no lipsync |
 
-`GET /healthz` on the backend reports which of these are actually configured and
-reachable — check it first when something isn't working.
+## Deploying to Coolify
 
----
+1. Point a Coolify **Docker Compose** resource at this repository.
+2. Give `backend` and `frontend` their own FQDNs. The `ports:` block exists only so
+   plain `docker compose up` works off-platform.
+3. Set `NEXT_PUBLIC_MARI_WS=wss://<backend-domain>/ws` as a **build-time** variable on
+   the frontend. Next.js resolves it when the image is built, not when the container
+   starts, so a runtime variable silently has no effect.
+4. Set the backend's provider keys in Coolify's environment UI. `.env` is never
+   committed; compose's `env_file` is a local convenience (`required: false`).
+5. Deploy `deploy/a2f/` separately on a GPU host and point `APP_A2F_URL` at it through
+   a TLS proxy that checks `APP_A2F_API_KEY`.
 
-## The `mari_s2s` GPU pipeline
-
-The rest of this document covers `mari_s2s/` — plugin handlers for the upstream
-`huggingface/speech-to-speech` project — which is unrelated to the kiosk app above
-except that it reuses the same provider credentials.
-
-## What's here
-
-```
-mari_s2s/handlers/soniox_stt_handler.py   Urdu STT  (BaseHandler[STTIn, STTOut])
-mari_s2s/handlers/uplift_tts_handler.py   Urdu TTS  (BaseHandler[TTSIn, TTSOut])
-mari_s2s/arguments/                        CLI/config dataclasses for the above
-mari_s2s/register.py                       make --stt soniox / --tts uplift resolve
-scripts/run_en.sh                          English pipeline (s2s built-ins only)
-scripts/run_ur.sh                          Urdu pipeline (our custom handlers)
-docs/integration.md                        contract + registration walkthrough
-```
-
-## Provider mapping
-
-| Stage | English | Urdu |
-|---|---|---|
-| STT | `faster-whisper` (s2s built-in) | **Soniox** (custom) |
-| LLM | `chat-completions` → vLLM Qwen3.5 | same |
-| TTS | `kokoro-82m` (s2s built-in) | **Uplift** (custom) |
-
-**English needs no new code** — it's pure s2s configuration. Only **Urdu** required
-custom handlers (s2s has no Urdu-native STT/TTS).
-
-## Quick start
+## Working on it
 
 ```bash
-python -m venv .venv && source .venv/bin/activate     # (or Docker — see Dockerfile)
-pip install -r requirements.txt                        # pulls s2s at your pin
-cp .env.example .env                                   # set vLLM + Soniox + Uplift
-
-# Confirm s2s's current flag names (they evolve), then run:
-python -m speech_to_speech.s2s_pipeline --help
-
-bash scripts/run_en.sh     # English (built-ins)
-# register custom handlers (docs/integration.md), then:
-bash scripts/run_ur.sh     # Urdu (Soniox + Uplift)
+pytest -q                                      # 928 tests, a few seconds
+ruff check . && lint-imports && mypy           # style, layering, types
+cd frontend && npm run lint && npm run typecheck && npm run profiles:check
 ```
 
-## Status & honest caveats
+CI runs all of that plus both image builds on every pull request.
 
-- The **custom handlers** are written against s2s's confirmed handler/message
-  contract (`BaseHandler`, `VADAudio`/`Transcription`/`TTSInput`) and reuse the
-  tested Soniox/Uplift logic from the kiosk's `voicecore`. They **compile**; full
-  runtime validation needs s2s installed + reachable endpoints (I couldn't run the
-  GPU stack here).
-- The **registration hook** (`--stt soniox` / `--tts uplift`) is version-sensitive:
-  s2s's builder registry isn't a documented public API. `register.try_autoregister()`
-  handles the common cases and warns loudly otherwise; `docs/integration.md` has the
-  explicit drop-in steps. **Pin an s2s commit** in `requirements.txt` before relying
-  on it.
-- s2s's exact CLI flag names for the LLM base URL can differ by commit — the run
-  scripts note where to confirm with `--help`.
+### Things that must not change by accident
 
-See [docs/integration.md](docs/integration.md) for the full contract and wiring.
+These files record how the kiosk behaves today. A diff in one means behaviour moved, so
+fix the code rather than refreshing the file — and if the change was deliberate, update
+it in the same commit with the reason in the message.
+
+| File | Pins |
+|---|---|
+| `tests/fixtures/golden.json` | what the kiosk says: speech text, prompts, LLM payloads |
+| `tests/fixtures/ws_golden.json` | the WebSocket contract and every lipsync frame |
+| `frontend/test/fixtures/avatar-profiles.json` | every per-presenter look value |
+| `eval/baselines/` | retrieval and answer quality |
+| `tests/test_turn_timing.py` | that sentence synthesis still overlaps |
+
+### Quality checks that need live services
+
+```bash
+set -a && . ./.env && set +a
+export MARI_RAG_QDRANT_HOST=<the qdrant container's address>   # its port is not published
+
+python eval/run_eval.py --k 5 --baseline eval/baselines/retrieval.json
+python eval/run_answers.py --repeat 2 --baseline eval/baselines/answers.jsonl
+```
+
+Both exit non-zero on a regression. Run them from the host, not inside the backend
+container, which holds an image copy of the code. See
+[eval/baselines/README.md](eval/baselines/README.md).

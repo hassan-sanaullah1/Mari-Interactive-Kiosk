@@ -79,27 +79,11 @@ def load_cases(path: Path = CASES, ids: str | None = None,
 
 
 # ── the live path ───────────────────────────────────────────────────
-# NOTE: this reproduces server.agent.responder.respond() rather than calling it, because
-# complete() throws away the `usage` and `finish_reason` that cap detection needs. If
-# respond() grows a step, this has to grow with it.
-
-
-async def complete_verbose(messages: list[dict], max_tokens: int) -> tuple[str, dict, str]:
-    """One non-streamed reply, keeping the usage and finish_reason that complete() drops."""
-    import httpx
-
-    from server.providers import llm
-
-    payload = llm._payload(messages, max_tokens, stream=False)
-    async with httpx.AsyncClient(timeout=llm.COMPLETE_TIMEOUT) as client:
-        r = await client.post(f"{__import__('server.config', fromlist=['x']).LLM_BASE}"
-                              "/chat/completions", headers=llm._headers(), json=payload)
-        r.raise_for_status()
-        body = r.json()
-    choice = body["choices"][0]
-    return (choice["message"]["content"].strip(),
-            body.get("usage") or {},
-            choice.get("finish_reason") or "")
+# NOTE: this reassembles server.agent.responder.respond() from its public steps rather
+# than calling it, because respond() returns only the text while a grade needs the token
+# accounting too. Every step below is a public function, so a rename breaks the import
+# instead of silently grading a different code path. If respond() grows a step, this has
+# to grow with it.
 
 
 class LiveRunner:
@@ -134,16 +118,17 @@ class LiveRunner:
         from server.agent import responder
         from server.agent.reply_fixes import gender_agreement
         from server.agent.script_fixes import latin_terms
+        from server.providers import llm
 
         self._captured = None
         t0 = time.perf_counter()
-        messages, reply_tokens = await responder._messages(
+        messages, reply_tokens = await responder.build_messages(
             case.question, case.lang, None, self.avatar
         )
         retrieve_ms = (time.perf_counter() - t0) * 1000
 
         t1 = time.perf_counter()
-        reply, usage, finish = await complete_verbose(messages, reply_tokens)
+        reply, usage, finish = await llm.complete_verbose(messages, reply_tokens)
         llm_ms = (time.perf_counter() - t1) * 1000
         reply = gender_agreement(latin_terms(reply, case.lang), case.lang, self.avatar)
 
@@ -432,7 +417,7 @@ def main() -> int:
         return 1
 
     if args.set:
-        from server.services.settings import get_settings
+        from server.rag.settings import get_settings
 
         settings = get_settings()
         for pair in args.set:
@@ -461,9 +446,14 @@ def main() -> int:
     if args.baseline and args.baseline.exists():
         prior = {}
         for line in args.baseline.read_text().splitlines():
-            if line.strip():
-                r = json.loads(line)
-                prior.setdefault(r["id"], r["grade"])
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            # The first line a run writes is its own header (branch, sha, settings),
+            # not a case, so a baseline written by this script has to skip it.
+            if "id" not in record:
+                continue
+            prior.setdefault(record["id"], record["grade"])
         for case in cases:
             case.baseline_grade = prior.get(case.id, case.baseline_grade)
 

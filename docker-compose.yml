@@ -30,7 +30,7 @@
 #     this compose file) rather than committing a real .env.
 
 services:
-  # Vector store for the retrieval layer (server/services/*). Kept in this stack rather
+  # Vector store for the retrieval layer (server/rag/*). Kept in this stack rather
   # than deployed separately because the backend cannot answer grounded questions
   # without it, so there is no useful state where one is up and the other is not.
   qdrant:

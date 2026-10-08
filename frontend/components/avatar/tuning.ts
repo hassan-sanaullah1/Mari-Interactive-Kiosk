@@ -59,12 +59,16 @@ export const CAMERA = {
   /** Clear air above the head, as a fraction of the rig's height. */
   headRoom: 0.045,
   /**
-   * Lens focal length in mm, with the same meaning as Blender's camera "Focal
-   * Length" (36mm sensor, Sensor Fit: Auto), so a value from the artist's
-   * .blend can be dropped in as-is. The frame size stays fixed; the lens only
-   * decides how far back the camera stands to get it. At this framing it
-   * changes her proportions very little — measured, 28mm to 200mm moves the
-   * shoulder-to-head width ratio by under 2%.
+   * The baseline lens focal length in mm, with the same meaning as Blender's
+   * camera "Focal Length" (36mm sensor, Sensor Fit: Auto), so a value from the
+   * artist's .blend can be dropped in as-is. The frame size stays fixed; the lens
+   * only decides how far back the camera stands to get it.
+   *
+   * Every rig declares its own `lensMm` in RIG_TUNING below, which is what the
+   * scene actually uses; this is the fallback and the value the framing was tuned
+   * at. It barely moves proportions WITHIN one depth — measured, 28mm to 200mm
+   * moves the shoulder-to-head width ratio by under 2% — but it does decide how
+   * much nearer geometry is exaggerated, which is the per-rig reason to change it.
    */
   lensMm: 85,
   /** Blender's default sensor width, which its focal lengths are quoted against. */
@@ -249,7 +253,37 @@ export interface RigTuning {
    * anamorphic "slimming" trick — a real lens cannot do this (see CAMERA.lensMm
    * above). It narrows the face as much as the body, so keep it close to 1.
    */
-  widthSqueeze?: number;
+  widthSqueeze: number;
+  /**
+   * Lens focal length in mm for this rig, overriding the shared `CAMERA.lensMm`
+   * baseline. The frame height is shared, so a longer lens only decides how far
+   * back the camera stands for the same shot — the presenter's size on screen
+   * does not change.
+   *
+   * What it does change is depth exaggeration, which is why it is per-rig. A rig
+   * whose hands sit in front of its face draws them larger than its face in
+   * proportion to how much nearer the camera they are: at 85mm the camera stands
+   * 2.7m out, so hands 0.3m forward are drawn ~12% large; at 135mm it stands
+   * 4.3m out and the same hands are ~7.5%. Reach for this before `handScale` —
+   * this is a camera artefact, that would be editing the rig.
+   */
+  lensMm: number;
+  /**
+   * How far back the camera stands, in metres, or null to derive it from the lens.
+   *
+   * null is the adaptive behaviour: the camera backs off until `CAMERA.frameHeightM`
+   * of the rig fills the frame height, recomputed on every resize, so the presenter
+   * is the same size on any screen shape and only the perspective changes with the
+   * lens.
+   *
+   * A number overrides that and stands the camera exactly there. Use it when you
+   * want to set the zoom and the distance independently — the cost is that the
+   * framing is no longer held constant: how much of the rig fills the frame then
+   * depends on the lens AND the stage's aspect ratio, so the same numbers crop
+   * differently on the portrait kiosk than on a desktop. Tune it on the screen the
+   * kiosk actually runs on.
+   */
+  cameraDistanceM: number | null;
   /** World Y the face spot aims at — the centre of this rig's face. */
   headTargetY: number;
   /**
@@ -304,13 +338,13 @@ export interface RigTuning {
    * AvatarModel picks from the card's base colour. Only needed where that guess
    * is wrong — see the alphaTest block there.
    */
-  alphaTest?: Record<string, number>;
+  alphaTest: Record<string, number>;
   /**
    * Roughness to force on a NON-skin material, by name — skinRoughness already
    * covers the skin. Set it only where the export omitted `roughnessFactor` and
    * so loads at glTF's fully matte 1.0.
    */
-  materialRoughness?: Record<string, number>;
+  materialRoughness: Record<string, number>;
   /**
    * Specular reflection strength to force on a material, by name — 1 is the
    * physical default, and anything above it reflects more light than arrives.
@@ -324,7 +358,7 @@ export interface RigTuning {
    * does not touch it (measured: the cyan rim at 0 changes his hair by under
    * half a level out of 255).
    */
-  materialSpecular?: Record<string, number>;
+  materialSpecular: Record<string, number>;
   /** A2F weight calibration, or null for a rig with no morphs to calibrate. */
   a2f: { gain: number; shapeGains: Record<string, number> } | null;
   /**
@@ -344,9 +378,9 @@ export interface RigTuning {
    * below), so a spot aimed at his outline mirrors straight back off it and the
    * black hair lights up at the sides, which never happens on her matte hair.
    *
-   * Only `rim` (the cyan one, camera-left) is dialled back today: it sits
-   * higher and further forward than the kick, so it is the one that reaches his
-   * hair. The green kick stays at 1 on both rigs.
+   * The female rig keeps both at 1; the male rig has both at 0, because his hair
+   * catches the rim (which sits higher and further forward) and his kurta caught
+   * the kick.
    */
   backLight: { rim: number; kick: number };
   /**
@@ -385,6 +419,23 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
     faceMaterial: "lambert12",
     a2f: { gain: 0.9, shapeGains: { jawopen: 0.375 } },
     handScale: 1,
+    // 1 = the camera's own aspect, unsqueezed.
+    widthSqueeze: 1,
+    // The shared baseline, unchanged: her hands rest at her sides, so there is no
+    // depth exaggeration to correct and she is the rig the framing was tuned on.
+    lensMm: 85,
+    // null: her distance follows the lens, so she fills the frame on any screen.
+    cameraDistanceM: null,
+    // No per-material overrides: AvatarModel's own cut (0.35 for a mask-only
+    // texture, 0.08 otherwise) is already right for every material on this rig.
+    // These were implicit before — the renderer read `undefined` and fell back to
+    // values buried in the component, so her appearance depended on code rather
+    // than on this file. Stated here so the two presenters declare the same
+    // fields, which is what stops them drifting.
+    alphaTest: {},
+    // Her kameez declares roughnessFactor, and nothing needs its specular capped.
+    materialRoughness: {},
+    materialSpecular: {},
     // Her hair is matte, so the back lights do on her exactly what they were
     // tuned to do. Nothing to scale.
     backLight: { rim: 1, kick: 1 },
@@ -397,10 +448,11 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
   },
 
   // -------------------------------------------------------------------------
-  // male_inital12.glb — the facial-bone rig (302 nodes) with the dark head repaint
+  // male_initial13.glb — the facial-bone rig (302 nodes) with the dark head repaint
   // back. What changed against the earlier exports, and which of the numbers below
   // answer to it, is in the MALE comment in models.ts, next to the clip windows the
-  // same export decides.
+  // same export decides. Every value here carried over from 12 unchanged except the
+  // two hair keys, which are keyed by material name and so had to follow the rename.
   // -------------------------------------------------------------------------
   male: {
     // Measured off the rig: HeadEnd sits at 1.784 against girl15's 1.616 (and
@@ -409,6 +461,16 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
     // Reads slimmer, closer to the artist's Blender render: the clasped-hands
     // idle pushes his elbows and sleeves out, which no lens choice changes.
     widthSqueeze: 0.93,
+    // Longer than her 85mm, which stands the camera 4.3m out instead of 2.7m for
+    // the same shot. His clasped-hands idle holds his hands in front of his chest
+    // and face, and at the nearer distance they drew noticeably large; the longer
+    // lens roughly halves that (~12% -> ~7.5%). `handScale` is left at 1 — the
+    // hands are the size they were authored, this corrects the camera.
+    lensMm: 135,
+    // Fixed, so the lens and the distance are two independent knobs. 4.92 is what
+    // the adaptive formula gave at 135mm on the desktop stage, i.e. the starting
+    // point this replaced. Raise it to push him further away and smaller.
+    cameraDistanceM: 4.92,
     // Girl15's 1.45 sits 0.029 below her Head_M joint (1.479); this is the same
     // offset below this rig's, at 1.632.
     headTargetY: 1.6,
@@ -429,7 +491,7 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
     // every other material too), so there is nothing left to correct and forcing
     // 0.5 would just overwrite what the artist set.
     //
-    // male_inital04 and 05 drop roughnessFactor on lambert5 (the head), so it
+    // male_initial04 and 05 drop roughnessFactor on lambert5 (the head), so it
     // would load at glTF's fully rough 1.0 default. 0.5 is what 03 authored on
     // the head; it also moves the arms and legs from 0.553 to 0.5, which is not
     // visible.
@@ -437,23 +499,11 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
     // The 0.5 here existed only because 05-08 omitted roughnessFactor on the head.
     skinRoughness: null,
     // Scaled to bring this export's albedo onto the female rig's level under the
-    // shared lights — see materialTint. The two garment entries are one texture
-    // on two meshes (kurta and shalwar). Verified by rendering both rigs through
-    // an identical rig: garment mean luminance 138 against her 134 (was 170),
-    // face p95 147 against her 150 (was 169).
-    // Carried over from male1 unchanged, because the albedo is: measured off this
-    // export's own textures, skin is 175/180/178 mean luminance (male1: 175/180/
-    // 178) and the garment 240 (male1: 240), against girl15's skin 130 and kameez
-    // 185. Same textures, same correction. The garment is one material here
-    // (`pasted__pasted__lambert6`) rather than male1's two meshes sharing one.
-    //
-    // male3's head texture is the exception, and its 0.85 is kept ON PURPOSE. The
-    // repaint is darker (121 whole-texture mean, down from 175), and rendered
-    // through the same lights his face now sits at mean 103 / p95 142, against
-    // male2's 128 / 173 and girl15's 121 / 166. Raising lambert5 to ~1.03 would put
-    // it back on male2's level, but that would paint out the artist's change
-    // rather than correct an export fault, and on screen the darker face reads
-    // naturally against his hands. That is the one number to move if it should not.
+    // shared lights — see materialTint. This rig's textures are authored much
+    // brighter than the female rig's: skin 175-180 mean luminance against her 130,
+    // and the garment (one material, `pasted__pasted__lambert6`) 240 against her
+    // kameez's 185. The tints below pull both back to her levels under the same
+    // lights: garment mean 138 against her 134, face p95 147 against her 150.
     materialTint: {
       "pasted__pasted__lambert6": 0.62,
       "lambert5": 0.95,
@@ -462,30 +512,20 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
     },
     // No makeup on this rig — the pass would read back a texture to change nothing.
     faceMaterial: null,
-    // male_inital06's hair is authored pure black (05 had it at 0.02 grey), which
-    // AvatarModel's colour test reads as a mask card and cuts at 0.35 — that drops
-    // 21% of the texture's visible texels against 4.2% at this cut, taking the soft
-    // strands along the front hairline with it. The hair mesh and its opacity
-    // texture are unchanged from 05, so this is the cut 05's hair actually got.
-    // Re-keyed for 09, which names the hair material `standardSurface2` again
-    // (08 called it `standardSurface2.001`). Still needed: the hair is authored
-    // near-black (0.0005), which AvatarModel's colour test reads as a mask card
-    // and would cut at 0.35 — 21% of the opacity texture's visible texels against
-    // 4.2% here, which is what ate the front hairline when 06 first went black.
-    // Keyed to 12's hair material name — the exports keep flipping between
+    // Keyed to 13's hair material name — the exports keep flipping between
     // `standardSurface2` and `standardSurface2.001`, and a key that misses is
-    // silent. 12 authors the hair at 0.047 rather than near-black, so
-    // AvatarModel's colour test would reach this same 0.08 on its own; the entry
-    // stays because the cut is what we actually want, not a side effect of a
-    // colour, and because 06 and 08 both shipped the hair black enough to take
-    // the 0.35 mask cut, which ate 21% of the opacity texture's visible texels
-    // and with them the front hairline.
-    alphaTest: { "standardSurface2.001": 0.08 },
-    // The kurta and shalwar (one material, two meshes). male_inital05 and 06 ship
+    // silent. Load-bearing again here: 13 authors the hair at 0.0068, back in the
+    // near-black range where AvatarModel's colour test reads it as a mask card and
+    // cuts at 0.35 — which drops 21% of the opacity texture's visible texels
+    // against 4.2% at this cut, and takes the soft strands along the front
+    // hairline with them. (On 12, authored at 0.047, the same 0.08 came out of the
+    // colour test on its own and the key only pinned it.)
+    alphaTest: { "standardSurface2": 0.08 },
+    // The kurta and shalwar (one material, two meshes). male_initial05 and 06 ship
     // it with no roughnessFactor at all, so it loads at glTF's fully matte 1.0 and
     // returns no specular — which is most of how the cyan rim and green kick show
     // up as coloured edges on cloth, so on those exports he lost the back lighting
-    // the female rig has. 0.5 is what male_inital03 authored on this same material
+    // the female rig has. 0.5 is what male_initial03 authored on this same material
     // and what girl15's kameez carries. Diffuse shading, and so his skin and the
     // garment's overall brightness, are untouched by this.
     // No override: 09 authors roughness 0.5 on the kurta, where 05-08 omitted it
@@ -497,21 +537,22 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
     // rather than felt. The sheen it was catching is handled by the specular
     // override below instead.
     materialRoughness: {},
-    // TEST
-    materialSpecular: { "standardSurface2.001": 0.6 },
+    // The hair's sheen, keyed to the same renamed material as alphaTest above.
+    materialSpecular: { "standardSurface2": 0.6 },
     // The female rig's calibration, unchanged. It is a property of what the NIM
     // emits (JawOpen peaking past 2.5 while the lip shapes sit under 1) far more
     // than of the rig, and these two rigs carry the same authored blendshapes at
     // the same amplitudes — the jawOpen delta here is 0.027 against her 0.025.
     // Worth a look on screen even so; ?a2fGain= and ?a2fShapes= retune it live.
     a2f: { gain: 0.9, shapeGains: { jawopen: 0.375 } },
-    // 1 = the hands as authored. Measured off male_inital05, they are 11.3% of his
+    // 1 = the hands as authored. Measured off male_initial05, they are 11.3% of his
     // height long and 7.6% wide, against the female rig's 10.4% and 6.4%, and the
     // camera enlarges them further because they are held in front of his face.
     // Lower this (0.9 or so) to shrink them; much below 0.85 the wrist starts to
     // show a step at the cuff.
     handScale: 1,
-    // The cyan rim pulled back off his hair; the green kick left alone.
+    // Both edge lights off: the rim mirrors off his clearcoated hair and the kick
+    // off the kurta's bright albedo.
     backLight: { rim: 0, kick: 0 },
     // Brighter in the shadows than the shared rig on both themes: the lift sits
     // mostly in ambient and fill, so what opens up is the shaded side of his

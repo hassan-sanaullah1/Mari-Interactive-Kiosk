@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import re
 
+from ..personas import get_persona
+
 SALAM_UR = "السلام علیکم"
 SALAM_EN = "Assalamualaikum"
 # The returned salam, for a visitor who greeted with one.
@@ -139,8 +141,12 @@ def masculine_agreement(reply: str, lang: str = "ur") -> str:
     return _SPEAKER_CLAUSE_RE.sub(fix_clause, reply)
 
 
-def gender_agreement(reply: str, lang: str = "ur", avatar: str = "female") -> str:
-    """The agreement pass for the presenter on screen; unknown ids get the female one."""
-    if avatar == "male":
-        return masculine_agreement(reply, lang)
-    return feminine_agreement(reply, lang)
+def gender_agreement(reply: str, lang: str = "ur", avatar: str | None = None) -> str:
+    """The agreement pass for the presenter on screen.
+
+    Which pass to run is the presenter's grammatical gender (server/personas.toml),
+    not its id; an unknown id gets the default presenter's.
+    """
+    if get_persona(avatar).is_feminine:
+        return feminine_agreement(reply, lang)
+    return masculine_agreement(reply, lang)

@@ -34,9 +34,9 @@ def api():
     from server.agent.turn import run_reply
     from server.normalization import normalize_for_tts
     from server.prompts import get_prompts
-    from server.services.expansion import expand_for_lexical
-    from server.services.generation import GenerationService
-    from server.services.retriever import RetrievalResult
+    from server.rag.expansion import expand_for_lexical
+    from server.rag.generation import GenerationService
+    from server.rag.retriever import RetrievalResult
 
     return {
         "normalize": normalize_for_tts,
@@ -344,8 +344,8 @@ def collect(monkeypatch_setattr, set_env, inputs: dict | None = None) -> dict:
     with_context = RR(context="## 1.5 Shareholding\nFauji Foundation 40 percent.",
                       sources=["kb#1.5"], glossary_block="ABBREVIATIONS:\nMPCL = Mari Petroleum")
     prompts = {}
-    for avatar in AVATARS + ("unknown",):
-        for lang in LANGS + ("xx",):
+    for avatar in (*AVATARS, "unknown"):
+        for lang in (*LANGS, "xx"):
             for greeting in (False, True):
                 for label, result in (("context", with_context), ("empty", RR())):
                     p = gen.build_prompt(result, lang, core_brief=a["core_brief"],
@@ -354,12 +354,12 @@ def collect(monkeypatch_setattr, set_env, inputs: dict | None = None) -> dict:
 
     canned = {}
     for name in ("demo", "no_speech"):
-        for avatar in AVATARS + ("unknown",):
-            for lang in LANGS + ("xx",):
+        for avatar in (*AVATARS, "unknown"):
+            for lang in (*LANGS, "xx"):
                 canned[f"{name}/{avatar}/{lang}"] = a["canned"](name, lang, avatar)
     set_env("MARI_PITCH_ONLY", "1")
     for avatar in AVATARS:
-        for lang in LANGS + ("xx",):
+        for lang in (*LANGS, "xx"):
             canned[f"pitch/{avatar}/{lang}"] = a["pitch"](lang, avatar)
     set_env("MARI_PITCH_ONLY", None)
 

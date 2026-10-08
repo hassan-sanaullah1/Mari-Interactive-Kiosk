@@ -26,10 +26,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from server import config as C          # noqa: E402
-from server import providers as P       # noqa: E402
+from server import config as C  # noqa: E402
+from server import providers as P  # noqa: E402
+from server.agent import speech  # noqa: E402
 from server.agent.responder import respond  # noqa: E402
-from server.agent import speech         # noqa: E402
 
 OK, BAD, WARN = "\033[92m✓\033[0m", "\033[91m✗\033[0m", "\033[93m!\033[0m"
 
@@ -62,7 +62,7 @@ async def _timed(coro):
 
 async def test_llm():
     if not C.llm_ready():
-        return WARN, "not configured (APP_VLLM_*)"
+        return WARN, "not configured (set APP_LLM_* or APP_VLLM_*)"
     try:
         reply, ms = await _timed(respond("Reply with exactly one word: pong.", "en"))
         return OK, f"{ms:6.0f} ms · {reply[:60]!r}"
@@ -70,9 +70,15 @@ async def test_llm():
         return BAD, f"{type(exc).__name__}: {exc}"
 
 
+def _engine_names(lang: str) -> tuple[str, str]:
+    """Which providers this language is actually configured to use right now."""
+    if lang == "ur":
+        return C.UR_TTS, "soniox"
+    return C.EN_TTS, f"whisper ({C.EN_STT})"
+
+
 async def test_roundtrip(lang, text):
-    tts_name = "uplift" if lang == "ur" else "kokoro"
-    stt_name = "soniox" if lang == "ur" else "whisper"
+    tts_name, stt_name = _engine_names(lang)
     try:
         (mp3, _), t_tts = await _timed(speech.speak(text, lang))
         if not mp3:
@@ -88,18 +94,20 @@ async def test_roundtrip(lang, text):
 async def main():
     print("\nMARI · Voice — provider self-test")
     print("=" * 60)
-    for k, v in C.status().items():
-        print(f"  {k}: {v}")
+    for key, value in (await C.status()).items():
+        print(f"  {key}: {value}")
     print("-" * 60)
 
     llm_mark, llm_msg = await test_llm()
-    print(f"{llm_mark} LLM     (vLLM Qwen)      {llm_msg}")
+    print(f"{llm_mark} LLM     ({C.LLM_PROVIDER} {C.LLM_MODEL})  {llm_msg}")
 
+    ur_tts, ur_stt = _engine_names("ur")
     ur_mark, ur_msg = await test_roundtrip("ur", "اسلام علیکم، آج آپ کیسے ہیں؟")
-    print(f"{ur_mark} Urdu    (Uplift↔Soniox)  {ur_msg}")
+    print(f"{ur_mark} Urdu    ({ur_tts}↔{ur_stt})  {ur_msg}")
 
+    en_tts, en_stt = _engine_names("en")
     en_mark, en_msg = await test_roundtrip("en", "Hello, this is a MARI voice self test.")
-    print(f"{en_mark} English (Kokoro↔Whisper) {en_msg}")
+    print(f"{en_mark} English ({en_tts}↔{en_stt})  {en_msg}")
     print("=" * 60 + "\n")
 
 

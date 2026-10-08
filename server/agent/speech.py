@@ -6,7 +6,7 @@ from .. import providers
 from ..normalization import normalize_for_tts
 
 
-async def speak(text: str, lang: str, avatar: str = "female") -> tuple[bytes, str]:
+async def speak(text: str, lang: str, avatar: str | None = None) -> tuple[bytes, str]:
     provider = providers.get_tts_provider(lang, avatar)
     text = (text or "").strip()
     if text and provider.wants_spoken_form:

@@ -39,6 +39,7 @@
  * not add Range headers, and do not add query strings (see cacheBust below).
  */
 
+import { publishProbe, registerSingleton } from "./debug";
 import { AVATARS } from "@/components/avatar/models";
 
 /**
@@ -67,6 +68,8 @@ function inflateRatio(url: string): number {
  * at runtime: with one slot, asking for the second model handed back the first
  * model's bytes and the toggle silently did nothing.
  */
+registerSingleton("avatarFetch");
+
 const inflight = new Map<string, Promise<ArrayBuffer>>();
 
 /**
@@ -88,6 +91,15 @@ export function isAvatarParsed(url: string): boolean {
 
 type ProgressFn = (loaded: number, total: number) => void;
 const listeners = new Set<ProgressFn>();
+
+// Read by e2e/download.spec.ts: a second copy of this module means `inflight` stops
+// deduplicating (the rig downloads twice) and `listeners` is written by a set nobody
+// subscribed to (the loading percentage never moves).
+publishProbe("fetch", {
+  get state() {
+    return { inflight: inflight.size, parsed: parsed.size, listeners: listeners.size };
+  },
+});
 
 /** Subscribe to download progress. Returns an unsubscribe function. */
 export function onAvatarProgress(fn: ProgressFn): () => void {

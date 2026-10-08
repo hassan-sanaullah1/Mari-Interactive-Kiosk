@@ -13,9 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from server.normalization import normalize_for_tts
-from server.normalization import normalise_for_english
-
+from server.normalization import normalise_for_english, normalize_for_tts
 
 # ── percent ─────────────────────────────────────────────────────────
 

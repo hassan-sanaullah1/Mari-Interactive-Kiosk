@@ -234,7 +234,7 @@ def test_sentences_go_out_in_order_even_when_a_later_one_renders_first(monkeypat
             {"type": "tts", "mime": "audio/wav"},
             f"audio:{s}".encode(),
         ]
-    assert sock.sent == expected + [{"type": "done", "spoken": True}]
+    assert sock.sent == [*expected, {"type": "done", "spoken": True}]
 
 
 def test_no_more_than_two_sentences_render_ahead(monkeypatch) -> None:

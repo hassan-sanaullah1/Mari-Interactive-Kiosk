@@ -6,9 +6,9 @@ the WebSocket; this module feeds the same blob to Audio2Face:
     speech.speak(sentence)  ──► WebSocket ──► <audio> playback
                             └─► LipsyncTurn.feed() ──► A2F ──► lipsync frames
 
-Each sentence is one A2F "clip" (§10 of THREEJS_A2F_INTEGRATION.md: the NIM is
-clip-in / burst-out, so short clips per sentence let sentence N's frames burst
-back while sentence N+1 is still being synthesized). Because this app plays one
+Each sentence is one A2F "clip": the NIM is clip-in / burst-out, so short clips
+per sentence let sentence N's frames burst back while sentence N+1 is still
+being synthesized. Because this app plays one
 discrete ``<audio>`` element per sentence rather than a single continuous track,
 each clip carries its OWN timeline and the browser anchors it against that
 element's ``currentTime`` — so no cumulative per-sentence offsets and no
@@ -32,7 +32,7 @@ from collections.abc import Awaitable, Callable
 
 import numpy as np
 
-from .. import config as C
+from .. import config
 from .a2f_client import A2F_SAMPLE_RATE, A2FClient
 
 logger = logging.getLogger(__name__)
@@ -49,16 +49,29 @@ _AUDIO_WAIT_S = 12.0
 # The NIM appends ~1.5s of near-neutral frames after real speech; anything past
 # the clip's true audio length is dropped so the mouth doesn't hold a stale pose.
 _TAIL_TRIM_S = 0.05
-# One process-wide pool of NIM stream slots (see LipsyncTurn.__init__).
-_SLOTS = asyncio.Semaphore(C.A2F_MAX_CLIPS)
+# One pool of NIM stream slots per event loop (see LipsyncTurn.__init__). The server
+# runs a single loop, so this is the process-wide pool it describes; keying by loop
+# only matters to callers that build their own (tests), where a semaphore first used
+# in another loop raises instead of blocking.
+_slots_by_loop: dict[asyncio.AbstractEventLoop, asyncio.Semaphore] = {}
+
+
+def _slots() -> asyncio.Semaphore:
+    loop = asyncio.get_running_loop()
+    pool = _slots_by_loop.get(loop)
+    if pool is None:
+        pool = _slots_by_loop[loop] = asyncio.Semaphore(config.A2F_MAX_CLIPS)
+        # Loops are short-lived in tests; without this the dict grows per loop.
+        for dead in [key for key in _slots_by_loop if key.is_closed()]:
+            del _slots_by_loop[dead]
+    return pool
 
 
 def decode_to_pcm16_16k(data: bytes, mime: str = "") -> bytes:
     """Decode TTS output (mp3 / wav / anything ffmpeg reads) to mono 16 kHz PCM16.
 
-    A2F takes 16-bit PCM at 16 kHz (§7). PyAV is already a dependency of the
-    Urdu s2s handler, and handles both providers' formats (Uplift → mp3,
-    local Kokoro → wav).
+    A2F takes 16-bit PCM at 16 kHz, and every provider hands back something else:
+    Uplift mp3, Matcha and local Kokoro wav.
     """
     import av
 
@@ -134,10 +147,6 @@ class LipsyncTurn:
         self._bs_multipliers = bs_multipliers
         self._send = send
         self._turn_id = turn_id
-        # Shared across turns: the NIM's slot count is global, so a per-turn
-        # semaphore let an overlapping turn (a second page, a chat reply, an
-        # interruption still draining) open a stream the NIM had no slot for.
-        self._slots = _SLOTS
         self._tasks: list[asyncio.Task] = []
         self._audio: dict[str, asyncio.Future] = {}
         self._sessions: set = set()
@@ -175,7 +184,11 @@ class LipsyncTurn:
             fut.set_result(None)
 
     async def _run_clip(self, uid: str) -> None:
-        await self._slots.acquire()
+        # Shared across turns: the NIM's slot count is global, so a per-turn
+        # semaphore let an overlapping turn (a second page, a chat reply, an
+        # interruption still draining) open a stream the NIM had no slot for.
+        slots = _slots()
+        await slots.acquire()
         session = None
         try:
             if self._disabled:
@@ -262,7 +275,7 @@ class LipsyncTurn:
         finally:
             self._sessions.discard(session)
             self._audio.pop(uid, None)
-            self._slots.release()
+            slots.release()
 
     async def drain(self, timeout: float = _CLIP_TIMEOUT_S) -> None:
         """Wait for in-flight clips so their frames land before the socket closes."""

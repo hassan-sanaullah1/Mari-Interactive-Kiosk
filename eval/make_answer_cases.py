@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Drafts eval/answers.yaml from the tester's evaluation spreadsheet.
 
-The tester graded 342 English questions in "MARI kiosk Evaluation - Sheet1 (1).csv"
+The tester graded 342 English questions in ``eval/data/tester_eval.csv``
 against branch refactor/modular-monolith-architecture. This turns the graded rows into
 answer-eval cases, carrying their verdict and their reply across so a new run can be
 compared with the human one case by case.
@@ -25,7 +25,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CSV_PATH = ROOT / "MARI kiosk Evaluation - Sheet1 (1).csv"
+CSV_PATH = ROOT / "eval" / "data" / "tester_eval.csv"
 
 # The tester logged speech complaints in the same column as missing facts. Content is
 # the only thing scored here, so a fragment about how a word sounded is not a

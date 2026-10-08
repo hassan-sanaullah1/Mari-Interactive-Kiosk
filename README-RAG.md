@@ -4,7 +4,7 @@ Hybrid (dense + sparse) retrieval over Qdrant for the MARI kiosk. It replaced a
 stdlib BM25 index that has since been removed; this is now the only retrieval path in
 the system. The measurements behind the settings are in `docs/retrieval_tuning_notes.md`.
 
-This document exists because every number in `server/services/settings.py` is a trade,
+This document exists because every number in `server/rag/settings.py` is a trade,
 and a parameter whose reason is not written down is a parameter nobody dares change.
 Where a value here contradicts the design it was built from, the measurement that caused
 the change is given.
@@ -37,18 +37,18 @@ pinned — re-measure on the real target.)
 
 | File | Responsibility |
 |---|---|
-| `server/services/settings.py` | every tunable, each with its rationale |
-| `server/services/chunking.py` | structure-aware markdown/PDF chunking with heading paths |
-| `server/services/documents.py` | parsing (md / txt / pdf) and content hashing |
-| `server/services/embedding.py` | FastEmbed dense + sparse + reranker, async-offloaded |
-| `server/services/store.py` | Qdrant collection management and the hybrid RRF query |
-| `server/services/ingestion.py` | idempotent hash-based ingest |
-| `server/services/metadata.py` | SQLite record of what is indexed |
-| `server/services/transcript.py` | STT domain-term correction |
-| `server/services/expansion.py` | Urdu → English expansion for the lexical channel |
-| `server/services/rewriter.py` | conditional, timeout-guarded query rewriting |
-| `server/services/retriever.py` | **the single shared retrieve path** |
-| `server/services/generation.py` | prompt assembly, sync + SSE streaming |
+| `server/rag/settings.py` | every tunable, each with its rationale |
+| `server/rag/chunking.py` | structure-aware markdown/PDF chunking with heading paths |
+| `server/rag/documents.py` | parsing (md / txt / pdf) and content hashing |
+| `server/rag/embedding.py` | FastEmbed dense + sparse + reranker, async-offloaded |
+| `server/rag/store.py` | Qdrant collection management and the hybrid RRF query |
+| `server/rag/ingestion.py` | idempotent hash-based ingest |
+| `server/rag/metadata.py` | SQLite record of what is indexed |
+| `server/rag/transcript.py` | STT domain-term correction |
+| `server/rag/expansion.py` | Urdu → English expansion for the lexical channel |
+| `server/rag/rewriter.py` | conditional, timeout-guarded query rewriting |
+| `server/rag/retriever.py` | **the single shared retrieve path** |
+| `server/rag/generation.py` | prompt assembly, sync + SSE streaming |
 | `server/rag.py` | bridge to `server/app.py`, and the degradation policy |
 | `eval/` | question set, scoring harness, threshold calibration |
 
@@ -277,7 +277,7 @@ currency, and RRF needs no per-corpus weight to tune.
 **The dense model beats the old BM25 retriever on English by 6 points of hit@5 and loses
 to it on Urdu by 15.**
 
-`server/services/expansion.py` (tables in `expansion_tables.py`) carries a hand-built, corpus-specific Urdu layer that no
+`server/rag/expansion.py` (tables in `expansion_tables.py`) carries a hand-built, corpus-specific Urdu layer that no
 general-purpose multilingual embedding reproduces: a curated topic glossary, phrase maps
 for acronyms Urdu spells out letter by letter (`پی ایس ایکس` = P-S-X, three tokens that
 individually mean nothing), and a phonetic index matching proper nouns across scripts on
@@ -293,7 +293,7 @@ Urdu-expanded query — BM25 is purely lexical, so an Urdu query against an Engl
 contributes nothing to it, and the expansion is what makes that channel exist at all for
 half the traffic. The **dense** channel gets the query as spoken, where the model's own
 cross-lingual alignment beats a bag of translated keywords. See
-`server/services/expansion.py`.
+`server/rag/expansion.py`.
 
 This closed most of the gap: Urdu hit@5 went 82.7% → 95.1%, MRR 0.651 → 0.836.
 

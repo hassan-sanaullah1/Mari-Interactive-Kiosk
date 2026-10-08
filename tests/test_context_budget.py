@@ -17,7 +17,7 @@ Latin, so the same conversation that fit in English did not fit in Urdu.
 from __future__ import annotations
 
 from server.agent import context_budget as A
-from server.services.generation import CONTEXT_HEADER
+from server.rag.generation import CONTEXT_HEADER
 
 
 def _msgs(n: int, chars: int) -> list[dict]:

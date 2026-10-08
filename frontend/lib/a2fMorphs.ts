@@ -1,7 +1,7 @@
 /**
  * Applies Audio2Face blendshape weights to the avatar's morph targets.
  *
- * Ported from the working implementation (THREEJS_A2F_INTEGRATION.md §9/§11),
+ * Resolves A2F shape names against the rig and applies them,
  * trimmed to the path girl15.glb actually takes.
  *
  * That rig carries the ARKit blendshape names verbatim (jawOpen, mouthFunnel,

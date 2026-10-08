@@ -1,0 +1,199 @@
+# Tool configuration for the MARI kiosk backend. There is no build here: the app
+# ships as a container (server/Dockerfile), not as a package, so this file exists to
+# give ruff, pytest, mypy and import-linter one place to read their settings from —
+# and to make `pytest` work from the repo root without the sys.path inserts that
+# tests/, scripts/ and eval/ used to carry.
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = [".venv", "frontend", "deploy", "new-machine-setup"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",   # pycodestyle + pyflakes: the basics
+    "I",             # import order
+    "N",             # pep8-naming — the plan's "spell names out" rule, enforced
+    "UP",            # pyupgrade: no syntax older than the Python we run
+    "B",             # bugbear: real traps (loop-variable closures, mutable defaults)
+    "SIM",           # simplifications
+    "C90",           # mccabe complexity, see below
+    "PLR",           # pylint refactor: too many branches/statements/arguments
+    "RUF",
+    "ERA",           # commented-out code
+]
+ignore = [
+    # Line length is not enforced because `ruff format` has never been run over this
+    # codebase. Reformatting it would bury the refactor in whitespace; the limit above
+    # still documents the target for new code.
+    "E501",
+    # The corpus, prompts and tests are bilingual, and the prose uses em dashes and
+    # middots on purpose, so "ambiguous unicode" is a false positive by the hundred.
+    "RUF001", "RUF002", "RUF003",
+    # Several `# noqa: BLE001` comments document deliberate broad catches. BLE is not
+    # selected yet (Phase 3 narrows those catches), which would make every one of them
+    # read as unused.
+    "RUF100",
+    # Magic values in comparisons: 82 of them, nearly all in tests and tuning tables
+    # where the literal IS the thing being asserted.
+    "PLR2004",
+    "PLR0911", "PLR0917",
+    # `try: ... except Exception: pass` — 10 sites. contextlib.suppress reads better,
+    # but Phase 3 is narrowing these catches to the exception each one actually means,
+    # which removes most of them outright rather than tidying the swallow.
+    "SIM105",
+    # asyncio.create_task without keeping the reference: 4 sites, all in app.py's
+    # startup hook. A real hazard (the task can be garbage-collected mid-flight) and
+    # exactly what Phase 3's lifespan handler fixes by owning them.
+    "RUF006",
+]
+
+[tool.ruff.lint.mccabe]
+# McCabe's own threshold. Four functions are over it today and are listed in
+# per-file-ignores below; the limit is here so no fifth appears.
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+# ── Temporary, each removed by the refactor phase named ──────────────
+#
+# These are the known-tangled spots the plan already schedules. They are listed by
+# file and rule rather than silenced globally, so the rule still guards every other
+# file and the list only ever gets shorter.
+
+# Phase 3 splits run_reply into a TurnRunner class and ws() into one handler per
+# message type. C901/PLR0912/PLR0915 = complexity, branches, statements.
+# run_reply() mirrors the wire message's fields, so its argument count is the
+# protocol's, not a design choice. The tangle it used to have (complexity 28, five
+# closures, 94 statements) is gone: TurnRunner holds the state instead.
+"server/agent/turn.py" = ["PLR0913"]
+"server/avatar/lipsync.py" = ["C901", "PLR0912", "PLR0915"]
+"server/avatar/a2f_client.py" = ["C901", "PLR0913"]
+"server/providers/stt.py" = ["C901", "PLR0913"]
+"server/providers/tts.py" = ["PLR0913"]
+"server/rag/chunking.py" = ["C901", "PLR0913"]
+"server/rag/glossary.py" = ["C901", "PLR0912"]
+"server/rag/retriever.py" = ["PLR0913"]
+"server/rag/metadata.py" = ["PLR0913"]
+"server/rag/documents.py" = ["PLR0913"]
+"server/normalization.py" = ["PLR0913"]
+"server/agent/script_fixes.py" = ["N806"]
+"server/config.py" = ["N816"]
+"scripts/selftest.py" = ["N812"]
+"scripts/rag_ingest.py" = ["N812"]
+
+# Tests and tooling. `C = config` style aliases and single-letter locals are the
+# naming work Phase 3 does for server/; the harnesses follow once their targets move.
+"tests/*" = ["N806", "N812", "N802", "C901", "PLR0912", "PLR0915", "B905"]
+"eval/*" = ["N806", "N812", "C901", "PLR0912", "PLR0915", "RUF005", "RUF015"]
+# One-off asset tooling: throwaway math scripts with glTF's own naming.
+"scripts/lipsync_audit.py" = ["ALL"]
+"scripts/optimize_glb.py" = ["C901", "PLR0912", "PLR0915", "PLR0913", "N806", "N803"]
+
+[tool.pytest.ini_options]
+# Lets `import server...` / `import tests...` / `import eval...` work from the repo
+# root, which is what tests/conftest.py and the sys.path inserts in scripts/ and
+# eval/ were doing by hand.
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "--strict-markers"
+markers = [
+    "slow: takes more than a second or two",
+    "needs_qdrant: needs a reachable Qdrant with the corpus ingested",
+    "needs_llm: calls the live LLM, so it costs tokens",
+    "needs_a2f: needs the Audio2Face NIM on a GPU host",
+]
+filterwarnings = [
+    "default",
+    # FastAPI's on_event is deprecated; Phase 3 moves startup to a lifespan handler.
+    "ignore:on_event is deprecated:DeprecationWarning",
+    "ignore:Using `httpx` with `starlette.testclient`:UserWarning",
+]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["server"]
+# Deliberately lenient to start: the point is to stop NEW untyped code, not to
+# annotate 9k lines before the refactor. Phase 3 turns the strict flags on per
+# package as each one is rebuilt.
+ignore_missing_imports = true
+warn_unused_ignores = false
+warn_redundant_casts = true
+no_implicit_optional = true
+check_untyped_defs = true
+
+# ── Temporary, removed as Phase 3 rebuilds each module ──────────────
+#
+# 42 pre-existing errors sit in these nine files, mostly where a value's type is
+# narrowed by an invariant mypy cannot see (`lips` is non-None exactly when `clip`
+# is) or where an untyped third-party object is indexed. Each file is listed rather
+# than the rules being turned off globally, so every other module is checked today
+# and the list only shrinks.
+#
+# warn_unreachable is off for the same reason: it fires on the defensive branches in
+# stt.py and documents.py that guard against providers returning something off-spec.
+
+[[tool.mypy.overrides]]
+module = [
+    "server.providers.stt",
+    "server.rag.documents",
+    "server.normalization",
+    "server.agent.turn",
+    "server.rag.store",
+    "server.rag.expansion",
+    "server.rag.embedding",
+    "server.rag.chunking",
+    "server.avatar.lipsync",
+    "server.avatar.a2f_client",
+]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+# Vendored protobuf stubs (nvidia_ace) and the ML libraries ship no usable types.
+module = ["nvidia_ace.*", "av.*", "fastembed.*", "kokoro.*", "faster_whisper.*"]
+ignore_missing_imports = true
+
+[tool.importlinter]
+root_packages = ["server"]
+include_external_packages = true
+
+# ── The dependency rule, in one place ───────────────────────────────
+#
+# Layers run top (most dependent) to bottom. A module may import anything BELOW it
+# and nothing above it. `|` means those siblings must not import each other either.
+#
+# This is the contract ARCHITECTURE.md describes, made executable: a reviewer does
+# not have to notice that agent/ started importing a route, CI does.
+[[tool.importlinter.contracts]]
+name = "Layers"
+type = "layers"
+layers = [
+    "server.app",
+    "server.agent",
+    "server.rag",
+    "server.avatar | server.providers | server.normalization | server.prompts",
+    "server.config",
+]
+exhaustive = false
+# ── Temporary, removed in Phase 3 ──
+# Each of these is a known wrong-way import the refactor already schedules:
+#   rag -> agent.greeting   greeting moves into the text/ layer
+#   services.expansion -> config, providers.tts -> normalization, and the rest
+#   are resolved when those modules move to their proper layer.
+ignore_imports = [
+    "server.rag -> server.agent.greeting",
+    "server.rag.expansion -> server.config",
+    "server.providers.tts -> server.normalization",
+    "server.agent.context_budget -> server.rag.generation",
+    "server.agent.script_fixes -> server.normalization",
+    "server.config -> server.avatar",
+]
+
+[[tool.importlinter.contracts]]
+name = "Only the adapter layer talks to vendors"
+type = "forbidden"
+source_modules = ["server.agent", "server.app"]
+forbidden_modules = ["httpx", "grpc", "qdrant_client", "fastembed"]
+# Direct imports only. These layers reach a vendor through an adapter, so every call
+# path ends at one eventually; what must not happen is this code holding an HTTP or
+# gRPC client of its own.
+allow_indirect_imports = true

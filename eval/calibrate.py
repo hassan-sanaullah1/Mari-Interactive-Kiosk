@@ -25,8 +25,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from eval.run_eval import heading_matches, load_cases  # noqa: E402
-from server.services.retriever import get_retriever  # noqa: E402
-from server.services.settings import get_settings  # noqa: E402
+from server.rag.retriever import get_retriever  # noqa: E402
+from server.rag.settings import get_settings  # noqa: E402
 
 
 async def main() -> int:

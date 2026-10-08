@@ -1,7 +1,7 @@
 """Settings for the web server and providers, read once from ``.env`` and the environment.
 
 Real environment variables win over ``.env``. Retrieval settings are separate, in
-server/services/settings.py (prefix ``MARI_RAG_``).
+server/rag/settings.py (prefix ``MARI_RAG_``).
 """
 
 from __future__ import annotations
@@ -10,7 +10,6 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-WEB_DIR = ROOT / "web"
 
 
 def _load_env(path: Path) -> dict:
@@ -165,19 +164,22 @@ def stt_ready(lang: str) -> bool:
     return True if EN_STT == "local" else bool(WHISPER_URL)
 
 
-def tts_ready(lang: str, avatar: str = "female") -> bool:
-    if lang == "ur" and UR_TTS == "matcha" and avatar != "male":
+def tts_ready(lang: str, avatar: str | None = None) -> bool:
+    """Whether this presenter can be spoken in this language right now."""
+    from .personas import get_persona, tts_engine
+
+    engine = tts_engine(lang, get_persona(avatar))
+    if engine == "matcha":
         # MatchaTTS falls back to Uplift by itself when the local server is down.
         return True
-    if lang == "ur" or EN_TTS == "uplift":
+    if engine == "uplift":
         return bool(UPLIFT_KEY)
-    return True if EN_TTS == "local" else bool(KOKORO_BASE)
+    return True if engine == "local" else bool(KOKORO_BASE)
 
 
 async def status() -> dict:
     """Compact config snapshot for /healthz (no secrets)."""
     en_stt = f"whisper-local:{WHISPER_LOCAL_MODEL}" if EN_STT == "local" else "whisper-remote"
-    en_tts = {"uplift": "uplift", "local": "kokoro-local"}.get(EN_TTS, "kokoro-remote")
     return {
         "llm": {"ready": llm_ready(), "provider": LLM_PROVIDER, "model": LLM_MODEL, "base": LLM_BASE or None},
         "stt": {
@@ -186,20 +188,41 @@ async def status() -> dict:
         },
         "tts": {
             "ur": await _ur_tts_status(),
-            "en": {
-                "provider": en_tts,
-                "ready": tts_ready("en"),
-                "voice": UPLIFT_VOICE_EN if EN_TTS == "uplift" else VOICE_EN,
-            },
+            "en": await _en_tts_status(),
         },
         "avatar": await _avatar_status(),
     }
 
 
+async def _en_tts_status() -> dict:
+    """English TTS per presenter."""
+    from .personas import all_personas, tts_engine
+
+    engine_label = {"uplift": "uplift", "local": "kokoro-local"}.get(EN_TTS, "kokoro-remote")
+    return {
+        persona.id: {
+            "provider": engine_label,
+            "ready": tts_ready("en", persona.id),
+            "voice": persona.voice("en", tts_engine("en", persona)) or None,
+        }
+        for persona in all_personas().values()
+    }
+
+
 async def _ur_tts_status() -> dict:
-    """Urdu TTS for the female presenter; with matcha, whether its server answers now."""
+    """Urdu TTS per presenter; with matcha, whether its local server answers now."""
+    from .personas import all_personas, tts_engine
+
+    per_persona = {
+        persona.id: {
+            "provider": tts_engine("ur", persona),
+            "ready": tts_ready("ur", persona.id),
+            "voice": persona.voice("ur", tts_engine("ur", persona)) or None,
+        }
+        for persona in all_personas().values()
+    }
     if UR_TTS != "matcha":
-        return {"provider": "uplift", "ready": tts_ready("ur"), "voice": UPLIFT_VOICE}
+        return per_persona
     import httpx
 
     try:
@@ -209,12 +232,9 @@ async def _ur_tts_status() -> dict:
     except Exception:
         reachable = False
     return {
-        "provider": "matcha",
-        "ready": tts_ready("ur"),
-        "url": MATCHA_URL,
-        "reachable": reachable,
-        "fallback": "uplift" if MATCHA_FALLBACK else None,
-        "male": {"provider": "uplift", "ready": tts_ready("ur", "male"), "voice": UPLIFT_VOICE_MALE},
+        **per_persona,
+        "matcha": {"url": MATCHA_URL, "reachable": reachable,
+                   "fallback": "uplift" if MATCHA_FALLBACK else None},
     }
 
 

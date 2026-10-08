@@ -3,11 +3,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import styles from "./ChatPanel.module.css";
 import { ChatIcon, CloseIcon, SendIcon } from "./icons";
-import { COPY, type Lang } from "@/lib/i18n";
+import { uiCopy, type Gender, type Lang } from "@/lib/i18n";
 import type { Message } from "@/hooks/useVoiceSession";
 
 type Props = {
   lang: Lang;
+  /** The presenter on screen, so Urdu status copy agrees with them. */
+  gender: Gender;
   open: boolean;
   onOpen: () => void;
   onClose: () => void;
@@ -17,12 +19,21 @@ type Props = {
   onSend: (text: string) => void;
 };
 
-export default function ChatPanel({ lang, open, onOpen, onClose, messages, partial, onSend }: Props) {
+export default function ChatPanel({
+  lang,
+  gender,
+  open,
+  onOpen,
+  onClose,
+  messages,
+  partial,
+  onSend,
+}: Props) {
   const [draft, setDraft] = useState("");
   const logRef = useRef<HTMLDivElement>(null);
   const seenRef = useRef(0);
   const [unread, setUnread] = useState(0);
-  const t = COPY[lang];
+  const t = uiCopy(lang, gender);
   const rtl = lang === "ur";
 
   // Pin to the newest turn as the reply streams in.

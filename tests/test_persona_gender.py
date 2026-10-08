@@ -1,8 +1,14 @@
-"""MARI is a female persona, and Urdu marks gender on verbs.
+"""Urdu marks gender on verbs, and the kiosk has a presenter of each.
 
-Any Urdu string describing what MARI is doing — in the prompts or in the two UIs —
-has to use feminine forms. Masculine is Urdu's default, so these regress easily:
-a new status label written as "سن رہا ہے" reads as a male assistant.
+Every line describing what the presenter is doing — spoken or on screen — has to agree
+with who is on screen. Masculine is Urdu's default, so the feminine forms regress
+easily: a status label written as "سن رہا ہے" reads as a male assistant under the
+female presenter.
+
+The spoken side is `server/agent/reply_fixes.py`, selected by the presenter's
+`grammatical_gender` in personas.toml. The UI side is `uiCopy()` in
+`frontend/lib/i18n.ts`. That the two agree is checked in
+`tests/test_personas_are_data.py`.
 """
 
 from __future__ import annotations
@@ -12,17 +18,21 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
-
 from server.agent.replies import canned
 from server.agent.reply_fixes import feminine_agreement, masculine_agreement
 from server.prompts import get_prompts
+
+ROOT = Path(__file__).resolve().parent.parent
 
 # Masculine verb endings that describe the speaker/subject. Each has a feminine
 # counterpart (رہا->رہی, سکتا->سکتی, تھا->تھی, رہے گا->رہے گی).
 MASCULINE = ("رہا ہے", "رہا ہوں", "سکتا ہوں", "سکتا ہے", "رہا تھا", "سنتا", "رہے گا")
 
-UI_FILES = ("frontend/lib/i18n.ts", "web/app.js")
+I18N = ROOT / "frontend" / "lib" / "i18n.ts"
+
+# The copy keys that describe the presenter mid-turn, and so must be gendered. Anything
+# else — an instruction to the visitor, a label, the product's own name — is not.
+PRESENTER_LINES = ("listening", "thinking", "speaking", "paused")
 
 
 def _urdu_strings(path: Path) -> list[str]:
@@ -34,12 +44,60 @@ def _urdu_strings(path: Path) -> list[str]:
     ]
 
 
-@pytest.mark.parametrize("relpath", UI_FILES)
-def test_ui_strings_use_feminine_forms(relpath: str) -> None:
+def _copy_block(name: str) -> str:
+    """The body of a named object literal in i18n.ts."""
+    text = I18N.read_text(encoding="utf-8")
+    start = text.index(name)
+    return text[start : text.index("};", start)]
+
+
+def test_default_urdu_copy_is_feminine() -> None:
+    """The base table is the female presenter's, so masculine forms must not appear."""
+    urdu_block = _copy_block("  ur: {")
     offenders = [
-        s for s in _urdu_strings(ROOT / relpath) if any(m in s for m in MASCULINE)
+        line
+        for line in re.findall(r'"([^"\n]*)"', urdu_block)
+        if re.search(r"[ؠ-ۿ]", line) and any(m in line for m in MASCULINE)
     ]
-    assert not offenders, f"masculine forms in {relpath}: {offenders}"
+    assert not offenders, (
+        f"masculine forms in the default Urdu copy: {offenders}. The base table is the "
+        "feminine one; masculine goes in MASCULINE_UR."
+    )
+
+
+def test_every_presenter_line_has_a_masculine_form() -> None:
+    """A gendered line with no masculine override shows the wrong gender for him."""
+    masculine_block = _copy_block("const MASCULINE_UR")
+    missing = [key for key in PRESENTER_LINES if f"{key}:" not in masculine_block]
+    assert not missing, (
+        f"these lines describe the presenter but have no masculine form: {missing}"
+    )
+
+
+def test_masculine_overrides_are_actually_masculine() -> None:
+    masculine_block = _copy_block("const MASCULINE_UR")
+    lines = [
+        line
+        for line in re.findall(r'"([^"\n]*)"', masculine_block)
+        if re.search(r"[ؠ-ۿ]", line)
+    ]
+    assert lines, "MASCULINE_UR has no Urdu lines"
+    feminine = ("رہی ہے", "رہی ہوں", "سکتی ہوں", "سکتی ہے", "رہی تھی", "رکی")
+    offenders = [line for line in lines if any(f in line for f in feminine)]
+    assert not offenders, f"feminine forms inside the masculine overrides: {offenders}"
+
+
+def test_no_stray_urdu_outside_the_copy_tables() -> None:
+    """Urdu copy belongs in i18n.ts, where the gender rule above can police it."""
+    frontend = ROOT / "frontend"
+    offenders = []
+    for path in list(frontend.glob("app/**/*.tsx")) + list(frontend.glob("components/**/*.tsx")):
+        for line in _urdu_strings(path):
+            offenders.append(f"{path.relative_to(ROOT)}: {line}")
+    assert not offenders, (
+        "Urdu text outside lib/i18n.ts, where nothing checks its gender:\n  "
+        + "\n  ".join(offenders)
+    )
 
 
 def test_urdu_prompt_instructs_feminine_self_reference() -> None:
@@ -68,7 +126,7 @@ def test_urdu_canned_lines_agree_with_the_presenter() -> None:
 
 def test_the_male_presenter_never_gets_the_female_persona() -> None:
     """The loudest failure there is: the male rig introducing itself as Maryam."""
-    from server.services.generation import GenerationService
+    from server.rag.generation import GenerationService
 
     svc = GenerationService()
     male_ur = svc.rules("ur", "male")

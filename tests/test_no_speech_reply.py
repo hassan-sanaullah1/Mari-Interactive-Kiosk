@@ -68,5 +68,5 @@ def test_the_male_presenter_apologises_in_his_own_gender() -> None:
     so it has to be picked per persona rather than left to the agreement pass."""
     sock = _Sock()
     asyncio.run(run_reply(sock, "", "ur", avatar_id="male", spoke=True))
-    said = [m for m in sock.sent if m.get("type") == "reply"][0]["text"]
+    said = next(m for m in sock.sent if m.get("type") == "reply")["text"]
     assert "سکا" in said and "سکی" not in said

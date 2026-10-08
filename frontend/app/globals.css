@@ -1,5 +1,5 @@
 /* MARI kiosk — design tokens + reset.
-   Geometry below is measured off UI-sample-images/UI.png, whose design space is
+   Geometry below is measured off the desktop reference art, whose design space is
    2000 x 1125. Every size is expressed in those reference units and multiplied by
    --s, so the whole composition scales as one piece instead of relying on
    per-breakpoint coordinates. */

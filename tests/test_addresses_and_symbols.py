@@ -12,9 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from server.normalization import normalize_for_tts
-from server.normalization import spoken_addresses
-
+from server.normalization import normalize_for_tts, spoken_addresses
 
 # ── chemical formulae ───────────────────────────────────────────────
 

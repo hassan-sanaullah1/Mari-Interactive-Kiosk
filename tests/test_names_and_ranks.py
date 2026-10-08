@@ -15,9 +15,7 @@ from __future__ import annotations
 
 import pytest
 
-from server.normalization import normalize_for_tts
-from server.normalization import spoken_names_and_ranks
-
+from server.normalization import normalize_for_tts, spoken_names_and_ranks
 
 # ── names ───────────────────────────────────────────────────────────
 

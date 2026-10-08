@@ -7,7 +7,7 @@
  * behind this canvas (see app/page.tsx), so the scene sets no background
  * colour, no fog and no ground plane — only the presenter is drawn. Camera and
  * lighting values come from the working implementation
- * (THREEJS_A2F_INTEGRATION.md §3); the framing logic is this app's own, because
+ * the framing logic is this app's own, because
  * the avatar lives in a sized container here rather than a full viewport.
  *
  * Three pieces of the source rig are deliberately NOT ported, because they
@@ -90,7 +90,17 @@ fetchAvatar(avatarConfig(readAvatar()).url).catch(() => {
  * the stage resizes (breakpoint change, rotation, window drag) without any
  * resize listener of our own.
  */
-function Framing({ modelHeight, widthSqueeze = 1 }: { modelHeight: number; widthSqueeze?: number }) {
+function Framing({
+  modelHeight,
+  widthSqueeze = 1,
+  lensMm = CAMERA.lensMm,
+  cameraDistanceM = null,
+}: {
+  modelHeight: number;
+  widthSqueeze?: number;
+  lensMm?: number;
+  cameraDistanceM?: number | null;
+}) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const size = useThree((s) => s.size);
   const centerY = useRef(1.26);
@@ -109,9 +119,12 @@ function Framing({ modelHeight, widthSqueeze = 1 }: { modelHeight: number; width
     // the vertical fov depends on it.
     camera.aspect = size.width / size.height;
     camera.filmGauge = CAMERA.sensorMm;
-    camera.setFocalLength(CAMERA.lensMm);
+    camera.setFocalLength(lensMm);
     // Then back off until `frameHeight` of her fills that fov.
-    const distance = frameHeight / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    // A fixed `cameraDistanceM` wins; otherwise back off until `frameHeight` fills
+    // the fov, which keeps the rig the same size on every screen shape.
+    const distance =
+      cameraDistanceM ?? frameHeight / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     // The squeeze: claiming a wider frame than the canvas really is fits more
     // world into the same pixels across, so everything draws narrower while
     // the height is untouched. Needs `manual` on the camera (see <Canvas>), or
@@ -122,7 +135,7 @@ function Framing({ modelHeight, widthSqueeze = 1 }: { modelHeight: number; width
     camera.updateProjectionMatrix();
     // `size` is a dependency so a container resize re-applies the framing —
     // the stage's shape changes the fov, and with it the distance.
-  }, [camera, size.width, size.height, modelHeight, widthSqueeze]);
+  }, [camera, size.width, size.height, modelHeight, widthSqueeze, lensMm, cameraDistanceM]);
 
   // A very slow sway keeps the shot from reading as a still image — see
   // CAMERA.sway in ./tuning.ts.
@@ -402,7 +415,12 @@ export default function AvatarScene({
       style={{ background: "transparent" }}
       resize={{ scroll: false }}
     >
-      <Framing modelHeight={modelHeight} widthSqueeze={config.widthSqueeze} />
+      <Framing
+        modelHeight={modelHeight}
+        widthSqueeze={config.widthSqueeze}
+        lensMm={config.lensMm}
+        cameraDistanceM={config.cameraDistanceM}
+      />
       <DynamicLighting
         state={state}
         levelRef={levelRef}

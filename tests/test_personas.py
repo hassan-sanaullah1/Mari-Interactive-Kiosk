@@ -14,15 +14,15 @@ from __future__ import annotations
 
 import pytest
 
-from server.normalization import normalize_for_tts
-from server.services.generation import GenerationService
-from server.services.retriever import RetrievalResult
 from server.agent.reply_fixes import (
     feminine_agreement,
     gender_agreement,
     masculine_agreement,
 )
+from server.normalization import normalize_for_tts
 from server.prompts import load_prompt
+from server.rag.generation import GenerationService
+from server.rag.retriever import RetrievalResult
 
 
 @pytest.fixture(scope="module")

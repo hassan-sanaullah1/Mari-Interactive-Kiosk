@@ -12,7 +12,7 @@ Everything the LLM is told, and the fixed lines spoken without it. Loaded once b
 | `query_rewriter.md` | system prompt for rewriting follow-up questions before retrieval |
 | `replies.toml` | demo line (LLM unreachable), no-speech apology, and the `MARI_PITCH_ONLY` pitch |
 
-Prompt assembly order (`server/services/generation.py`): system rules → greeting (if a
+Prompt assembly order (`server/rag/generation.py`): system rules → greeting (if a
 greeting turn) → core brief → glossary definitions → retrieved sections, or the
 no-context instruction.
 

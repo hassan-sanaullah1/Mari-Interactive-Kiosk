@@ -13,11 +13,11 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Callable
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["normalize_tts_text", "normalize_for_tts", "spoken_units"]
+__all__ = ["normalize_for_tts", "normalize_tts_text", "spoken_units"]
 
 # The engines this module writes for. Uplift is one Urdu-first voice for both languages and
 # is fixed by respelling words in Urdu script; Kokoro is English-only, cannot read Urdu

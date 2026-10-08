@@ -13,14 +13,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY requirements-web.txt /app/requirements-web.txt
+COPY requirements.txt /app/requirements.txt
 COPY vendor /app/vendor
-RUN pip install --no-cache-dir -r requirements-web.txt \
+RUN pip install --no-cache-dir -r requirements.txt \
     && pip install --no-cache-dir --no-deps /app/vendor/nvidia_ace-1.2.0-py3-none-any.whl
 
 COPY server /app/server
 # The knowledge base, prompts and normalization all live inside server/.
-COPY web /app/web
 
 ENV MARI_HOST=0.0.0.0
 ENV MARI_PORT=8010

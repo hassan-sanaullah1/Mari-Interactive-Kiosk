@@ -18,7 +18,6 @@ from functools import lru_cache
 from pathlib import Path
 
 PROMPT_DIR = Path(__file__).resolve().parent
-PERSONAS = ("female", "male")
 LANGS = ("en", "ur")
 _LANGUAGE_NAMES = {"en": "english", "ur": "urdu"}
 
@@ -43,10 +42,14 @@ def load_prompt(relative_path: str) -> str:
 
 
 def load_prompts() -> PromptLibrary:
+    # Imported here, not at module level: personas.py reads config, and config imports
+    # nothing from prompts, so a top-level import would be the one cycle in this layer.
+    from ..personas import persona_ids
+
     def per_persona(kind: str) -> dict[tuple[str, str], str]:
         return {
             (persona, lang): load_prompt(f"{kind}/{persona}_{_LANGUAGE_NAMES[lang]}.md")
-            for persona in PERSONAS
+            for persona in persona_ids()
             for lang in LANGS
         }
 

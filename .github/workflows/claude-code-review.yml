@@ -36,11 +36,10 @@ jobs:
           # classifier is what silently dropped every finding on the first
           # attempt at this. (docs: claude-code-action inputs, classify_inline_comments)
           classify_inline_comments: "false"
-          # Temporary: prints Claude's full tool-call transcript to the Actions
-          # log so a misfire is diagnosable. Turn back to "false" once inline
-          # comments are confirmed landing — the log otherwise carries file
-          # contents Claude read, which is unnecessary exposure long-term.
-          show_full_output: "true"
+          # Off: the transcript carries the contents of every file Claude read,
+          # which does not belong in a build log. Turn on temporarily to diagnose
+          # a run that posts nothing.
+          show_full_output: "false"
           prompt: |
             Review pull request #${{ github.event.pull_request.number }}
             in ${{ github.repository }}.
@@ -73,8 +72,9 @@ jobs:
 
             This is MARI, a real-time speech-to-speech kiosk: a FastAPI
             server (`server/`) streaming between vLLM, Soniox/Uplift for
-            Urdu, and faster-whisper/kokoro for English, with a browser
-            client in `web/`. Weight your attention accordingly:
+            Urdu and faster-whisper/Uplift for English, with a Next.js
+            client and a 3D avatar in `frontend/`. Weight your attention
+            accordingly:
 
             - Correctness bugs: races in the async streaming paths,
               unawaited coroutines, websocket/session state that leaks

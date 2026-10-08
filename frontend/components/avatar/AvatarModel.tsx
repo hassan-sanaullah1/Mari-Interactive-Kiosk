@@ -3,13 +3,13 @@
 /**
  * The MARI presenter — either rig, driven by the config it is handed.
  *
- * Everything that differs between the two presenters lives in ./models.ts (loop
+ * Everything that differs between the two presenters is data: ./tuning.ts holds
+ * the look values and ./models.ts the asset facts (url, size, animation loop
  * windows, material names, whether the rig has blendshapes at all); everything
  * in this file is the machinery they share. The notes below were written
  * against girl15.glb, which is still the default, and remain the reference for
  * how that rig's numbers were arrived at — see models.ts for the male rig's.
  *
- * Ported from the working implementation (THREEJS_A2F_INTEGRATION.md §4/§5/§9).
  *
  * The mouth is driven by Audio2Face ONLY — no visemes, no mapping layer. This
  * rig makes that possible: its 51 morph targets carry the ARKit blendshape
@@ -68,6 +68,7 @@ import * as THREE from "three";
 import { fetchAvatar, releaseAvatar } from "@/lib/avatarFetch";
 import { applyA2FLipsync, createA2FMorphState } from "@/lib/a2fMorphs";
 import { setRigCalibration } from "@/lib/blendshapePlayer";
+import { publishProbe } from "@/lib/debug";
 import type { AvatarState } from "./state";
 import {
   CLIP_NAME,
@@ -213,7 +214,7 @@ const bodyStateFor = (state: AvatarState): BodyState => {
  * a different rig. Tune live with ?a2fGain= / ?a2fShapes=jawopen: — the query
  * string overrides both.
  */
-// The numbers are per-rig (`a2f` in ./models.ts); girl15's are 0.9 with jawOpen
+// The numbers are per-rig (`a2f` in ./tuning.ts); girl15's are 0.9 with jawOpen
 // trimmed to 0.375 of that, and a rig with no morphs has none at all.
 
 /**
@@ -239,7 +240,7 @@ const AVATAR_POSITION_X = 0;
  * usually crops them — a visible forearm and an invisible shin should not be
  * different colours if the shot ever widens.
  */
-// Per-rig, as `skinMaterials` in ./models.ts: girl15's lambert11/12/13 and
+// Per-rig, as `skinMaterials` in ./tuning.ts: girl15's lambert11/12/13 and
 // the male rig's lambert5/Std_Skin_Arm/Std_Skin_Leg.
 
 /**
@@ -252,11 +253,10 @@ const AVATAR_POSITION_X = 0;
  * a flat colour — pores, lips and nail beds keep their relative values, the
  * whole surface just sits higher.
  */
-// Per-rig now, as `skinEmissive` in ./models.ts: the lift is proportional to
-// the texture it samples, so one number cannot serve two skin tones. girl15
-// keeps the 0.25 this constant held; the male rig takes 0, because his albedo is
-// already bright enough that the term erased his shading instead of revealing
-// it. See that field for the measurements.
+// Per-rig, as `skinEmissive` in ./tuning.ts: the lift is proportional to the
+// texture it samples, so one number cannot serve two skin tones. The female rig
+// takes 0.25, the male rig far less, because his albedo is already bright enough
+// that the term erases his shading instead of revealing it.
 
 /**
  * Materials whose albedo has already been scaled by `materialTint`.
@@ -267,6 +267,10 @@ const AVATAR_POSITION_X = 0;
  */
 const tintedMaterials = new WeakSet<THREE.Material>();
 
+/** Material name -> tinted colour, for the presenter-switch regression test. */
+const tintReadings: Record<string, number> = {};
+publishProbe("tints", tintReadings);
+
 /**
  * Which material carries the face — and therefore the makeup.
  *
@@ -276,16 +280,16 @@ const tintedMaterials = new WeakSet<THREE.Material>();
  * lambert11 samples Arm_Diffuse and lambert12 the head. Verified against the
  * file's texture/image indices.)
  */
-// Per-rig, as `faceMaterial` in ./models.ts — null for a rig with no makeup,
+// Per-rig, as `faceMaterial` in ./tuning.ts — null for a rig with no makeup,
 // which skips the read-back below entirely.
 
 /**
  * How much chroma to remove from the makeup. 0 = texture as authored,
  * 1 = the made-up pixels go fully grey. This is the dial.
  *
- * 0.45 takes the lipstick from a saturated red to a muted rose and softens the
- * cheek flush, while leaving skin tone where it was. Raise for a barer face,
- * lower to keep more of the original makeup.
+ * 0.20 takes most of the heat out of the lipstick and softens the cheek flush
+ * while leaving skin tone where it was. Raise for a barer face, lower to keep
+ * more of the original makeup.
  */
 const MAKEUP_DESATURATION = 0.20;
 
@@ -800,16 +804,21 @@ export default function AvatarModel({
   const { scene, animations } = useGLTF(url, undefined, undefined, useSharedFetch);
 
   // ── HAND SCALE ──────────────────────────────────────────────
-  // `config.handScale` is set on the wrist bones once, below. The clip carries a
-  // scale track for each wrist (constant 1.0 on every rig here), and the mixer
-  // rewrites that every frame, AFTER this component's own useFrame — so the
-  // tracks are dropped instead of fought. That has to happen before
-  // useAnimations binds its actions, hence here and not in an effect. It mutates
-  // the cached clip in place, which is idempotent and harmless for a scale of 1.
-  if (config.handScale !== 1) {
-    for (const clip of animations) {
-      clip.tracks = clip.tracks.filter((track) => !HAND_SCALE_TRACKS.has(track.name));
-    }
+  // The wrist bones' scale belongs to `config.handScale` alone (set below), so
+  // the clip's own scale track for each wrist is dropped unconditionally — the
+  // mixer rewrites that bone every frame, AFTER this component's own useFrame,
+  // so a track left in place wins. That has to happen before useAnimations binds
+  // its actions, hence here and not in an effect. It mutates the cached clip in
+  // place, which is idempotent.
+  //
+  // Unconditional because a rig may animate it: male_initial13 scales both
+  // wrists down to 0.8 across frames 424-890, and the talking window (544-784)
+  // sits entirely inside that, so the hands shrank 20% while gesturing and the
+  // wrist pinched against a full-size forearm. breathing and listening play
+  // outside it, which is why it only showed mid-gesture. girl15 carries no
+  // wrist scale track at all, so dropping it is a no-op for her.
+  for (const clip of animations) {
+    clip.tracks = clip.tracks.filter((track) => !HAND_SCALE_TRACKS.has(track.name));
   }
   useEffect(() => {
     for (const name of HAND_BONES) {
@@ -1069,7 +1078,7 @@ export default function AvatarModel({
           std.map.needsUpdate = true;
         }
 
-        // Face and hands only — see `skinMaterials` in ./models.ts. Driving the
+        // Face and hands only — see `skinMaterials` in ./tuning.ts. Driving the
         // emissive from the diffuse map keeps the skin's own shading; a flat
         // emissive colour would fill the shadow side of the face and flatten it.
         if (config.skinMaterials.has(std.name)) {
@@ -1083,11 +1092,19 @@ export default function AvatarModel({
         }
 
         // Albedo scale, matching this rig's exposure to the female rig's under
-        // the one shared light rig — see materialTint in ./models.ts.
+        // the one shared light rig — see materialTint in ./tuning.ts.
         const tint = config.materialTint[std.name];
         if (tint !== undefined && !tintedMaterials.has(std)) {
           tintedMaterials.add(std);
           std.color.multiplyScalar(tint);
+        }
+        // Recorded for e2e/materials.spec.ts. `multiplyScalar` edits the material in
+        // place and drei's cache hands the SAME object back on a presenter switch, so
+        // the WeakSet above is the only thing stopping the tint compounding (0.62,
+        // then 0.38, then 0.24...). That failure is invisible until two or three
+        // switches in, which is why a test reads these values rather than an eye.
+        if (tint !== undefined) {
+          tintReadings[std.name] = std.color.getHex();
         }
 
         // Roughness the export left out, for materials outside skinMaterials —
@@ -1096,7 +1113,7 @@ export default function AvatarModel({
         // fully matte surface returns no specular. The cyan rim and green kick
         // read as coloured EDGES on cloth mostly through that specular term, so
         // a garment that loads at 1.0 keeps its diffuse shading and loses the
-        // back lighting. Affects no skin — see materialRoughness in ./models.ts.
+        // back lighting. Affects no skin — see materialRoughness in ./tuning.ts.
         const roughness = config.materialRoughness?.[std.name];
         if (roughness !== undefined) std.roughness = roughness;
 
@@ -1122,7 +1139,7 @@ export default function AvatarModel({
           // only need the faintest texels removed.
           //
           // Colour is the wrong signal for a card that is MEANT to be black,
-          // which is why `alphaTest` in ./models.ts can override it by material
+          // which is why `alphaTest` in ./tuning.ts can override it by material
           // name: male_inital06 authors its hair pure black (05 had it at 0.02
           // grey), so the test above reclassified it as a mask and took the hard
           // cut — 21% of the texture's visible texels against 4.2%, which ate

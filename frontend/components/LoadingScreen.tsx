@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import styles from "./LoadingScreen.module.css";
-import { COPY, type Lang } from "@/lib/i18n";
+import { uiCopy, type Lang } from "@/lib/i18n";
 import { onAvatarProgress } from "@/lib/avatarFetch";
 
 export interface LoadingScreenProps {
@@ -47,19 +47,17 @@ export default function LoadingScreen({ lang, ready }: LoadingScreenProps) {
     return () => { off(); clearTimeout(t); };
   }, [ready]);
 
+  const t = uiCopy(lang);
+
   return (
     <div className={`${styles.screen} ${ready ? styles.done : ""}`} aria-hidden={ready}>
       <div className={styles.card}>
         <span className={styles.spinner} />
         <span className={styles.text}>
-          {COPY[lang].loading}
+          {t.loading}
           {pct !== null ? ` ${pct}%` : ""}
         </span>
-        {slow && !ready ? (
-          <span className={styles.text} style={{ opacity: 0.7, fontSize: "0.85em" }}>
-            {lang === "ur" ? "سست کنکشن…" : "Slow connection…"}
-          </span>
-        ) : null}
+        {slow && !ready ? <span className={styles.note}>{t.slowConnection}</span> : null}
       </div>
     </div>
   );

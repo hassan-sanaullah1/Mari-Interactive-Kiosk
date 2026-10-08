@@ -1,0 +1,24 @@
+# Development and CI only — never installed into the deployed image
+# (server/Dockerfile installs requirements.txt alone).
+#
+#   pip install -r requirements.txt -r requirements-dev.txt
+
+pytest>=8.0
+
+# Style, naming and complexity. Configured in pyproject.toml, which also lists the
+# rules that are deliberately off and the file-scoped exemptions the refactor removes.
+ruff>=0.16,<0.17
+
+# Types. Lenient today on purpose; tightened per package as each is rebuilt.
+mypy>=1.14
+
+# Enforces the layer rule from pyproject.toml ([tool.importlinter]), so a wrong-way
+# import fails CI instead of waiting for a reviewer to spot it.
+import-linter>=2.3
+
+# Known-vulnerability check for the runtime dependencies.
+pip-audit>=2.7
+
+# eval/ reads its question and answer fixtures as YAML. Dev-only: the eval harnesses
+# are not part of the deployed app.
+PyYAML>=6.0

@@ -517,7 +517,7 @@ def test_clusters_plural_is_matched_before_the_singular() -> None:
     trailing ز stranded — the same trap _SUBSIDIARY_RE hit on a malformed spelling."""
     said = normalize_for_tts("GPU کلسٹرز", "ur")
     assert "klusturz" in said
-    assert "klusturz" == said.split()[-1]
+    assert said.split()[-1] == "klusturz"
 
 
 def test_clusters_is_left_alone_in_english() -> None:

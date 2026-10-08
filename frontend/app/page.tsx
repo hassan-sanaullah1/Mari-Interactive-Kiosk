@@ -10,8 +10,8 @@ import LoadingScreen from "@/components/LoadingScreen";
 import { useVoiceSession } from "@/hooks/useVoiceSession";
 import { applyTheme, readTheme, type Theme } from "@/lib/theme";
 import { applyAvatar, readAvatar } from "@/lib/avatar";
-import { DEFAULT_AVATAR, type AvatarId } from "@/components/avatar/models";
-import { COPY, type Lang } from "@/lib/i18n";
+import { avatarConfig, DEFAULT_AVATAR, type AvatarId } from "@/components/avatar/models";
+import { uiCopy, type Lang } from "@/lib/i18n";
 
 export default function Page() {
   const [lang, setLang] = useState<Lang>("en");
@@ -33,7 +33,10 @@ export default function Page() {
   // toggle switches the voice with the model. Turns already in flight keep the
   // voice they started in; see run_reply's `avatar`.
   const voice = useVoiceSession(lang, avatar);
-  const t = COPY[lang];
+  // Resolved here because this is where the presenter is known; the Urdu status
+  // lines have to agree with who is on screen.
+  const presenterGender = avatarConfig(avatar).grammaticalGender;
+  const t = uiCopy(lang, presenterGender);
 
   // Pick up the theme the inline script in layout.tsx already applied, and the
   // stored presenter, which has no such script — see lib/avatar.ts.
@@ -70,8 +73,9 @@ export default function Page() {
     document.documentElement.lang = lang;
   }, [lang]);
 
-  const errorText =
-    voice.error === "mic-denied" ? t.micDenied : voice.error === "no-speech" ? t.noSpeech : voice.error ? t.noSpeech : null;
+  // Every failure except a denied mic currently reads as "didn't catch that",
+  // including a server error, which is misleading but needs its own copy to fix.
+  const errorText = !voice.error ? null : voice.error === "mic-denied" ? t.micDenied : t.noSpeech;
 
   return (
     <main className={styles.root}>
@@ -106,6 +110,7 @@ export default function Page() {
       <ControlDock
         className={styles.dock}
         lang={lang}
+        gender={presenterGender}
         mode={voice.mode}
         active={voice.active}
         paused={voice.paused}
@@ -117,6 +122,7 @@ export default function Page() {
 
       <ChatPanel
         lang={lang}
+        gender={presenterGender}
         open={chatOpen}
         onOpen={() => setChatOpen(true)}
         onClose={() => setChatOpen(false)}

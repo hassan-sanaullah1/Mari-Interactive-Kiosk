@@ -22,10 +22,12 @@ Usage:
     python scripts/lipsync_audit.py record frames.json
     # 2. compare the rigs
     python scripts/lipsync_audit.py audit frames.json
-    # 3. fit the male's per-shape multipliers to the female's lip outline
-    python scripts/lipsync_audit.py fit frames.json
-    # 4. check a fitted setting on live NIM output (variants file: see record())
-    python scripts/lipsync_audit.py record frames2.json variants.json
+    # 3. fit the male's per-shape multipliers to the female's lip outline; the last
+    #    line it prints is the candidate tuning as JSON
+    python scripts/lipsync_audit.py fit frames.json > fit.txt && tail -1 fit.txt > candidate.json
+    # 4. check the candidate on live NIM output, on fresh audio, before putting it in
+    #    server/personas.toml
+    python scripts/lipsync_audit.py record frames2.json candidate.json
 """
 
 from __future__ import annotations
@@ -42,7 +44,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODELS = os.path.join(ROOT, "frontend", "public", "models")
 RIGS = {
     "female": dict(glb="girl15.glb", head="lambert12", upper_teeth="upper_teeth", lower_teeth="lower_teeth"),
-    "male": dict(glb="male_inital12.glb", head="lambert5", upper_teeth="Std_Upper_Teeth", lower_teeth="Std_Lower_Teeth"),
+    "male": dict(glb="male_initial13.glb", head="lambert5", upper_teeth="Std_Upper_Teeth", lower_teeth="Std_Lower_Teeth"),
 }
 # Browser calibration (tuning.ts): both rigs use gain 0.9 with jawOpen trimmed to 0.375.
 GAIN = {"female": (0.9, {"jawopen": 0.375}), "male": (0.9, {"jawopen": 0.375})}
@@ -232,7 +234,15 @@ def audit(frames_path: str) -> None:
     for title, F, M in (("SAME A2F frames on both rigs (male voice) — the rig's own effect", same_f, same_m),
                         ("WHAT VISITORS SEE — each avatar with its own voice and settings", own_f, own_m)):
         wf, wm = F["width0"], M["width0"]
-        nf, nm = lambda x: 100 * x / wf, lambda x: 100 * x / wm      # % of each rig's mouth width
+
+        # Bound as defaults: both are rebound on the next pass of this loop, and a
+        # late-binding closure would then report the second pass's widths for the first.
+        def nf(x, width=wf):  # % of the female rig's mouth width
+            return 100 * x / width
+
+        def nm(x, width=wm):  # % of the male rig's mouth width
+            return 100 * x / width
+
         print(f"== {title}")
         print(f"   mouth width at rest: female {wf:.1f}mm, male {wm:.1f}mm   (all sizes below in % of own mouth width)")
         print(f"   rest pose: lip gap female {nf(F['rest']['gap']):+.2f}%, male {nm(M['rest']['gap']):+.2f}%; "
@@ -464,7 +474,7 @@ def fit(frames_path: str) -> None:
     print(f"\nbest{' (NO setting passes the guards!)' if bad else ''}: {label}")
     for n, v in mult.items():
         print(f"   {n:22s} {v:5.2f}   ({v / defaults[n]:4.2f}x the NIM default {defaults[n]:.2f})")
-    print(json.dumps({"malec": {"face": {"lipOpenOffset": off}, "bs": mult}}))
+    print(json.dumps({"candidate": {"face": {"lipOpenOffset": off}, "bs": mult}}))
 
 
 # ── Recording ────────────────────────────────────────────────────────────────
@@ -481,8 +491,8 @@ def record(out_path: str, extra_path: str | None = None) -> None:
     sys.path.insert(0, ROOT)
     from dotenv import load_dotenv
     load_dotenv(os.path.join(ROOT, ".env"), override=False)
-    from server import config as C
-    from server.avatar.a2f_client import A2F_BLENDSHAPE_MULTIPLIERS, A2F_FACE_PARAMS, A2FClient
+    from server.avatar.a2f_client import A2FClient
+    from server.personas import get_persona
     from server.providers.tts import UpliftTTS
     extra = json.load(open(extra_path)) if extra_path else {}
     raw = {n: 1.0 for n in FIT_SHAPES}
@@ -507,13 +517,13 @@ def record(out_path: str, extra_path: str | None = None) -> None:
 
         for avatar in ("female", "male"):
             for lang, sents in SENTENCES.items():
-                voice = C.UPLIFT_VOICE_MALE if avatar == "male" else (C.UPLIFT_VOICE_EN if lang == "en" else C.UPLIFT_VOICE)
-                tts = UpliftTTS(voice=voice, lang=lang)
+                persona = get_persona(avatar)
+                tts = UpliftTTS(voice=persona.voice(lang, "uplift"), lang=lang)
                 for k, text in enumerate(sents):
                     audio, _ = await tts.synthesize(text)
                     pcm = subprocess.run(["ffmpeg", "-v", "error", "-i", "pipe:0", "-f", "s16le", "-ac", "1",
                                           "-ar", "16000", "pipe:1"], input=audio, capture_output=True, check=True).stdout
-                    variants = {avatar: (A2F_FACE_PARAMS.get(avatar), A2F_BLENDSHAPE_MULTIPLIERS.get(avatar))}
+                    variants = {avatar: persona.a2f_tuning()}
                     if avatar == "male":
                         variants["maledef"] = (None, None)
                         for o in RAW_OFFSETS:

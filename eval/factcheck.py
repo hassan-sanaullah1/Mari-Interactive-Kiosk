@@ -1,6 +1,6 @@
 """Scores one English reply against the facts it was required to contain.
 
-The tester's grades in ``MARI kiosk Evaluation - Sheet1 (1).csv`` are "Matched",
+The tester's grades in ``eval/data/tester_eval.csv`` are "Matched",
 "Partial" and "Not Matched", and a Partial always means the same thing: the reply was
 true but left out facts the Expected Answer carried. So the scoring unit here is a
 *required fact*, and the grade is just how many of them survived into the reply.
@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 
 from server.normalization import normalize_for_tts
 
-__all__ = ["canon", "tts_canon", "hit", "score", "FactScore", "Entry", "GRADES"]
+__all__ = ["GRADES", "Entry", "FactScore", "canon", "hit", "score", "tts_canon"]
 
 GRADES = ("Matched", "Partial", "Not Matched")
 

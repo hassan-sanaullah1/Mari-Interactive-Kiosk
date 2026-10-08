@@ -1,7 +1,7 @@
 """Provider interfaces (ports) for STT and TTS.
 
-Callers (server/app.py, server/agent/, mari_s2s/handlers/) depend only on these, so
-swapping a provider means building a different adapter, not editing dispatch code.
+Callers (server/app.py, server/agent/) depend only on these, so swapping a provider
+means building a different adapter, not editing dispatch code.
 """
 
 from __future__ import annotations

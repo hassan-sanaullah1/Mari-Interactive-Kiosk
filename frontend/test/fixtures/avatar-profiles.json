@@ -1,0 +1,179 @@
+{
+ "avatars": {
+  "female": {
+   "a2f": {
+    "gain": 0.9,
+    "shapeGains": {
+     "jawopen": 0.375
+    }
+   },
+   "alphaTest": {},
+   "backLight": {
+    "kick": 1,
+    "rim": 1
+   },
+   "bytes": {
+    "decoded": 29813520,
+    "encoded": 20165542
+   },
+   "cameraDistanceM": null,
+   "darkThemeLighting": {
+    "ambient": 0.3,
+    "environment": 1,
+    "exposure": 1,
+    "fill": 1
+   },
+   "faceMaterial": "lambert12",
+   "fallbackHeight": 1.68,
+   "grammaticalGender": "f",
+   "handScale": 1,
+   "hasMorphs": true,
+   "headTargetY": 1.45,
+   "icon": "female",
+   "id": "female",
+   "label": {
+    "en": "Female presenter",
+    "ur": "خاتون پیشکار"
+   },
+   "lensMm": 85,
+   "lightThemeLighting": {
+    "ambient": 0.9,
+    "environment": 1.3,
+    "exposure": 1.35,
+    "fill": 2.3
+   },
+   "materialRoughness": {},
+   "materialSpecular": {},
+   "materialTint": {},
+   "segments": {
+    "breathing": {
+     "loop": [
+      3.966666666666667,
+      8.033333333333333
+     ]
+    },
+    "listening": {
+     "loop": [
+      10,
+      13.1
+     ]
+    },
+    "talking": {
+     "loop": [
+      18.6,
+      26
+     ]
+    }
+   },
+   "skinEmissive": 0.25,
+   "skinMaterials": {
+    "__set": [
+     "lambert11",
+     "lambert12",
+     "lambert13"
+    ]
+   },
+   "skinRoughness": null,
+   "url": "/models/girl15.glb.gz",
+   "widthSqueeze": 1
+  },
+  "male": {
+   "a2f": {
+    "gain": 0.9,
+    "shapeGains": {
+     "jawopen": 0.375
+    }
+   },
+   "alphaTest": {
+    "standardSurface2": 0.08
+   },
+   "backLight": {
+    "kick": 0,
+    "rim": 0
+   },
+   "bytes": {
+    "decoded": 67752008,
+    "encoded": 42294045
+   },
+   "cameraDistanceM": null,
+   "darkThemeLighting": {
+    "ambient": 0.45,
+    "environment": 1,
+    "exposure": 1,
+    "fill": 1.35
+   },
+   "faceMaterial": null,
+   "fallbackHeight": 1.85,
+   "grammaticalGender": "m",
+   "handScale": 1,
+   "hasMorphs": true,
+   "headTargetY": 1.6,
+   "icon": "male",
+   "id": "male",
+   "label": {
+    "en": "Male presenter",
+    "ur": "مرد پیشکار"
+   },
+   "lensMm": 135,
+   "lightThemeLighting": {
+    "ambient": 0.95,
+    "environment": 1.3,
+    "exposure": 1.3,
+    "fill": 2.6
+   },
+   "materialRoughness": {},
+   "materialSpecular": {
+    "standardSurface2": 0.6
+   },
+   "materialTint": {
+    "Std_Skin_Arm": 0.95,
+    "Std_Skin_Leg": 0.95,
+    "lambert5": 0.95,
+    "pasted__pasted__lambert6": 0.62
+   },
+   "segments": {
+    "breathing": {
+     "loop": [
+      1.2,
+      3.2
+     ]
+    },
+    "listening": {
+     "loop": [
+      10,
+      13.2
+     ]
+    },
+    "talking": {
+     "loop": [
+      18.133333333333333,
+      26.133333333333333
+     ]
+    }
+   },
+   "skinEmissive": 0.08,
+   "skinMaterials": {
+    "__set": [
+     "Std_Skin_Arm",
+     "Std_Skin_Leg",
+     "lambert5"
+    ]
+   },
+   "skinRoughness": null,
+   "url": "/models/male_initial13.glb.gz",
+   "widthSqueeze": 0.93
+  }
+ },
+ "componentConstants": {
+  "AvatarModel.tsx:AVATAR_POSITION_X": "0",
+  "AvatarModel.tsx:FACE_UV_BOX": "{ x0: 0.12, x1: 0.88, y0: 0.05, y1: 0.72 }",
+  "AvatarModel.tsx:MAKEUP_DESATURATION": "0.20",
+  "AvatarModel.tsx:MAKEUP_MAX_HUE_DEG": "20",
+  "AvatarModel.tsx:MAKEUP_MIN_SATURATION": "0.22",
+  "AvatarModel.tsx:READY_FRAME_DELAY": "2",
+  "blendshapePlayer.ts:DEFAULT_GAIN": "0.55",
+  "blendshapePlayer.ts:DEFAULT_SHAPE_GAINS": "{ jawopen: 0.45 }",
+  "blendshapePlayer.ts:MAX_BUFFERED_CLIPS": "12"
+ },
+ "defaultAvatar": "female"
+}

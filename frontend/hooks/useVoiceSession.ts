@@ -51,10 +51,7 @@ const TARGET_SR = 16000;
  */
 const CLIP_FRAME_WAIT_MS = 700;
 /**
- * RMS thresholds for endpointing. silenceMs was 600 — short enough that an
- * ordinary mid-sentence breath or thinking pause ended the turn early
- * ("half sentence" cutoffs); 1200ms gives a real pause room without making
- * genuine end-of-turn silence feel laggy.
+ * RMS thresholds for endpointing.
  *
  * `start` is how loud the room has to get before the turn counts as speech, and
  * it is the one number here that can lose a turn outright: below it the VAD never
@@ -89,11 +86,11 @@ const CLIP_FRAME_WAIT_MS = 700;
 const VAD = {
   start: 0.02,
   stop: 0.012,
-  // 1200 cut people off mid-sentence: it is the length of pause tolerated, and an
-  // ordinary one for breath or thought reaches ~1.2s. The cost is symmetric — this is
-  // also how long after a real end-of-turn the kiosk waits before answering — so it
-  // buys ~250ms more thinking room for ~250ms more latency, which is the right trade
-  // at a kiosk where being cut off means repeating the whole question.
+  // The length of pause tolerated mid-question. An ordinary breath or thinking
+  // pause reaches ~1.2s, so anything near that cuts people off. The cost is
+  // symmetric — this is also how long after a real end-of-turn the kiosk waits
+  // before answering — and at a kiosk, being cut off means repeating the whole
+  // question, so it is worth the latency.
   silenceMs: 1500,
   preSpeechMs: 8000,
   maxMs: 20000,
@@ -574,7 +571,6 @@ export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
             type: "start",
             lang: langRef.current,
             avatar: avatarRef.current,
-            a2fPreset: new URLSearchParams(window.location.search).get("male"), // TEMP male preset
             history: historyPayload(),
           }),
         );
@@ -853,7 +849,6 @@ export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
               text: body,
               lang: langRef.current,
               avatar: avatarRef.current,
-              a2fPreset: new URLSearchParams(window.location.search).get("male"), // TEMP male preset
               history,
             }),
           );

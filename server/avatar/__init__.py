@@ -14,21 +14,24 @@ from __future__ import annotations
 
 import logging
 
-from .. import config as C
-from .a2f_client import A2F_BLENDSHAPE_MULTIPLIERS, A2F_FACE_PARAMS, AVAILABLE, IMPORT_ERROR, A2FClient, A2FStreamSession
+from .. import config
+from .a2f_client import (
+    AVAILABLE,
+    IMPORT_ERROR,
+    A2FClient,
+    A2FStreamSession,
+)
 from .lipsync import LipsyncTurn, decode_to_pcm16_16k
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "A2F_BLENDSHAPE_MULTIPLIERS",
-    "A2F_FACE_PARAMS",
     "A2FClient",
     "A2FStreamSession",
     "LipsyncTurn",
+    "a2f_status",
     "decode_to_pcm16_16k",
     "get_a2f_client",
-    "a2f_status",
     "warm",
 ]
 
@@ -41,7 +44,7 @@ def get_a2f_client() -> A2FClient | None:
     global _client, _resolved
     if not _resolved:
         _resolved = True
-        if not C.A2F_URL:
+        if not config.A2F_URL:
             logger.info("A2F lipsync disabled (APP_A2F_URL not set)")
         elif not AVAILABLE:
             logger.warning(
@@ -51,9 +54,9 @@ def get_a2f_client() -> A2FClient | None:
             )
         else:
             _client = A2FClient(
-                target=C.A2F_URL, api_key=C.A2F_API_KEY, tls_ca_file=C.A2F_TLS_CA
+                target=config.A2F_URL, api_key=config.A2F_API_KEY, tls_ca_file=config.A2F_TLS_CA
             )
-            logger.info("A2F lipsync enabled (url=%s)", C.A2F_URL)
+            logger.info("A2F lipsync enabled (url=%s)", config.A2F_URL)
     return _client
 
 
@@ -70,7 +73,7 @@ async def a2f_status() -> dict:
     ``configured``/``client`` reflect static setup; ``connected`` actually dials the
     channel, so a NIM that is down or still loading shows up here.
     """
-    configured = bool(C.A2F_URL)
+    configured = bool(config.A2F_URL)
     connected = False
     if configured and AVAILABLE:
         client = get_a2f_client()
@@ -81,5 +84,5 @@ async def a2f_status() -> dict:
         "client": AVAILABLE,
         "connected": connected,
         "ready": configured and AVAILABLE and connected,
-        "url": C.A2F_URL or None,
+        "url": config.A2F_URL or None,
     }

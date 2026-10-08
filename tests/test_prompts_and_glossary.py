@@ -13,7 +13,7 @@ import pytest
 from server import config as C
 from server.normalization import normalise_for_uplift, normalize_for_tts, spoken_urls
 from server.prompts import get_prompts, load_prompt, load_prompts
-from server.services.glossary import (
+from server.rag.glossary import (
     extract_glossary,
     find_glossary_matches,
     format_glossary_block,
@@ -131,8 +131,8 @@ def test_glossary_block_is_empty_without_matches() -> None:
 
 
 def _prompt_for(query: str) -> str:
-    from server.services.generation import GenerationService
-    from server.services.retriever import RetrievalResult
+    from server.rag.generation import GenerationService
+    from server.rag.retriever import RetrievalResult
 
     matches = find_glossary_matches(query, ABBREVIATIONS)
     result = RetrievalResult(query=query, glossary_block=format_glossary_block(matches))
@@ -288,7 +288,7 @@ def test_the_core_brief_carries_the_sky47_ai_hardware() -> None:
 def test_urdu_gpuaas_questions_expand_to_the_english_section_terms(query: str) -> None:
     """§3.1.3.3 is the only section naming the accelerators, and Urdu spells "GPU" out
     letter by letter, which matched nothing in the lexical channel."""
-    from server.services.expansion import expand_for_lexical
+    from server.rag.expansion import expand_for_lexical
 
     expanded, terms = expand_for_lexical(f"{query} کے بارے میں بتائیں")
     assert "gpu" in expanded.lower() or "clusters" in expanded.lower()

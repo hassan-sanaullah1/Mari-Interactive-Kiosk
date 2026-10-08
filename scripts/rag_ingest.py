@@ -20,9 +20,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from server.services.ingestion import IngestionService  # noqa: E402
-from server.services.settings import get_settings  # noqa: E402
-from server.services.store import QdrantStore  # noqa: E402
+from server.rag.ingestion import IngestionService  # noqa: E402
+from server.rag.settings import get_settings  # noqa: E402
+from server.rag.store import QdrantStore  # noqa: E402
 
 
 async def main() -> int:

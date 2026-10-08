@@ -7,9 +7,9 @@ import {
   MaleAvatarIcon,
   MoonIcon,
 } from "./icons";
-import type { Lang } from "@/lib/i18n";
+import { uiCopy, type Lang } from "@/lib/i18n";
 import type { Theme } from "@/lib/theme";
-import type { AvatarId } from "./avatar/models";
+import { AVATARS, type AvatarConfig, type AvatarId } from "./avatar/models";
 
 type Props = {
   className?: string;
@@ -21,11 +21,14 @@ type Props = {
   onTheme: (t: Theme) => void;
 };
 
-/** Labels for the presenter pill — spoken names, not file names. */
-const AVATAR_LABELS: Record<Lang, Record<AvatarId, string>> = {
-  en: { female: "Female presenter", male: "Male presenter" },
-  ur: { female: "خاتون پیشکار", male: "مرد پیشکار" },
-};
+/** The profile names a silhouette; this is the only place that maps one to a component. */
+const ICONS = {
+  female: FemaleAvatarIcon,
+  male: MaleAvatarIcon,
+} as const;
+
+/** The presenters, in the order they are declared. */
+const PRESENTERS: AvatarConfig[] = Object.values(AVATARS);
 
 export default function LanguageBar({
   className,
@@ -36,9 +39,12 @@ export default function LanguageBar({
   theme,
   onTheme,
 }: Props) {
-  const next: Theme = theme === "dark" ? "light" : "dark";
-  const other: AvatarId = avatar === "female" ? "male" : "female";
-  const labels = AVATAR_LABELS[lang];
+  const t = uiCopy(lang);
+  const nextTheme: Theme = theme === "dark" ? "light" : "dark";
+  // The next presenter round, so the compact button cycles rather than selects.
+  const currentIndex = PRESENTERS.findIndex((p) => p.id === avatar);
+  const nextPresenter = PRESENTERS[(currentIndex + 1) % PRESENTERS.length];
+  const NextIcon = ICONS[nextPresenter.icon];
 
   return (
     <div className={`${styles.bar} ${className ?? ""}`}>
@@ -76,31 +82,24 @@ export default function LanguageBar({
           fit would put them under any sensible touch target. So narrow screens
           get the compact button below instead, which toggles rather than
           selects, exactly as the theme switch beside it already does. */}
-      <div
-        className={`${styles.pill} ${styles.iconPill}`}
-        role="group"
-        aria-label={lang === "ur" ? "پیشکار" : "Presenter"}
-      >
-        <button
-          type="button"
-          className={`${styles.seg} ${styles.iconSeg} ${avatar === "female" ? styles.active : ""}`}
-          onClick={() => onAvatar("female")}
-          aria-pressed={avatar === "female"}
-          aria-label={labels.female}
-          title={labels.female}
-        >
-          <FemaleAvatarIcon className={styles.avatarIcon} />
-        </button>
-        <button
-          type="button"
-          className={`${styles.seg} ${styles.iconSeg} ${avatar === "male" ? styles.active : ""}`}
-          onClick={() => onAvatar("male")}
-          aria-pressed={avatar === "male"}
-          aria-label={labels.male}
-          title={labels.male}
-        >
-          <MaleAvatarIcon className={styles.avatarIcon} />
-        </button>
+      <div className={`${styles.pill} ${styles.iconPill}`} role="group" aria-label={t.presenter}>
+        {PRESENTERS.map((presenter) => {
+          const Icon = ICONS[presenter.icon];
+          const label = presenter.label[lang];
+          return (
+            <button
+              key={presenter.id}
+              type="button"
+              className={`${styles.seg} ${styles.iconSeg} ${avatar === presenter.id ? styles.active : ""}`}
+              onClick={() => onAvatar(presenter.id)}
+              aria-pressed={avatar === presenter.id}
+              aria-label={label}
+              title={label}
+            >
+              <Icon className={styles.avatarIcon} />
+            </button>
+          );
+        })}
       </div>
 
       {/* The phone form of the same control. Like the theme switch, the icon
@@ -108,24 +107,20 @@ export default function LanguageBar({
       <button
         type="button"
         className={styles.compactAvatar}
-        onClick={() => onAvatar(other)}
-        aria-label={labels[other]}
-        title={labels[other]}
+        onClick={() => onAvatar(nextPresenter.id)}
+        aria-label={nextPresenter.label[lang]}
+        title={nextPresenter.label[lang]}
       >
-        {other === "male" ? (
-          <MaleAvatarIcon className={styles.compactIcon} />
-        ) : (
-          <FemaleAvatarIcon className={styles.compactIcon} />
-        )}
+        <NextIcon className={styles.compactIcon} />
       </button>
 
       {/* Dark ⇄ light switch. The icon shows the theme you'd switch TO. */}
       <button
         type="button"
         className={styles.theme}
-        onClick={() => onTheme(next)}
-        aria-label={`Switch to ${next} mode`}
-        title={`Switch to ${next} mode`}
+        onClick={() => onTheme(nextTheme)}
+        aria-label={`Switch to ${nextTheme} mode`}
+        title={`Switch to ${nextTheme} mode`}
       >
         {theme === "dark" ? (
           <BrightnessIcon className={styles.themeIcon} />

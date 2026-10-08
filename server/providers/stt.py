@@ -5,7 +5,7 @@
   WhisperLocalSTT  English, local faster-whisper (GPU if available)
   WhisperRemoteSTT English, remote OpenAI-compatible /audio/transcriptions
 
-Used by server/app.py and mari_s2s/handlers/.
+Used by server/app.py.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import struct
 
 import httpx
 
-from .. import config as C
+from .. import config
 from .base import STTProvider
 
 # Biases the recognizer toward the kiosk's vocabulary; without it "Mari" comes back as
@@ -76,7 +76,7 @@ def resample_pcm16(pcm: bytes, src_sr: int, dst_sr: int = 16000) -> bytes:
     import numpy as np
 
     a = np.frombuffer(pcm, dtype=np.int16).astype(np.float32)
-    n = int(round(a.size * dst_sr / src_sr))
+    n = round(a.size * dst_sr / src_sr)
     if n <= 0:
         return b""
     xo = np.linspace(0.0, 1.0, a.size, endpoint=False)
@@ -90,9 +90,9 @@ class SonioxSTT(STTProvider):
     :class:`SonioxStream` instead."""
 
     def __init__(self, api_key: str = "", url: str = "", model: str = "", lang: str = "ur"):
-        self.api_key = api_key or C.SONIOX_KEY
-        self.url = url or C.SONIOX_URL
-        self.model = model or C.SONIOX_MODEL
+        self.api_key = api_key or config.SONIOX_KEY
+        self.url = url or config.SONIOX_URL
+        self.model = model or config.SONIOX_MODEL
         self.lang = lang
 
     async def transcribe(self, wav: bytes) -> str:
@@ -153,9 +153,9 @@ class SonioxStream:
     def __init__(self, lang: str = "ur", on_partial=None, api_key: str = "", url: str = "", model: str = ""):
         self.lang = lang
         self.on_partial = on_partial
-        self.api_key = api_key or C.SONIOX_KEY
-        self.url = url or C.SONIOX_URL
-        self.model = model or C.SONIOX_MODEL
+        self.api_key = api_key or config.SONIOX_KEY
+        self.url = url or config.SONIOX_URL
+        self.model = model or config.SONIOX_MODEL
         self.ws = None
         self.finals: list[str] = []
         self.last_partial = ""
@@ -258,7 +258,7 @@ class WhisperLocalSTT(STTProvider):
     _model = None  # class-level cache: one model instance per process
 
     def __init__(self, model_size: str = ""):
-        self.model_size = model_size or C.WHISPER_LOCAL_MODEL
+        self.model_size = model_size or config.WHISPER_LOCAL_MODEL
 
     def _get_model(self):
         if WhisperLocalSTT._model is None:
@@ -304,9 +304,9 @@ class WhisperRemoteSTT(STTProvider):
     """Remote Whisper — OpenAI-compatible /audio/transcriptions multipart."""
 
     def __init__(self, url: str = "", token: str = "", model: str = ""):
-        self.url = url or C.WHISPER_URL
-        self.token = token or C.WHISPER_TOKEN
-        self.model = model or C.WHISPER_MODEL
+        self.url = url or config.WHISPER_URL
+        self.token = token or config.WHISPER_TOKEN
+        self.model = model or config.WHISPER_MODEL
 
     async def transcribe(self, wav: bytes) -> str:
         headers = {}
@@ -337,12 +337,12 @@ _stt_cache: dict[str, STTProvider] = {}
 
 def get_stt_provider(lang: str) -> STTProvider:
     """The configured STT adapter for a language, cached so local models stay loaded."""
-    key = f"{lang}:{C.EN_STT if lang != 'ur' else 'soniox'}"
+    key = f"{lang}:{config.EN_STT if lang != 'ur' else 'soniox'}"
     if key not in _stt_cache:
         if lang == "ur":
             _stt_cache[key] = SonioxSTT(lang="ur")
         else:
-            _stt_cache[key] = WhisperLocalSTT() if C.EN_STT == "local" else WhisperRemoteSTT()
+            _stt_cache[key] = WhisperLocalSTT() if config.EN_STT == "local" else WhisperRemoteSTT()
     return _stt_cache[key]
 
 

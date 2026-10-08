@@ -3,12 +3,14 @@
 import { useEffect, useRef, type RefObject } from "react";
 import styles from "./ControlDock.module.css";
 import { CloseIcon, PauseIcon, PlayIcon, WaveformIcon } from "./icons";
-import { COPY, type Lang } from "@/lib/i18n";
+import { uiCopy, type Gender, type Lang } from "@/lib/i18n";
 import type { Mode } from "@/hooks/useVoiceSession";
 
 type Props = {
   className?: string;
   lang: Lang;
+  /** The presenter on screen, so Urdu status copy agrees with them. */
+  gender: Gender;
   mode: Mode;
   active: boolean;
   paused: boolean;
@@ -21,6 +23,7 @@ type Props = {
 export default function ControlDock({
   className,
   lang,
+  gender,
   mode,
   active,
   paused,
@@ -30,7 +33,7 @@ export default function ControlDock({
   onTogglePause,
 }: Props) {
   const dockRef = useRef<HTMLDivElement>(null);
-  const t = COPY[lang];
+  const t = uiCopy(lang, gender);
 
   /* Drive the halo/waveform from the audio level without re-rendering per frame. */
   useEffect(() => {
