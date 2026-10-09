@@ -8,6 +8,10 @@
 x-untouchable: &untouchable >-
   ^(tests/fixtures/|frontend/test/fixtures/|eval/baselines/|eval/data/|server/data/|server/prompts/.*\.(md|toml)$|vendor/|frontend/public/|deploy/a2f/configs/)
 
+# `pre-commit install` (run by `make setup`) installs both, so the branch-name check
+# below needs no step of its own.
+default_install_hook_types: [pre-commit, pre-push]
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -44,4 +48,14 @@ repos:
         entry: bash -c 'cd frontend && npx eslint --max-warnings=0 .'
         language: system
         files: ^frontend/.*\.(js|jsx|ts|tsx|mjs)$
+        pass_filenames: false
+
+      # On push only: `make lint` and the PR lint job run the commit stage, where a
+      # branch name has nothing to check.
+      - id: branch-name
+        name: branch name follows <type>/<short-description>
+        entry: scripts/check_branch_name.sh
+        language: script
+        stages: [pre-push]
+        always_run: true
         pass_filenames: false

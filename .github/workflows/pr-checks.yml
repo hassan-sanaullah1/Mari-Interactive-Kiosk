@@ -1,6 +1,9 @@
 # The checks a pull request must pass before it merges (project-setup §10). Coolify
 # deploys; this only judges a PR. The job names are what the branch rulesets list as
 # required status checks.
+#
+# lint and build are the guide's two required jobs. The compose check and the types job
+# are from its "ideas for later" list. security goes beyond the guide; see its comment.
 name: pr-checks
 on:
   pull_request:
@@ -29,10 +32,66 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    # Compose refuses to read the file without the Qdrant key; any value works here.
+    env:
+      MARI_RAG_QDRANT_API_KEY: ci-build-only
     steps:
       - uses: actions/checkout@v4
+      - name: Compose files are valid
+        # docker-compose.yml alone is what Coolify reads; the others are local layers.
+        run: |
+          docker compose -f docker-compose.yml config -q
+          docker compose config -q
+          if [ -f docker-compose.dev.yml ]; then
+            docker compose -f docker-compose.yml -f docker-compose.override.yml \
+              -f docker-compose.dev.yml config -q
+          fi
       - name: Image builds
-        # Compose refuses to read the file without the Qdrant key; any value works for a build.
-        env:
-          MARI_RAG_QDRANT_API_KEY: ci-build-only
         run: docker compose build
+
+  types:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The image's Python, and the app's packages, so mypy sees what runs in production.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install backend packages
+        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Backend types
+        run: mypy
+      - name: .env.example lists every variable the code reads
+        run: pytest -q tests/test_env_example.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Frontend types
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run typecheck
+
+  # Not in the project-setup guide. Added after the 2026-09 compromise through a known
+  # Next.js hole: a PR may not merge with a high or critical advisory in a runtime
+  # dependency. Advisories published after a merge reach us as Dependabot alerts and
+  # security-update PRs, not through a schedule here.
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Frontend runtime dependencies
+        # Reads package-lock.json only; nothing is installed.
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Backend runtime dependencies
+        run: pipx run pip-audit -r requirements.txt

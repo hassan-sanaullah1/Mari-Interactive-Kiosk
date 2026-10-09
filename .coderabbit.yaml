@@ -1,0 +1,53 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit's review settings (project-setup §12). Its review criteria are AGENTS.md;
+# the path notes below only point it at the rules there that are easiest to miss.
+# Its comments advise; what must block a merge is in .github/workflows/pr-checks.yml.
+
+language: en-US
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: true
+  auto_review:
+    enabled: true
+    drafts: false
+    # The same branches pr-checks runs for.
+    base_branches: [develop, staging, main]
+  path_filters:
+    # Binary assets, vendored code, generated lock files and NVIDIA's own configs.
+    - "!frontend/public/**"
+    - "!vendor/**"
+    - "!**/package-lock.json"
+    - "!deploy/a2f/configs/**"
+  path_instructions:
+    - path: "{tests/fixtures/**,frontend/test/fixtures/**,eval/baselines/**}"
+      instructions: >-
+        Pinned snapshots and baselines. A diff here means behavior moved. It is only
+        acceptable when the PR changes that behavior on purpose and says why; it must
+        never be a refresh to make a check pass.
+    - path: "server/prompts/**"
+      instructions: >-
+        Prompts are not changed with word-swap lists, and a change must be checked
+        against live replies with eval/run_answers.py. The PR should say it was.
+    - path: "{server/personas.toml,frontend/lib/a2f-morphs.ts,server/avatar/**}"
+      instructions: >-
+        Lipsync and Audio2Face face parameters are retuned only with measurements from
+        scripts/lipsync_audit.py. Presenter differences belong in data, never in an
+        `if avatar == ...` branch.
+    - path: "docker-compose.yml"
+      instructions: >-
+        This is the file Coolify deploys. It must not declare a networks block or
+        publish ports; local-only settings go in docker-compose.override.yml.
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "AGENTS.md"
+
+chat:
+  auto_reply: true
