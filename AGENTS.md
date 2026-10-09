@@ -3,7 +3,7 @@
 Rules for anyone changing this repository: developers, reviewers and AI coding agents.
 
 ## Project
-intelligent-kiosk is a touchscreen voice kiosk: visitors speak or type to a 3D presenter,
+interactive-kiosk is a touchscreen voice kiosk: visitors speak or type to a 3D presenter,
 and it answers questions about Mari Energies from the company's knowledge base, in English
 or Urdu.
 Stack: Python (FastAPI), Qdrant, Next.js 15, three.js, Docker, deployed by Coolify.

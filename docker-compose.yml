@@ -1,4 +1,4 @@
-# intelligent-kiosk — the stack Coolify deploys: Qdrant, backend, frontend.
+# interactive-kiosk — the stack Coolify deploys: Qdrant, backend, frontend.
 #
 # Local runs also merge docker-compose.override.yml (published ports) automatically;
 # `make dev` adds docker-compose.a2f.yml when the Audio2Face stack is running.

@@ -1,4 +1,4 @@
-# intelligent-kiosk
+# interactive-kiosk
 
 A touchscreen kiosk with a 3D presenter. A visitor speaks or types, and it answers
 questions about Mari Energies from the company's own knowledge base, in English or Urdu,
