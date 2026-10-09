@@ -65,8 +65,9 @@ class AnswerCase:
     optional: list = field(default_factory=list)
 
 
-def load_cases(path: Path = CASES, ids: str | None = None,
-               statuses: str | None = None) -> list[AnswerCase]:
+def load_cases(
+    path: Path = CASES, ids: str | None = None, statuses: str | None = None
+) -> list[AnswerCase]:
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     cases = [AnswerCase(**c) for c in data["cases"]]
     if ids:
@@ -161,11 +162,18 @@ class LiveRunner:
 # ── scoring one run ─────────────────────────────────────────────────
 
 
-def grade_record(case: AnswerCase, reply: str, context: str | None,
-                 cap_hit: bool, extra: dict | None = None) -> dict:
+def grade_record(
+    case: AnswerCase, reply: str, context: str | None, cap_hit: bool, extra: dict | None = None
+) -> dict:
     fs = score(case.require, case.optional, reply, context)
-    rec = {"id": case.id, "depth": case.depth, "section": case.section,
-           "baseline_grade": case.baseline_grade, "reply": reply, **fs.as_dict()}
+    rec = {
+        "id": case.id,
+        "depth": case.depth,
+        "section": case.section,
+        "baseline_grade": case.baseline_grade,
+        "reply": reply,
+        **fs.as_dict(),
+    }
     # A reply cut off at the cap did not "drop" the tail — it never got to write it.
     if cap_hit:
         for e in rec["entries"]:
@@ -232,8 +240,9 @@ def summarise(records: list[dict], cases: list[AnswerCase], header: dict) -> dic
         if any(r.get("cap_hit") for r in runs):
             caps += 1
 
-    counts = {g: sum(1 for v in grades.values() if v == g)
-              for g in ("Matched", "Partial", "Not Matched")}
+    counts = {
+        g: sum(1 for v in grades.values() if v == g) for g in ("Matched", "Partial", "Not Matched")
+    }
     moves = {"FIXED": [], "SAME": [], "WORSE": [], "NEW": []}
     for case in cases:
         if case.id not in grades:
@@ -249,29 +258,45 @@ def summarise(records: list[dict], cases: list[AnswerCase], header: dict) -> dic
             moves["SAME"].append(case.id)
 
     comps = [r["completion_tokens"] for r in records if r.get("completion_tokens")]
-    return {"header": header, "grades": grades, "counts": counts, "moves": moves,
-            "causes": causes, "cap_cases": caps, "unstable": unstable,
-            "fact_hit": req_hit, "fact_total": req_total,
-            "completion_p50": statistics.median(comps) if comps else 0,
-            "completion_max": max(comps) if comps else 0,
-            "records": records}
+    return {
+        "header": header,
+        "grades": grades,
+        "counts": counts,
+        "moves": moves,
+        "causes": causes,
+        "cap_cases": caps,
+        "unstable": unstable,
+        "fact_hit": req_hit,
+        "fact_total": req_total,
+        "completion_p50": statistics.median(comps) if comps else 0,
+        "completion_max": max(comps) if comps else 0,
+        "records": records,
+    }
 
 
 def print_report(rep: dict, cases: list[AnswerCase], show: int) -> None:
     h, c, m = rep["header"], rep["counts"], rep["moves"]
     n = len(rep["grades"])
     print()
-    print(f"╭─ answers ─ {n} cases × {h['repeat']} repeats ─ {h['branch']} @ {h['git_sha']} "
-          f"─ temp {h['temperature']}")
-    print(f"│  grade        Matched {c['Matched']:3}  Partial {c['Partial']:3}  "
-          f"Not Matched {c['Not Matched']:3}")
-    print(f"│  fact recall  {_pct(rep['fact_hit'], rep['fact_total'])}   "
-          f"({rep['fact_hit']}/{rep['fact_total']} required facts)")
+    print(
+        f"╭─ answers ─ {n} cases × {h['repeat']} repeats ─ {h['branch']} @ {h['git_sha']} "
+        f"─ temp {h['temperature']}"
+    )
+    print(
+        f"│  grade        Matched {c['Matched']:3}  Partial {c['Partial']:3}  "
+        f"Not Matched {c['Not Matched']:3}"
+    )
+    print(
+        f"│  fact recall  {_pct(rep['fact_hit'], rep['fact_total'])}   "
+        f"({rep['fact_hit']}/{rep['fact_total']} required facts)"
+    )
     if rep["causes"]:
         print("│  miss causes  " + "   ".join(f"{k} {v}" for k, v in sorted(rep["causes"].items())))
     if h["mode"] == "live":
-        print(f"│  cap hits     {rep['cap_cases']}/{n}   (completion p50 "
-              f"{rep['completion_p50']:.0f}, max {rep['completion_max']} of {h['max_tokens']})")
+        print(
+            f"│  cap hits     {rep['cap_cases']}/{n}   (completion p50 "
+            f"{rep['completion_p50']:.0f}, max {rep['completion_max']} of {h['max_tokens']})"
+        )
         hit = [r.get("section_hit") for r in rep["records"] if r.get("section_hit") is not None]
         if hit:
             print(f"│  section hit  {_pct(sum(1 for x in hit if x), len(hit))}")
@@ -297,11 +322,14 @@ def print_report(rep: dict, cases: list[AnswerCase], show: int) -> None:
     if still:
         print(f"\nstill failing ({len(still)}):")
         for cid in still[:show]:
-            rec = next(r for r in rep["records"]
-                       if r["id"] == cid and r["grade"] == rep["grades"][cid])
+            rec = next(
+                r for r in rep["records"] if r["id"] == cid and r["grade"] == rep["grades"][cid]
+            )
             miss = [e["variants"][0] for e in rec["entries"] if not e["hit"]]
-            print(f"  {cid:14} {rec['grade']:12} {rec['hit']}/{rec['total']}  "
-                  f"causes={rec.get('causes', {})}")
+            print(
+                f"  {cid:14} {rec['grade']:12} {rec['hit']}/{rec['total']}  "
+                f"causes={rec.get('causes', {})}"
+            )
             print(f"      missing: {miss}")
 
 
@@ -316,8 +344,7 @@ def print_calibration(records: list[dict], cases: list[AnswerCase]) -> None:
         agree += ok
         note = "" if ok else "  <-- scorer disagrees with the human"
         print(f"{r['id']:16} {old:12} {r['grade']:12} {r['hit']}/{r['total']}{note}")
-    print(f"\nagreement with the tester: {agree}/{len(records)} "
-          f"({_pct(agree, len(records))})")
+    print(f"\nagreement with the tester: {agree}/{len(records)} ({_pct(agree, len(records))})")
     off = [r for r in records if byid[r["id"]].baseline_grade != r["grade"]]
     for r in off[:12]:
         miss = [e["variants"][0] for e in r["entries"] if not e["hit"]]
@@ -328,17 +355,23 @@ def print_calibration(records: list[dict], cases: list[AnswerCase]) -> None:
 def _header(args, mode: str, max_tokens: int = 0) -> dict:
     def git(*a):
         try:
-            return subprocess.run(["git", *a], cwd=ROOT, capture_output=True,
-                                  text=True, check=True).stdout.strip()
+            return subprocess.run(
+                ["git", *a], cwd=ROOT, capture_output=True, text=True, check=True
+            ).stdout.strip()
         except Exception:  # noqa: BLE001
             return "?"
 
-    return {"mode": mode, "repeat": args.repeat, "temperature": args.temperature,
-            "branch": git("rev-parse", "--abbrev-ref", "HEAD"),
-            "git_sha": git("rev-parse", "--short", "HEAD"),
-            "avatar": args.avatar, "max_tokens": max_tokens,
-            "system_prompt": str(args.system_prompt or ""),
-            "when": time.strftime("%Y-%m-%dT%H:%M:%S")}
+    return {
+        "mode": mode,
+        "repeat": args.repeat,
+        "temperature": args.temperature,
+        "branch": git("rev-parse", "--abbrev-ref", "HEAD"),
+        "git_sha": git("rev-parse", "--short", "HEAD"),
+        "avatar": args.avatar,
+        "max_tokens": max_tokens,
+        "system_prompt": str(args.system_prompt or ""),
+        "when": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }
 
 
 def _swap_prompt(path: Path, lang: str, avatar: str) -> None:
@@ -368,18 +401,19 @@ async def _live(args, cases: list[AnswerCase]) -> list[dict]:
                 try:
                     out = await runner.run(case)
                 except Exception as exc:  # noqa: BLE001
-                    print(f"  [{rep}] {case.id}: ERROR {type(exc).__name__}: {exc}",
-                          flush=True)
+                    print(f"  [{rep}] {case.id}: ERROR {type(exc).__name__}: {exc}", flush=True)
                     continue
-                rec = grade_record(case, out["reply"], out["context"],
-                                   out["cap_hit"], out)
+                rec = grade_record(case, out["reply"], out["context"], out["cap_hit"], out)
                 rec["repeat"] = rep
                 records.append(rec)
                 # flushed: a run takes minutes, and redirected stdout is block
                 # buffered, which makes a working run look like a hung one.
-                print(f"  [{rep}] {i:3}/{len(cases)} {case.id:16} {rec['grade']:12} "
-                      f"{rec['hit']}/{rec['total']}  {out['completion_tokens']:4}tok"
-                      f"{'  CAP' if out['cap_hit'] else ''}", flush=True)
+                print(
+                    f"  [{rep}] {i:3}/{len(cases)} {case.id:16} {rec['grade']:12} "
+                    f"{rec['hit']}/{rec['total']}  {out['completion_tokens']:4}tok"
+                    f"{'  CAP' if out['cap_hit'] else ''}",
+                    flush=True,
+                )
     finally:
         await runner.stop()
     return records
@@ -389,25 +423,41 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--cases", type=Path, default=CASES)
     ap.add_argument("--ids")
-    ap.add_argument("--status", default="all",
-                    help='keep only these baseline grades; default all')
+    ap.add_argument("--status", default="all", help="keep only these baseline grades; default all")
     ap.add_argument("--lang", choices=["en", "ur"], default="en")
     ap.add_argument("--avatar", choices=["female", "male"], default="female")
     ap.add_argument("--repeat", type=int, default=1)
-    ap.add_argument("--temperature", type=float, default=0.0,
-                    help="0.0 for a graded run; 0.3 mirrors production")
-    ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
-                    help="override a RagSettings field, as in eval/run_eval.py")
-    ap.add_argument("--system-prompt", type=Path,
-                    help="swap the (avatar, lang) system prompt — prompt A/B")
-    ap.add_argument("--ingest", action="store_true",
-                    help="re-ingest the corpus on startup (needed after a KB edit)")
+    ap.add_argument(
+        "--temperature",
+        type=float,
+        default=0.0,
+        help="0.0 for a graded run; 0.3 mirrors production",
+    )
+    ap.add_argument(
+        "--set",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="override a RagSettings field, as in eval/run_eval.py",
+    )
+    ap.add_argument(
+        "--system-prompt", type=Path, help="swap the (avatar, lang) system prompt — prompt A/B"
+    )
+    ap.add_argument(
+        "--ingest",
+        action="store_true",
+        help="re-ingest the corpus on startup (needed after a KB edit)",
+    )
     ap.add_argument("--jsonl", type=Path, help="append one record per (case, repeat)")
     ap.add_argument("--json", type=Path, help="write the summary report here")
-    ap.add_argument("--baseline", type=Path,
-                    help="compare against a previous --jsonl instead of the tester's grades")
-    ap.add_argument("--score-only", action="store_true",
-                    help="no LLM: score the replies stored in the fixture")
+    ap.add_argument(
+        "--baseline",
+        type=Path,
+        help="compare against a previous --jsonl instead of the tester's grades",
+    )
+    ap.add_argument(
+        "--score-only", action="store_true", help="no LLM: score the replies stored in the fixture"
+    )
     ap.add_argument("--show", type=int, default=20)
     args = ap.parse_args()
 
@@ -423,8 +473,11 @@ def main() -> int:
         for pair in args.set:
             key, _, raw = pair.partition("=")
             current = getattr(settings, key)
-            value = (raw.strip().lower() in {"1", "true", "yes", "on"}
-                     if isinstance(current, bool) else type(current)(raw))
+            value = (
+                raw.strip().lower() in {"1", "true", "yes", "on"}
+                if isinstance(current, bool)
+                else type(current)(raw)
+            )
             setattr(settings, key, value)
             print(f"override {key} = {value!r}")
 
@@ -432,8 +485,9 @@ def main() -> int:
         records = [grade_record(c, c.baseline_reply, None, False) for c in cases]
         print_calibration(records, cases)
         if args.jsonl:
-            args.jsonl.write_text("\n".join(json.dumps(r, ensure_ascii=False)
-                                            for r in records) + "\n")
+            args.jsonl.write_text(
+                "\n".join(json.dumps(r, ensure_ascii=False) for r in records) + "\n"
+            )
         return 0
 
     from server import config as C
@@ -462,8 +516,11 @@ def main() -> int:
         print("every case errored")
         return 1
 
-    header = _header(args, "baseline-file" if args.baseline else "live",
-                     max_tokens=records[0].get("max_tokens", 0))
+    header = _header(
+        args,
+        "baseline-file" if args.baseline else "live",
+        max_tokens=records[0].get("max_tokens", 0),
+    )
     rep = summarise(records, cases, header)
     print_report(rep, cases, args.show)
 
@@ -476,8 +533,11 @@ def main() -> int:
         print(f"\nwrote {args.jsonl}")
     if args.json:
         args.json.parent.mkdir(parents=True, exist_ok=True)
-        args.json.write_text(json.dumps({k: v for k, v in rep.items() if k != "records"},
-                                        indent=2, ensure_ascii=False))
+        args.json.write_text(
+            json.dumps(
+                {k: v for k, v in rep.items() if k != "records"}, indent=2, ensure_ascii=False
+            )
+        )
         print(f"wrote {args.json}")
     return 0
 

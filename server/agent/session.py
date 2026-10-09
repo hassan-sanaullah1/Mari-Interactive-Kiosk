@@ -23,6 +23,7 @@ import logging
 from fastapi import WebSocket, WebSocketDisconnect
 
 from .. import config, providers, rag
+from ..logging_setup import new_request_id, request_id
 from ..personas import default_persona, persona_ids
 from .turn import run_reply
 
@@ -47,6 +48,8 @@ class VoiceSession:
 
     async def run(self) -> None:
         """Receive until the turn is answered, the client leaves, or a stage fails."""
+        # Runs in this socket's own task, so the ID covers only this connection.
+        request_id.set(new_request_id())
         await self._sock.accept()
         try:
             while await self._receive_one():
@@ -55,9 +58,7 @@ class VoiceSession:
             pass
         except Exception as exc:  # pragma: no cover - last resort
             logger.exception("turn failed: %s", exc)
-            await self._try_send(
-                {"type": "error", "message": str(exc) or exc.__class__.__name__}
-            )
+            await self._try_send({"type": "error", "message": str(exc) or exc.__class__.__name__})
         finally:
             await self.aclose()
 

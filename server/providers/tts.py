@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 
 import httpx
 
@@ -47,8 +48,10 @@ class UpliftTTS(TTSProvider):
         self.output_format = output_format or config.UPLIFT_FORMAT
         self.lang = lang
         # 1.0 means "not set by the caller": use the configured per-language rate.
-        self.speed = speed if speed != 1.0 else (
-            config.UPLIFT_SPEED_EN if lang == "en" else config.UPLIFT_SPEED
+        self.speed = (
+            speed
+            if speed != 1.0
+            else (config.UPLIFT_SPEED_EN if lang == "en" else config.UPLIFT_SPEED)
         )
 
     async def synthesize(self, text: str) -> tuple[bytes, str]:
@@ -118,8 +121,10 @@ class MatchaTTS(TTSProvider):
         r.raise_for_status()
         logger.debug(
             "matcha-tts: frontend %s ms, model %s ms, %s s of audio, cached %s",
-            r.headers.get("x-timing-frontend-ms"), r.headers.get("x-timing-model-ms"),
-            r.headers.get("x-audio-seconds"), r.headers.get("x-cached"),
+            r.headers.get("x-timing-frontend-ms"),
+            r.headers.get("x-timing-model-ms"),
+            r.headers.get("x-audio-seconds"),
+            r.headers.get("x-cached"),
         )
         return r.content, "audio/wav"
 
@@ -145,7 +150,9 @@ class MatchaTTS(TTSProvider):
         if ready:
             logger.info("Matcha-TTS ready at %s", self.base)
         elif config.MATCHA_FALLBACK:
-            logger.warning("Matcha-TTS not reachable at %s, Urdu will fall back to Uplift", self.base)
+            logger.warning(
+                "Matcha-TTS not reachable at %s, Urdu will fall back to Uplift", self.base
+            )
         else:
             logger.warning("Matcha-TTS not reachable at %s, and fallback is off", self.base)
 
@@ -160,7 +167,7 @@ class KokoroLocalTTS(TTSProvider):
     def __init__(self, voice: str = ""):
         self.voice = voice or config.VOICE_EN
 
-    def _get_pipe(self):
+    def _get_pipe(self) -> Any:
         if KokoroLocalTTS._pipe is None:
             from kokoro import KPipeline
 
@@ -200,7 +207,15 @@ class KokoroRemoteTTS(TTSProvider):
     wants_spoken_form = True
     engine = "kokoro"
 
-    def __init__(self, base: str = "", path: str = "", token: str = "", model: str = "", voice: str = "", fmt: str = ""):
+    def __init__(
+        self,
+        base: str = "",
+        path: str = "",
+        token: str = "",
+        model: str = "",
+        voice: str = "",
+        fmt: str = "",
+    ):
         self.base = (base or config.KOKORO_BASE).rstrip("/")
         self.path = path or config.KOKORO_PATH
         self.token = token or config.KOKORO_TOKEN
@@ -216,7 +231,12 @@ class KokoroRemoteTTS(TTSProvider):
         headers = {"Content-Type": "application/json"}
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
-        payload = {"model": self.model, "input": text, "voice": self.voice, "response_format": self.fmt}
+        payload = {
+            "model": self.model,
+            "input": text,
+            "voice": self.voice,
+            "response_format": self.fmt,
+        }
         async with httpx.AsyncClient(timeout=60) as client:
             r = await client.post(url, json=payload, headers=headers)
             r.raise_for_status()

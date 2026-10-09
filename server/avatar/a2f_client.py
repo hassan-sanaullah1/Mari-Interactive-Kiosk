@@ -358,8 +358,11 @@ class A2FClient:
         bs_multipliers: dict[str, float] | None = None,
     ) -> A2FStreamSession:
         session = A2FStreamSession(
-            sample_rate, on_batch, metadata=self._metadata,
-            face_params=face_params, bs_multipliers=bs_multipliers,
+            sample_rate,
+            on_batch,
+            metadata=self._metadata,
+            face_params=face_params,
+            bs_multipliers=bs_multipliers,
         )
         try:
             await session.start(self._get_channel())

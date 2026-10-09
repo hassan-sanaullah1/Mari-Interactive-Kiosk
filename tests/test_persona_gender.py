@@ -69,17 +69,13 @@ def test_every_presenter_line_has_a_masculine_form() -> None:
     """A gendered line with no masculine override shows the wrong gender for him."""
     masculine_block = _copy_block("const MASCULINE_UR")
     missing = [key for key in PRESENTER_LINES if f"{key}:" not in masculine_block]
-    assert not missing, (
-        f"these lines describe the presenter but have no masculine form: {missing}"
-    )
+    assert not missing, f"these lines describe the presenter but have no masculine form: {missing}"
 
 
 def test_masculine_overrides_are_actually_masculine() -> None:
     masculine_block = _copy_block("const MASCULINE_UR")
     lines = [
-        line
-        for line in re.findall(r'"([^"\n]*)"', masculine_block)
-        if re.search(r"[ؠ-ۿ]", line)
+        line for line in re.findall(r'"([^"\n]*)"', masculine_block) if re.search(r"[ؠ-ۿ]", line)
     ]
     assert lines, "MASCULINE_UR has no Urdu lines"
     feminine = ("رہی ہے", "رہی ہوں", "سکتی ہوں", "سکتی ہے", "رہی تھی", "رکی")

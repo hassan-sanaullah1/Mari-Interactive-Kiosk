@@ -30,6 +30,7 @@ def kokoro(text: str) -> str:
 
 # ── the lexicon ─────────────────────────────────────────────────────
 
+
 def test_every_phoneme_is_one_kokoro_can_say() -> None:
     for word, ipa in KOKORO_IPA.items():
         unknown = {c for c in ipa if c not in KOKORO_VOCAB}
@@ -42,8 +43,9 @@ def test_every_pakistani_word_the_uplift_tables_know_has_a_kokoro_pronunciation(
     for table in (N._PLACES, N._PROGRAMMES, N._PARTS):
         for key in table:
             words |= {key} if key in KOKORO_IPA else set(re.split(r"[\s-]+", key))
-    missing = {w for w in words if w not in KOKORO_IPA and w not in KOKORO_PLAIN
-               and w not in ("e",)}
+    missing = {
+        w for w in words if w not in KOKORO_IPA and w not in KOKORO_PLAIN and w not in ("e",)
+    }
     assert not missing, sorted(missing)
 
 
@@ -59,6 +61,7 @@ def test_the_american_voice_never_gets_phonemes_it_mishears() -> None:
 
 
 # ── what Kokoro receives ────────────────────────────────────────────
+
 
 @pytest.mark.parametrize(
     "text",
@@ -98,8 +101,9 @@ def test_the_salam_returned_and_offered() -> None:
 
 def test_chairman_line_keeps_rank_order_and_drops_the_honour() -> None:
     said = kokoro("Board Chairman: Lt. Gen. Anwar Ali Hyder, HI(M), (Retd)")
-    assert said.startswith("Board Chairman: Retired [Lieutenant](/lɛftˈɛnənt/) General "
-                           "Anwar [Ali](/ˈəli/) [Hyder](/")
+    assert said.startswith(
+        "Board Chairman: Retired [Lieutenant](/lɛftˈɛnənt/) General Anwar [Ali](/ˈəli/) [Hyder](/"
+    )
     assert "Imtiaz" not in said and "Military" not in said
     assert "HI(M)" not in said and "(Retd)" not in said
 
@@ -142,6 +146,7 @@ def test_digits_inside_a_pronunciation_are_never_spelled_out() -> None:
 
 # ── wiring ──────────────────────────────────────────────────────────
 
+
 def test_speech_sends_kokoro_its_own_spoken_form(monkeypatch) -> None:
     from server import providers
     from server.agent import speech
@@ -154,8 +159,11 @@ def test_speech_sends_kokoro_its_own_spoken_form(monkeypatch) -> None:
         return b"x", "audio/mpeg"
 
     monkeypatch.setattr(KokoroRemoteTTS, "synthesize", synthesize)
-    monkeypatch.setattr(providers, "get_tts_provider",
-                        lambda lang, avatar="female": KokoroRemoteTTS(base="http://k.test", voice="af_heart"))
+    monkeypatch.setattr(
+        providers,
+        "get_tts_provider",
+        lambda lang, avatar="female": KokoroRemoteTTS(base="http://k.test", voice="af_heart"),
+    )
     asyncio.run(speech.speak("Faheem Haider says up to 50kW per rack.", "en"))
     assert sent == ["[Faheem](/fəhˈiːm/) [Haider](/hˈɛːdər/) says up to fifty kilowatts per rack."]
 

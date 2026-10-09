@@ -76,9 +76,16 @@ def test_spelled_out_acronyms_are_rebuilt() -> None:
 
 @pytest.mark.parametrize(
     "urdu,expected",
-    [("مجید", "majid"), ("بھٹائی", "bhitai"), ("کارپلنک", "corplink"),
-     ("نبیل", "nabeel"), ("رجسٹرار", "registrar"), ("ڈہرکی", "daharki"),
-     ("فوجی", "fauji"), ("غنی", "ghani")],
+    [
+        ("مجید", "majid"),
+        ("بھٹائی", "bhitai"),
+        ("کارپلنک", "corplink"),
+        ("نبیل", "nabeel"),
+        ("رجسٹرار", "registrar"),
+        ("ڈہرکی", "daharki"),
+        ("فوجی", "fauji"),
+        ("غنی", "ghani"),
+    ],
 )
 def test_names_are_matched_by_sound(urdu: str, expected: str) -> None:
     """Proper nouns are unbounded, so they are matched phonetically, not from a list.

@@ -112,14 +112,15 @@ filterwarnings = [
 [tool.mypy]
 python_version = "3.12"
 files = ["server"]
-# Deliberately lenient to start: the point is to stop NEW untyped code, not to
-# annotate 9k lines before the refactor. Phase 3 turns the strict flags on per
-# package as each one is rebuilt.
+# Every function carries type hints (AGENTS.md). The modules listed below are still
+# exempt from the other errors until each one is rebuilt.
 ignore_missing_imports = true
 warn_unused_ignores = false
 warn_redundant_casts = true
 no_implicit_optional = true
 check_untyped_defs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
 
 # ── Temporary, removed as Phase 3 rebuilds each module ──────────────
 #
@@ -161,7 +162,7 @@ include_external_packages = true
 # Layers run top (most dependent) to bottom. A module may import anything BELOW it
 # and nothing above it. `|` means those siblings must not import each other either.
 #
-# This is the contract ARCHITECTURE.md describes, made executable: a reviewer does
+# This is the contract docs/architecture.md describes, made executable: a reviewer does
 # not have to notice that agent/ started importing a route, CI does.
 [[tool.importlinter.contracts]]
 name = "Layers"
@@ -171,7 +172,7 @@ layers = [
     "server.agent",
     "server.rag",
     "server.avatar | server.providers | server.normalization | server.prompts",
-    "server.config",
+    "server.config | server.logging_setup",
 ]
 exhaustive = false
 # ── Temporary, removed in Phase 3 ──

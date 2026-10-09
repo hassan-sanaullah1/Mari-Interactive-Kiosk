@@ -2,7 +2,7 @@
 
 Hybrid (dense + sparse) retrieval over Qdrant for the MARI kiosk. It replaced a
 stdlib BM25 index that has since been removed; this is now the only retrieval path in
-the system. The measurements behind the settings are in `docs/retrieval_tuning_notes.md`.
+the system. The measurements behind the settings are in `docs/retrieval-tuning-notes.md`.
 
 This document exists because every number in `server/rag/settings.py` is a trade,
 and a parameter whose reason is not written down is a parameter nobody dares change.

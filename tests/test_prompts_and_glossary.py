@@ -24,11 +24,14 @@ ABBREVIATIONS = extract_glossary(C.KNOWLEDGE_FILE.read_text(encoding="utf-8"))
 
 # ── prompt files ────────────────────────────────────────────────────
 
+
 def test_every_prompt_file_loads() -> None:
     prompts = load_prompts()
-    assert set(prompts.system) == set(prompts.greeting) == {
-        (p, lang) for p in ("female", "male") for lang in ("en", "ur")
-    }
+    assert (
+        set(prompts.system)
+        == set(prompts.greeting)
+        == {(p, lang) for p in ("female", "male") for lang in ("en", "ur")}
+    )
     assert all(prompts.system.values()) and all(prompts.greeting.values())
     assert prompts.core_brief and prompts.query_rewriter and all(prompts.no_context.values())
 
@@ -42,13 +45,13 @@ def test_a_missing_prompt_file_fails_loudly() -> None:
 def test_persona_and_tone_rules_are_in_the_files() -> None:
     system = get_prompts().system
     en, ur = system[("female", "en")], system[("female", "ur")]
-    assert "Maryam" in en and "مریم" in ur           # she has a name, and uses it
-    assert "Mari Energies" in en and "Mari Energies" in ur   # brand stays in Latin script
-    assert "کر سکتی ہوں" in ur          # feminine verb forms
-    assert "کی representative" in ur    # feminine role noun, in the English word people say
+    assert "Maryam" in en and "مریم" in ur  # she has a name, and uses it
+    assert "Mari Energies" in en and "Mari Energies" in ur  # brand stays in Latin script
+    assert "کر سکتی ہوں" in ur  # feminine verb forms
+    assert "کی representative" in ur  # feminine role noun, in the English word people say
     # She presents as a member of the team, not as an assistant.
     assert "never a salesperson" in en
-    assert "chatbot" in en and "chatbot" in ur       # ...and is told not to admit to being one
+    assert "chatbot" in en and "chatbot" in ur  # ...and is told not to admit to being one
 
 
 def test_the_greeting_prompts_demand_the_salam_and_the_name() -> None:
@@ -57,7 +60,7 @@ def test_the_greeting_prompts_demand_the_salam_and_the_name() -> None:
     en, ur = greeting[("female", "en")], greeting[("female", "ur")]
     assert "Assalamualaikum" in en and "Maryam" in en
     assert "السلام علیکم" in ur and "مریم" in ur
-    assert "وعلیکم السلام" in ur         # named explicitly so it is never returned instead
+    assert "وعلیکم السلام" in ur  # named explicitly so it is never returned instead
 
 
 def test_the_greeting_is_not_baked_into_the_urdu_rules() -> None:
@@ -69,13 +72,14 @@ def test_the_greeting_is_not_baked_into_the_urdu_rules() -> None:
     سکتی ہوں؟" before every answer, however far into the conversation the visitor was.
     """
     ur = get_prompts().system[("female", "ur")]
-    assert "وعلیکم السلام" not in ur              # the opening script, not the base rules
-    assert "میں آپ کی کیا مدد کر سکتی ہوں؟" not in ur   # the invitation it ended on
+    assert "وعلیکم السلام" not in ur  # the opening script, not the base rules
+    assert "میں آپ کی کیا مدد کر سکتی ہوں؟" not in ur  # the invitation it ended on
     # ...and the rules still tell her to stay silent about it until told otherwise.
     assert "سیدھا سوال کا جواب دیں" in ur
 
 
 # ── abbreviation glossary ───────────────────────────────────────────
+
 
 def test_real_definitions_are_extracted() -> None:
     g = extract_glossary("The Mari Seismic Processing Center (MSPC) opened in 2019.")
@@ -90,8 +94,8 @@ def test_abbreviation_first_ordering() -> None:
 @pytest.mark.parametrize(
     "text",
     [
-        "EPS 54.25 (restated)",                    # an aside, not a definition
-        "OGDCL (20%)",                             # a shareholding figure
+        "EPS 54.25 (restated)",  # an aside, not a definition
+        "OGDCL (20%)",  # a shareholding figure
         "energy use 4,344,223 GJ (2024: 728 ML)",  # a prior-year comparison
     ],
 )
@@ -136,9 +140,9 @@ def _prompt_for(query: str) -> str:
 
     matches = find_glossary_matches(query, ABBREVIATIONS)
     result = RetrievalResult(query=query, glossary_block=format_glossary_block(matches))
-    return GenerationService().build_prompt(
-        result, "en", core_brief=get_prompts().core_brief
-    ).system
+    return (
+        GenerationService().build_prompt(result, "en", core_brief=get_prompts().core_brief).system
+    )
 
 
 def test_definition_is_injected_into_the_system_prompt() -> None:
@@ -150,6 +154,7 @@ def test_prompt_is_untouched_when_no_abbreviation_matches() -> None:
 
 
 # ── Uplift spoken-form fixes ────────────────────────────────────────
+
 
 @pytest.mark.parametrize(
     "text,expected",
@@ -171,7 +176,7 @@ def test_slash_between_words_becomes_aur() -> None:
 
 @pytest.mark.parametrize("text", ["ہم 24/7 دستیاب ہیں۔", "2024/25 کے دوران۔"])
 def test_numeric_slashes_are_left_alone(text: str) -> None:
-    """"24/7" is a ratio the voice already reads correctly — and "اور" would change it."""
+    """ "24/7" is a ratio the voice already reads correctly — and "اور" would change it."""
     assert normalise_for_uplift(text, "ur") == text
 
 
@@ -185,6 +190,7 @@ def test_bare_url_is_spelled_for_the_voice() -> None:
 # The voice runs a written domain into a different word and drops the dots entirely:
 # "marienergies.com.pk" -> "marionettes.com.pk" in English, "میری انرجیز کام پی کے"
 # (no "ڈاٹ" at all) in Urdu.
+
 
 @pytest.mark.parametrize(
     "text,expected",
@@ -234,13 +240,13 @@ def test_domains_are_fixed_in_english_mode_too() -> None:
 @pytest.mark.parametrize(
     "text",
     [
-        "منافع 65.14 ارب روپے۔",      # decimals — Uplift is correct already
-        "یہ 2024 میں ہوا۔",            # 20xx years — the cardinal reading is the year
+        "منافع 65.14 ارب روپے۔",  # decimals — Uplift is correct already
+        "یہ 2024 میں ہوا۔",  # 20xx years — the cardinal reading is the year
         # 18xx/19xx years are NOT in this list: Uplift reads "1954" as the cardinal
         # "ایک ہزار نو سو چون" where the year is "انیس سو چون", which is why
         # normalization.spoken_years exists. See tests/test_tts_spoken.py.
-        "یہ 99.98% ہے۔",              # percentages
-        "ہم AI استعمال کرتے ہیں۔",     # acronyms
+        "یہ 99.98% ہے۔",  # percentages
+        "ہم AI استعمال کرتے ہیں۔",  # acronyms
     ],
 )
 def test_what_uplift_already_handles_is_not_touched(text: str) -> None:

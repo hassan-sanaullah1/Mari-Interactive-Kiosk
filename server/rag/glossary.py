@@ -19,10 +19,31 @@ _CONNECTIVE_WORDS = {"of", "the", "and", "for", "&", "a", "an", "to", "in"}
 
 # Short all-caps tokens that are ordinary words or markup, not abbreviations.
 _NOT_ABBREVIATIONS = {
-    "NEW", "OLD", "ALL", "ANY", "ARE", "NOT", "YES", "NOW", "WHO",
-    "WHY", "CAN", "MAY", "OUR", "YOUR", "ITS", "OUT", "TOP", "TBD",
+    "NEW",
+    "OLD",
+    "ALL",
+    "ANY",
+    "ARE",
+    "NOT",
+    "YES",
+    "NOW",
+    "WHO",
+    "WHY",
+    "CAN",
+    "MAY",
+    "OUR",
+    "YOUR",
+    "ITS",
+    "OUT",
+    "TOP",
+    "TBD",
     # Seen in this corpus specifically: table headers and emphasis markers.
-    "FY", "YOY", "QOQ", "NOTE", "TOTAL", "NIL",
+    "FY",
+    "YOY",
+    "QOQ",
+    "NOTE",
+    "TOTAL",
+    "NIL",
 }
 
 # A definition never starts with these — they signal a continuation fragment the
@@ -63,7 +84,9 @@ def _is_plausible_definition(abbr: str, full_form: str) -> bool:
         return False
 
     # Only the first initial is compared: real forms drop connectives and keep plural heads.
-    initials = [w[0].upper() for w in words if w[0].isalpha() and w.lower() not in _CONNECTIVE_WORDS]
+    initials = [
+        w[0].upper() for w in words if w[0].isalpha() and w.lower() not in _CONNECTIVE_WORDS
+    ]
     return bool(initials) and initials[0] == abbr[0].upper()
 
 

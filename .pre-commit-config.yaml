@@ -1,0 +1,47 @@
+# Checks that run on every commit (after `make setup`), on `make lint`, and on every pull
+# request (.github/workflows/pr-checks.yml). One definition of "lint" for all three.
+# Run `pre-commit autoupdate` every few months to move the revs to the latest releases.
+
+# Never rewritten by the whitespace fixers: pinned snapshots and baselines (a byte change
+# fails their checks), the prompts and knowledge base (a byte change alters what the kiosk
+# says), vendored and binary assets, and NVIDIA's own Audio2Face configs.
+x-untouchable: &untouchable >-
+  ^(tests/fixtures/|frontend/test/fixtures/|eval/baselines/|eval/data/|server/data/|server/prompts/.*\.(md|toml)$|vendor/|frontend/public/|deploy/a2f/configs/)
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: *untouchable
+      - id: end-of-file-fixer
+        exclude: *untouchable
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        # The avatar rigs are 30-65 MB by design (see .gitignore's allowlist).
+        exclude: ^frontend/public/models/
+      - id: detect-private-key
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.10
+    hooks:
+      - id: ruff-check        # lint, fixing what it safely can
+        args: [--fix]
+      - id: ruff-format       # format
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks          # refuse commits that contain secrets
+
+  - repo: local
+    hooks:
+      # The frontend's own linter. Run from frontend/, where its eslint.config.mjs lives;
+      # needs `npm ci` there first (`make setup` does it).
+      - id: eslint
+        name: eslint
+        entry: bash -c 'cd frontend && npx eslint --max-warnings=0 .'
+        language: system
+        files: ^frontend/.*\.(js|jsx|ts|tsx|mjs)$
+        pass_filenames: false

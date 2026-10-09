@@ -37,7 +37,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Environment, Lightformer } from "@react-three/drei";
 import * as THREE from "three";
 import AvatarModel from "./AvatarModel";
-import { fetchAvatar, isAvatarParsed } from "@/lib/avatarFetch";
+import { fetchAvatar, isAvatarParsed } from "@/lib/avatar-fetch";
 import { type AvatarState } from "./state";
 import { avatarConfig, DEFAULT_AVATAR, type AvatarId } from "./models";
 // Every number that decides how the scene looks lives in ./tuning.ts — this

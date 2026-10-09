@@ -23,7 +23,7 @@ from .expansion_tables import (
     URDU_TO_LATIN,
 )
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 # Any character in the Urdu/Arabic block: a cheap "is expansion relevant" test.
 _URDU_RE = re.compile(r"[؀-ۿ]")
@@ -39,9 +39,9 @@ _UR_WORD_RE = re.compile(r"[\u0620-\u064a\u0670-\u06d3\u06fa-\u06ff]+")
 _MIN_WEIGHT = 0.5
 
 # What the visitor said outweighs what was inferred from it.
-_W_LITERAL = 1.0    # words the visitor typed, and acronyms they spelled out
-_W_SOUND = 0.7      # a name matched by sound; can catch a common word inside a compound
-_W_GLOSS = 0.5      # our own topic expansion: a hint, not evidence
+_W_LITERAL = 1.0  # words the visitor typed, and acronyms they spelled out
+_W_SOUND = 0.7  # a name matched by sound; can catch a common word inside a compound
+_W_GLOSS = 0.5  # our own topic expansion: a hint, not evidence
 
 # Sound matching. Exact on a consonant skeleton, never fuzzy: edit distance matched
 # "آڈیٹر" to "dsra". A two-consonant key is trusted only if one corpus word has it.
@@ -82,7 +82,7 @@ def _sound_key(word: str) -> str:
     word = word.replace("v", "w").replace("z", "s")
     word = re.sub(r"(.)\1+", r"\1", word)
     word = re.sub(r"[aeiouwy]", "", word)
-    word = re.sub(r"h$", "", word)          # silent final ہ: "آیلہ" is "ayla"
+    word = re.sub(r"h$", "", word)  # silent final ہ: "آیلہ" is "ayla"
     return re.sub(r"(.)\1+", r"\1", word)
 
 
@@ -155,7 +155,7 @@ def expand_for_lexical(query: str) -> tuple[str, list[str]]:
     try:
         weighted = _expand_weighted(query)
     except Exception:  # noqa: BLE001
-        log.exception("Urdu query expansion failed; using the raw query for BM25")
+        logger.exception("Urdu query expansion failed; using the raw query for BM25")
         return query, []
 
     terms = sorted(
@@ -173,7 +173,79 @@ def expand_for_lexical(query: str) -> tuple[str, list[str]]:
 
 # Words that cannot carry a topic on their own.
 _FUNCTION_WORDS = frozenset(
-    ["a", "an", "the", "is", "are", "was", "were", "be", "been", "being", "do", "does", "did", "what", "which", "who", "whom", "whose", "when", "where", "why", "how", "tell", "me", "us", "you", "your", "our", "their", "about", "of", "for", "from", "to", "in", "on", "at", "by", "with", "and", "or", "but", "if", "then", "than", "that", "this", "these", "those", "it", "its", "there", "here", "can", "could", "would", "should", "will", "shall", "may", "might", "must", "have", "has", "had", "get", "give", "show", "say", "said", "please"]
+    [
+        "a",
+        "an",
+        "the",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "do",
+        "does",
+        "did",
+        "what",
+        "which",
+        "who",
+        "whom",
+        "whose",
+        "when",
+        "where",
+        "why",
+        "how",
+        "tell",
+        "me",
+        "us",
+        "you",
+        "your",
+        "our",
+        "their",
+        "about",
+        "of",
+        "for",
+        "from",
+        "to",
+        "in",
+        "on",
+        "at",
+        "by",
+        "with",
+        "and",
+        "or",
+        "but",
+        "if",
+        "then",
+        "than",
+        "that",
+        "this",
+        "these",
+        "those",
+        "it",
+        "its",
+        "there",
+        "here",
+        "can",
+        "could",
+        "would",
+        "should",
+        "will",
+        "shall",
+        "may",
+        "might",
+        "must",
+        "have",
+        "has",
+        "had",
+        "get",
+        "give",
+        "show",
+        "say",
+        "said",
+        "please",
+    ]
 )
 
 _SUBJECT_RE = re.compile(

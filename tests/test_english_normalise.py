@@ -17,6 +17,7 @@ from server.normalization import normalise_for_english, normalize_for_tts
 
 # ── percent ─────────────────────────────────────────────────────────
 
+
 def test_percent_is_spoken() -> None:
     """33 in the corpus, and the sign is not a word to any voice: "33%" was handed
     over as "thirty three" and then silence."""
@@ -29,6 +30,7 @@ def test_percent_survives_the_number_spell_out() -> None:
 
 
 # ── slashes ─────────────────────────────────────────────────────────
+
 
 @pytest.mark.parametrize(
     "text,expected",
@@ -56,10 +58,11 @@ def test_md_ceo_is_left_to_the_address_pass() -> None:
 
 # ── clock times and colon ratios ────────────────────────────────────
 
+
 @pytest.mark.parametrize(
     "text,expected",
     [
-        ("Open 9:00 AM to 5:00 PM.", "nine AM to five PM"),   # a round hour drops :00
+        ("Open 9:00 AM to 5:00 PM.", "nine AM to five PM"),  # a round hour drops :00
         ("Closes 5:30 PM daily.", "five thirty PM"),
     ],
 )
@@ -75,13 +78,14 @@ def test_colon_ratio_reads_as_to() -> None:
 
 
 def test_a_standards_revision_is_not_a_ratio() -> None:
-    """"ISO 9001:2015" has no decimal after the colon, so neither the time rule nor
+    """ "ISO 9001:2015" has no decimal after the colon, so neither the time rule nor
     the ratio rule may claim it; it keeps the reading it already had."""
     assert "ISO" in normalize_for_tts("We hold ISO 9001:2015.", "en")
     assert " to " not in normalize_for_tts("We hold ISO 9001:2015.", "en")
 
 
 # ── legal suffixes and Latin abbreviations ──────────────────────────
+
 
 @pytest.mark.parametrize(
     "text,expected",
@@ -102,8 +106,9 @@ def test_abbreviations_are_expanded(text: str, expected: str) -> None:
 
 # ── the brand ───────────────────────────────────────────────────────
 
+
 def test_camel_cased_brand_gets_the_retroflex_flap() -> None:
-    """"MariEnergies" (57×) beat the boundary-anchored ڑ rule that "Mari Energies"
+    """ "MariEnergies" (57×) beat the boundary-anchored ڑ rule that "Mari Energies"
     (6×) matched, so one company was said two ways."""
     assert "ماڑی Energies" in normalize_for_tts("MariEnergies grew fast.", "en")
     assert "ماڑی" in normalize_for_tts("Mari Petroleum Ltd today.", "en")
@@ -111,17 +116,18 @@ def test_camel_cased_brand_gets_the_retroflex_flap() -> None:
 
 # ── what must NOT change ────────────────────────────────────────────
 
+
 @pytest.mark.parametrize(
     "text,must_keep",
     [
-        ("ہم 24/7 دستیاب ہیں۔", "24/7"),      # Uplift reads it correctly in Urdu
-        ("منافع 33% رہا۔", "33%"),             # so are percentages
-        ("2024/25 کے دوران۔", "2024/25"),      # a financial year, not a pair of words
+        ("ہم 24/7 دستیاب ہیں۔", "24/7"),  # Uplift reads it correctly in Urdu
+        ("منافع 33% رہا۔", "33%"),  # so are percentages
+        ("2024/25 کے دوران۔", "2024/25"),  # a financial year, not a pair of words
     ],
 )
 def test_urdu_is_untouched(text: str, must_keep: str) -> None:
     """The module is a no-op on Urdu. Re-normalising what the voice already says
-    correctly is the regression docs/pronunciation_notes.md warns about."""
+    correctly is the regression docs/pronunciation-notes.md warns about."""
     assert must_keep in normalize_for_tts(text, "ur")
 
 
@@ -137,6 +143,7 @@ def test_english_numeric_slashes_are_not_pairs() -> None:
 
 # ── opening hours ───────────────────────────────────────────────────
 
+
 def test_a_time_range_is_a_span_not_two_times() -> None:
     """§16.2 writes office hours "9:00 AM-5:00 PM". The hyphen has the same shape as a
     well identifier ("Name-01"), and the formats pass was eating it — leaving
@@ -151,7 +158,7 @@ def test_a_well_identifier_still_keeps_its_number() -> None:
 
 
 def test_the_timezone_does_not_strand_urdu_inside_english() -> None:
-    """"PKT" expanded to "Pakistan Standard Time" put the word "Pakistan" into an
+    """ "PKT" expanded to "Pakistan Standard Time" put the word "Pakistan" into an
     English phrase, which the places pass — running later — then respelled, giving
     "پاکستان Standard Time". An expansion must not contain a name a later pass owns."""
     said = normalize_for_tts("Office hours 9:00 AM to 5:00 PM (PKT).", "en")

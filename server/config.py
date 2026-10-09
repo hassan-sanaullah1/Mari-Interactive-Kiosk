@@ -42,6 +42,11 @@ LANGS = ("en", "ur")
 HOST = env("MARI_HOST", "127.0.0.1")
 PORT = int(env("MARI_PORT", "8010"))
 
+# Reported by /health/ready so anyone can confirm which deployment and which commit
+# a running server is: local, dev, staging or prod, and the deployed git commit.
+APP_ENV = env("APP_ENV", "local")
+APP_COMMIT = env("APP_COMMIT", "local")
+
 KNOWLEDGE_FILE = Path(
     env("APP_KNOWLEDGE_FILE", str(ROOT / "server" / "data" / "mari_energies_knowledge_base.md"))
 )
@@ -83,7 +88,7 @@ UPLIFT_VOICE_EN = env("APP_UPLIFT_VOICE_ID_EN", UPLIFT_VOICE)
 UPLIFT_VOICE_MALE = env("APP_UPLIFT_VOICE_ID_MALE", UPLIFT_VOICE)
 UPLIFT_FORMAT = env("APP_UPLIFT_OUTPUT_FORMAT", "MP3_22050_32")
 # Below 1.0 so short unstressed words are not clipped; measured, and not monotonic
-# (docs/pronunciation_notes.md).
+# (docs/pronunciation-notes.md).
 try:
     UPLIFT_SPEED = float(env("APP_UPLIFT_SPEED", "0.9"))
 except ValueError:  # a typo in the env must not take the voice down
@@ -111,8 +116,8 @@ MATCHA_FALLBACK = env("APP_MATCHA_FALLBACK", "1").lower() not in ("0", "false", 
 # ── English STT/TTS. Urdu uses Soniox, and Uplift or Matcha-TTS (UR_TTS). English TTS
 #    defaults to Uplift because no Kokoro instance is deployed; set
 #    APP_EN_TTS=local|remote when one is. ──
-EN_STT = env("APP_EN_STT", "local")     # "local" (faster-whisper) | "remote"
-EN_TTS = env("APP_EN_TTS", "uplift")    # "uplift" | "local" (kokoro) | "remote"
+EN_STT = env("APP_EN_STT", "local")  # "local" (faster-whisper) | "remote"
+EN_TTS = env("APP_EN_TTS", "uplift")  # "uplift" | "local" (kokoro) | "remote"
 
 # local faster-whisper
 WHISPER_LOCAL_MODEL = env("APP_ASR_MODEL_SIZE", "base.en")
@@ -178,10 +183,10 @@ def tts_ready(lang: str, avatar: str | None = None) -> bool:
 
 
 async def status() -> dict:
-    """Compact config snapshot for /healthz (no secrets)."""
+    """Compact config snapshot for /healthz: no secrets and no internal hostnames."""
     en_stt = f"whisper-local:{WHISPER_LOCAL_MODEL}" if EN_STT == "local" else "whisper-remote"
     return {
-        "llm": {"ready": llm_ready(), "provider": LLM_PROVIDER, "model": LLM_MODEL, "base": LLM_BASE or None},
+        "llm": {"ready": llm_ready(), "provider": LLM_PROVIDER, "model": LLM_MODEL},
         "stt": {
             "ur": {"provider": "soniox", "ready": stt_ready("ur"), "model": SONIOX_MODEL},
             "en": {"provider": en_stt, "ready": stt_ready("en")},
@@ -233,8 +238,7 @@ async def _ur_tts_status() -> dict:
         reachable = False
     return {
         **per_persona,
-        "matcha": {"url": MATCHA_URL, "reachable": reachable,
-                   "fallback": "uplift" if MATCHA_FALLBACK else None},
+        "matcha": {"reachable": reachable, "fallback": "uplift" if MATCHA_FALLBACK else None},
     }
 
 

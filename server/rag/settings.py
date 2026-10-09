@@ -1,7 +1,7 @@
 """Tunable configuration for the retrieval layer.
 
 Every value was measured with eval/run_eval.py or eval/calibrate.py; the numbers are in
-docs/retrieval_tuning_notes.md. Environment prefix is ``MARI_RAG_``, for example
+docs/retrieval-tuning-notes.md. Environment prefix is ``MARI_RAG_``, for example
 ``MARI_RAG_TOP_K=4`` or ``MARI_RAG_QDRANT_HOST=qdrant``.
 """
 

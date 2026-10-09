@@ -1,16 +1,18 @@
-# MARI Interactive Kiosk
+# intelligent-kiosk
 
 A touchscreen kiosk with a 3D presenter. A visitor speaks or types, and it answers
-questions about Mari Energies from the company's own knowledge base — in English or
-Urdu, in one of two presenters' voices, with the avatar's mouth matching the speech.
+questions about Mari Energies from the company's own knowledge base, in English or Urdu,
+in one of two presenters' voices, with the avatar's mouth matching the speech.
 
 ```
 microphone → speech to text → retrieval → LLM → text to speech → audio + lipsync
 ```
 
+## Tech stack
+
 | | |
 |---|---|
-| **Backend** | FastAPI, one process (`server/`) |
+| **Backend** | Python (3.12 locally and in CI, 3.11 in the image), FastAPI, one process (`server/`) |
 | **Frontend** | Next.js 15 + three.js (`frontend/`) |
 | **Speech to text** | Soniox for Urdu, faster-whisper for English |
 | **LLM** | Qwen 3.5 on vLLM, or DeepSeek |
@@ -19,79 +21,72 @@ microphone → speech to text → retrieval → LLM → text to speech → audio
 | **Lipsync** | NVIDIA Audio2Face-3D, on a separate GPU host, optional |
 | **Deployed** | `docker-compose.yml`, by Coolify |
 
-## Where to look
+## Run locally
 
-| | |
-|---|---|
-| **How it is put together, and why** | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| **Conventions a change has to follow** | [CLAUDE.md](CLAUDE.md) |
-| **A walkthrough of the whole codebase** | [MARI_INTERACTIVE_KIOSK_GUIDE.md](MARI_INTERACTIVE_KIOSK_GUIDE.md) |
-| **Why a structural decision was made** | [docs/decisions/](docs/decisions/) |
-| **Retrieval design and measurements** | [README-RAG.md](README-RAG.md) |
-| **Quality baselines, and how to re-run them** | [eval/baselines/README.md](eval/baselines/README.md) |
-
-## Running it
-
-### With Docker Compose — what Coolify deploys
+Prerequisites: Docker with Compose, Make, Node 24, pipx (for pre-commit), and for work outside Docker, Python 3.12.
 
 ```bash
-cp .env.example .env     # fill in at least the LLM keys and MARI_RAG_QDRANT_API_KEY
-docker compose up -d --build
+make setup     # once per clone: commit hooks, .env from .env.example (fill in at least
+               # the LLM keys and MARI_RAG_QDRANT_API_KEY), frontend packages
+make dev       # builds and starts everything
+make down      # stops it (your .env is kept)
 ```
 
 - Frontend: http://localhost:3000
-- Backend: http://localhost:8010, status at `/healthz`
+- Backend: http://localhost:8010. **Check `/healthz` first when something is not
+  working.** It reports which providers are configured and reachable, and whether
+  retrieval has finished warming up.
+- API docs: http://localhost:8010/docs
 
-**Check `/healthz` first when something is not working.** It reports which providers
-are configured and reachable, and whether retrieval has finished warming up.
+Nothing is mounted into the containers, so after a change run `make dev` again; only what
+changed rebuilds. `make lint` runs the checks every commit and every pull request must
+pass (`.pre-commit-config.yaml`, enforced by `.github/workflows/pr-checks.yml`); `make check`
+runs the tests, snapshots, types and import layers.
 
-Nothing is mounted into the containers, so after a change rebuild the service you
-touched:
+Health: `/health/live` (the process is up) and `/health/ready` (environment, commit, and
+whether the LLM and Qdrant are usable; 503 if not). The frontend serves `/version.json`
+with its commit. Local-only Compose settings live in `docker-compose.override.yml`; see
+[docs/deployment.md](docs/deployment.md).
 
-```bash
-docker compose up -d --build backend     # or frontend
-```
+A cold start takes minutes: the backend downloads embedding models on first boot and
+answers from its core brief until retrieval is ready
+([docs/architecture.md §7](docs/architecture.md#7-the-kiosk-always-speaks)).
 
-**A cold start takes minutes.** The backend downloads embedding models on first boot
-and answers from its core brief until retrieval is ready. That is deliberate — see
-[ARCHITECTURE.md §7](ARCHITECTURE.md#7-the-kiosk-always-speaks).
-
-### Locally, without Docker
+**Without Docker:**
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
-cp .env.example .env
 python -m uvicorn server.app:app --host 127.0.0.1 --port 8010
 
 cd frontend && npm install && npm run dev      # http://localhost:3000
 ```
 
-Retrieval needs a Qdrant instance; the simplest route is `docker compose up -d qdrant`
-and pointing `MARI_RAG_QDRANT_HOST` at it.
+Retrieval still needs Qdrant: run `docker compose up -d qdrant` and point
+`MARI_RAG_QDRANT_HOST` at it. `scripts/dev.sh {start|stop|restart|status}` starts the
+backend, the frontend and the Audio2Face container together, with logs under `.run/`.
 
-`scripts/dev.sh {start|stop|restart|status}` starts the backend, the frontend and the
-Audio2Face container together, with logs under `.run/`.
-
-### Lipsync — optional, needs a GPU
+**Lipsync (optional, needs a GPU):** once per machine, fetch the Audio2Face model:
 
 ```bash
 cd deploy/a2f
 cp .env.example .env          # NGC_API_KEY from build.nvidia.com
 docker login nvcr.io -u '$oauthtoken' -p "$NGC_API_KEY"
 docker compose --profile init up nim-init    # first boot only, ~10 GB model pull
-docker compose up -d
 ```
 
-Then set `APP_A2F_URL=127.0.0.1:52000` in the root `.env`. Leave it unset and the kiosk
-runs normally with a still mouth. The port is loopback-only on purpose: the NIM has no
-authentication of its own. See `deploy/a2f/docker-compose.yml`.
+Then set `APP_A2F_URL=nim:52000` in the root `.env`. From then on `make dev` starts the
+Audio2Face stack too and joins the backend to its network (`docker-compose.a2f.yml`), and
+`make down` stops it. A plain `docker compose up` does **not** join that network, so
+lipsync stays off that way. Leave `APP_A2F_URL` unset and the kiosk runs normally with a
+still mouth. For a backend running on the host instead of in Docker, use
+`APP_A2F_URL=127.0.0.1:52000`; the NIM has no authentication of its own, so its port is
+loopback-only.
 
 ## Configuration
 
-Every setting is read from the environment — `.env` locally, Coolify's own environment
-variables in production. Copy `.env.example`, which lists them all; a test enforces
-that it stays in step with the code.
+Every setting is an environment variable: `.env` locally, Coolify's environment variables
+when deployed. `.env.example` lists every name, and a test keeps it in step with the code.
 
 | Concern | Variables |
 |---|---|
@@ -100,55 +95,67 @@ that it stays in step with the code.
 | Text to speech | `APP_UPLIFT_API_KEY`; `APP_UR_TTS=matcha` for the local Urdu voice |
 | English speech to text | local by default, no key needed |
 | Retrieval | `MARI_RAG_*`, including `MARI_RAG_QDRANT_API_KEY` (required) |
-| Lipsync | `APP_A2F_URL` — unset means no lipsync |
+| Lipsync | `APP_A2F_URL`; unset means no lipsync |
+| Frontend → backend | `MARI_API_ORIGIN` (build time) and `NEXT_PUBLIC_MARI_WS` (build time) |
 
-## Deploying to Coolify
+The frontend reaches the backend two ways. `/api/chat`, `/api/voice` and `/api/healthz`
+go through a Next.js rewrite to `MARI_API_ORIGIN`. The `/ws` WebSocket connects to the
+backend directly, because the Next proxy does not forward WebSocket upgrades; set
+`NEXT_PUBLIC_MARI_WS=wss://<backend-domain>/ws` whenever frontend and backend are on
+different domains. Both are read when the image is **built**, not when it starts.
 
-1. Point a Coolify **Docker Compose** resource at this repository.
-2. Give `backend` and `frontend` their own FQDNs. The `ports:` block exists only so
-   plain `docker compose up` works off-platform.
-3. Set `NEXT_PUBLIC_MARI_WS=wss://<backend-domain>/ws` as a **build-time** variable on
-   the frontend. Next.js resolves it when the image is built, not when the container
-   starts, so a runtime variable silently has no effect.
-4. Set the backend's provider keys in Coolify's environment UI. `.env` is never
-   committed; compose's `env_file` is a local convenience (`required: false`).
-5. Deploy `deploy/a2f/` separately on a GPU host and point `APP_A2F_URL` at it through
-   a TLS proxy that checks `APP_A2F_API_KEY`.
+## Environments
 
-## Working on it
+| Environment | Branch | URL |
+|---|---|---|
+| Current deployment | `develop` | set in Coolify |
+| Staging | not created yet | |
+| Production | not created yet | |
 
-```bash
-pytest -q                                      # 928 tests, a few seconds
-ruff check . && lint-imports && mypy           # style, layering, types
-cd frontend && npm run lint && npm run typecheck && npm run profiles:check
-```
+Coolify deploys when its branch changes:
 
-CI runs all of that plus both image builds on every pull request.
+1. A Coolify **Docker Compose** resource points at this repository, file `/docker-compose.yml`.
+2. `backend` and `frontend` each get their own domain. `docker-compose.yml` publishes no
+   ports; Coolify routes through its proxy.
+3. `NEXT_PUBLIC_MARI_WS` is set as a **build-time** variable on the frontend.
+4. Provider keys are set in Coolify's environment variables. `.env` is never committed.
+5. `deploy/a2f/` is deployed separately on a GPU host, and `APP_A2F_URL` points at it
+   through a TLS proxy that checks `APP_A2F_API_KEY`.
+6. `APP_ENV` names the environment and `APP_COMMIT=$SOURCE_COMMIT` gives the deployed
+   commit; both show up in `/health/ready`.
 
-### Things that must not change by accident
+## Feature flags
 
-These files record how the kiosk behaves today. A diff in one means behaviour moved, so
-fix the code rather than refreshing the file — and if the change was deliberate, update
-it in the same commit with the reason in the message.
+| Flag | Purpose | Owner |
+|---|---|---|
+| none yet | | |
 
-| File | Pins |
+New or unfinished features go behind a flag named `enable_<feature>`, default off.
+
+## Project structure
+
+    server/          FastAPI backend: agent (one turn), rag, providers, avatar, prompts, data
+    frontend/        Next.js kiosk UI and the three.js avatar
+    eval/            retrieval and answer graders, and the recorded baselines
+    tests/           pytest suite, including the golden snapshots
+    scripts/         dev launcher, ingestion, lipsync audit, model optimisation
+    deploy/a2f/      Audio2Face NIM stack (separate GPU host)
+    docs/            architecture, decision records, measurements
+
+| Read this | For |
 |---|---|
-| `tests/fixtures/golden.json` | what the kiosk says: speech text, prompts, LLM payloads |
-| `tests/fixtures/ws_golden.json` | the WebSocket contract and every lipsync frame |
-| `frontend/test/fixtures/avatar-profiles.json` | every per-presenter look value |
-| `eval/baselines/` | retrieval and answer quality |
-| `tests/test_turn_timing.py` | that sentence synthesis still overlaps |
+| [AGENTS.md](AGENTS.md) | Conventions every change follows, including branches and PR titles |
+| [docs/architecture.md](docs/architecture.md) | How it is put together, and why |
+| [docs/decisions/](docs/decisions/) | Why each structural decision was made |
+| [docs/retrieval.md](docs/retrieval.md) | Retrieval design and measurements |
+| [docs/eval-baselines.md](docs/eval-baselines.md) | Quality baselines, and how to re-run them |
+| [docs/prompts.md](docs/prompts.md), [docs/knowledge-base.md](docs/knowledge-base.md) | Prompt files, and the corpus format |
+| [docs/deployment.md](docs/deployment.md) | Why the compose files and Dockerfiles are set up the way they are |
 
-### Quality checks that need live services
+Before opening a pull request, run `make lint` and `make check`. Every pull request into
+`develop`, `staging` or `main` must pass `pr-checks`: branch name and PR title, the same
+hooks as `make lint`, and both image builds.
 
-```bash
-set -a && . ./.env && set +a
-export MARI_RAG_QDRANT_HOST=<the qdrant container's address>   # its port is not published
+## Contacts
 
-python eval/run_eval.py --k 5 --baseline eval/baselines/retrieval.json
-python eval/run_answers.py --repeat 2 --baseline eval/baselines/answers.jsonl
-```
-
-Both exit non-zero on a regression. Run them from the host, not inside the backend
-container, which holds an image copy of the code. See
-[eval/baselines/README.md](eval/baselines/README.md).
+Standards: project setup guide

@@ -18,7 +18,7 @@ import {
   setRigCalibration,
   stop,
   waitForFrames,
-} from "@/lib/blendshapePlayer";
+} from "@/lib/blendshape-player";
 
 const NAMES = ["JawOpen", "MouthClose", "MouthFunnel"];
 

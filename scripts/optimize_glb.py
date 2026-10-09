@@ -86,8 +86,12 @@ KEEP_WINDOWS = [
 
 # Component type -> (struct char, byte size)
 CTYPE = {
-    5120: ("b", 1), 5121: ("B", 1), 5122: ("h", 2),
-    5123: ("H", 2), 5125: ("I", 4), 5126: ("f", 4),
+    5120: ("b", 1),
+    5121: ("B", 1),
+    5122: ("h", 2),
+    5123: ("H", 2),
+    5125: ("I", 4),
+    5126: ("f", 4),
 }
 NCOMP = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}
 
@@ -109,7 +113,7 @@ def read_glb(path):
 
 def write_glb(path, gltf, binary):
     js = json.dumps(gltf, separators=(",", ":")).encode()
-    js += b" " * (-len(js) % 4)              # chunks must be 4-byte aligned
+    js += b" " * (-len(js) % 4)  # chunks must be 4-byte aligned
     binary += b"\x00" * (-len(binary) % 4)
     total = 12 + 8 + len(js) + (8 + len(binary) if binary else 0)
     with open(path, "wb") as f:
@@ -183,8 +187,7 @@ def clip_fps(gltf, binary) -> float:
     return float(round(1.0 / steps[len(steps) // 2]))
 
 
-def optimize(src, dst, drop_morph_normals=True, quantize=True,
-             keep_windows=None, trim_anim=True):
+def optimize(src, dst, drop_morph_normals=True, quantize=True, keep_windows=None, trim_anim=True):
     gltf, binary = read_glb(src)
     before = len(binary)
     fps = clip_fps(gltf, binary)
@@ -212,17 +215,18 @@ def optimize(src, dst, drop_morph_normals=True, quantize=True,
         return any(a - 1 <= frame_idx <= b + 1 for a, b in windows)
 
     anim_kept = anim_total = 0
-    new_acc = []          # accessors rebuilt as (data, accessor-json)
-    acc_map = {}          # old accessor idx -> new idx
-    quantised_rotations = 0    # animation channels halved to normalized shorts
+    new_acc = []  # accessors rebuilt as (data, accessor-json)
+    acc_map = {}  # old accessor idx -> new idx
+    quantised_rotations = 0  # animation channels halved to normalized shorts
 
     # A sampler carries no path of its own; only the channel that points at it
     # knows whether it drives rotation or translation. Only cloth joints are
     # quantised — the 110 body joints are 0.58 MB in total, so there is nothing
     # to win there and the skeleton keeps full float precision.
     channel_path = {}
-    cloth_nodes = {i for i, nd in enumerate(gltf.get("nodes", []))
-                   if "a_cloth" in str(nd.get("name", ""))}
+    cloth_nodes = {
+        i for i, nd in enumerate(gltf.get("nodes", [])) if "a_cloth" in str(nd.get("name", ""))
+    }
     for anim_ in gltf.get("animations", []):
         for ch_ in anim_["channels"]:
             if ch_["target"]["node"] in cloth_nodes:
@@ -247,8 +251,11 @@ def optimize(src, dst, drop_morph_normals=True, quantize=True,
                 # frame — robust to the export's float error and to the clip not
                 # starting at t=0.
                 t0 = times[0][0]
-                sel = [i for i, (t,) in enumerate(times)
-                       if wanted(round((t - t0) * fps) + round(t0 * fps))]
+                sel = [
+                    i
+                    for i, (t,) in enumerate(times)
+                    if wanted(round((t - t0) * fps) + round(t0 * fps))
+                ]
                 if len(sel) < 2:
                     sel = [0, len(times) - 1]
             anim_kept += len(sel)
@@ -257,10 +264,13 @@ def optimize(src, dst, drop_morph_normals=True, quantize=True,
             if key not in acc_map:
                 tch, _ = CTYPE[tacc["componentType"]]
                 data = b"".join(struct.pack("<" + tch, times[i][0]) for i in sel)
-                ta = OrderedDict(componentType=tacc["componentType"], count=len(sel),
-                                 type="SCALAR",
-                                 min=[min(times[i][0] for i in sel)],
-                                 max=[max(times[i][0] for i in sel)])
+                ta = OrderedDict(
+                    componentType=tacc["componentType"],
+                    count=len(sel),
+                    type="SCALAR",
+                    min=[min(times[i][0] for i in sel)],
+                    max=[max(times[i][0] for i in sel)],
+                )
                 acc_map[key] = emit(data, ta)
             samp["input"] = acc_map[key]
 
@@ -272,9 +282,12 @@ def optimize(src, dst, drop_morph_normals=True, quantize=True,
             rows = [values[i * per + k] for i in sel for k in range(per)]
 
             path = channel_path.get(id(samp))
-            if (quantize and vacc["componentType"] == 5126
-                    and path == "rotation"
-                    and samp.get("interpolation") != "CUBICSPLINE"):
+            if (
+                quantize
+                and vacc["componentType"] == 5126
+                and path == "rotation"
+                and samp.get("interpolation") != "CUBICSPLINE"
+            ):
                 # Rotations are unit quaternions, so they already live in [-1,1]
                 # and glTF's "normalized short" encoding applies directly. It is
                 # one of the encodings glTF defines for animation output and
@@ -287,17 +300,16 @@ def optimize(src, dst, drop_morph_normals=True, quantize=True,
                 # encoding cannot represent them. glTF has no per-channel scale to
                 # borrow, and folding one into the node's own scale would rescale
                 # its children and its mesh too.
-                data = b"".join(
-                    struct.pack("<4h", *(quant_short(c) for c in row)) for row in rows)
-                va = OrderedDict(componentType=5122, count=len(rows),
-                                 type="VEC4", normalized=True)
+                data = b"".join(struct.pack("<4h", *(quant_short(c) for c in row)) for row in rows)
+                va = OrderedDict(componentType=5122, count=len(rows), type="VEC4", normalized=True)
                 samp["output"] = emit(data, va)
                 quantised_rotations += 1
                 continue
 
             out = [struct.pack(fmt, *row) for row in rows]
-            va = OrderedDict(componentType=vacc["componentType"], count=len(rows),
-                             type=vacc["type"])
+            va = OrderedDict(
+                componentType=vacc["componentType"], count=len(rows), type=vacc["type"]
+            )
             samp["output"] = emit(b"".join(out), va)
 
     # ---- 2. drop morph target NORMAL (and TANGENT) deltas ----
@@ -345,16 +357,17 @@ def optimize(src, dst, drop_morph_normals=True, quantize=True,
             base = bv.get("byteOffset", 0) + acc.get("byteOffset", 0)
             stride = bv.get("byteStride") or elem
             if stride == elem:
-                data = binary[base:base + elem * acc["count"]]
+                data = binary[base : base + elem * acc["count"]]
             else:  # de-interleave
-                data = b"".join(binary[base + i * stride: base + i * stride + elem]
-                                for i in range(acc["count"]))
+                data = b"".join(
+                    binary[base + i * stride : base + i * stride + elem]
+                    for i in range(acc["count"])
+                )
             new_acc_json = OrderedDict(
-                (k, v) for k, v in acc.items()
-                if k not in ("bufferView", "byteOffset")
+                (k, v) for k, v in acc.items() if k not in ("bufferView", "byteOffset")
             )
             offset = builder.add(data)
-            new_acc_json["bufferView"] = None   # patched below
+            new_acc_json["bufferView"] = None  # patched below
             new_acc_json["_off"] = offset
             new_acc_json["_len"] = len(data)
             new_acc_json["_target"] = bv.get("target")
@@ -379,7 +392,7 @@ def optimize(src, dst, drop_morph_normals=True, quantize=True,
                 else:
                     _c, csz = CTYPE[new_acc_json["componentType"]]
                     nbytes = sparse["count"] * NCOMP[new_acc_json["type"]] * csz
-                sub["_off"] = builder.add(binary[start:start + nbytes])
+                sub["_off"] = builder.add(binary[start : start + nbytes])
                 sub["_len"] = nbytes
                 sub.pop("byteOffset", None)
                 sparse[part] = sub
@@ -394,7 +407,7 @@ def optimize(src, dst, drop_morph_normals=True, quantize=True,
         if "bufferView" in img:
             bv = gltf["bufferViews"][img["bufferView"]]
             start = bv.get("byteOffset", 0)
-            data = binary[start:start + bv["byteLength"]]
+            data = binary[start : start + bv["byteLength"]]
             image_views[img["bufferView"]] = (builder.add(data), len(data))
 
     # animation accessors built in step 1
@@ -442,12 +455,14 @@ def optimize(src, dst, drop_morph_normals=True, quantize=True,
     for mesh in gltf.get("meshes", []):
         for prim in mesh.get("primitives", []):
             prim["attributes"] = OrderedDict(
-                (k, old_to_new[v]) for k, v in prim.get("attributes", {}).items())
+                (k, old_to_new[v]) for k, v in prim.get("attributes", {}).items()
+            )
             if "indices" in prim:
                 prim["indices"] = old_to_new[prim["indices"]]
             if "targets" in prim:
-                prim["targets"] = [OrderedDict((k, old_to_new[v]) for k, v in t.items())
-                                   for t in prim["targets"]]
+                prim["targets"] = [
+                    OrderedDict((k, old_to_new[v]) for k, v in t.items()) for t in prim["targets"]
+                ]
     for skin in gltf.get("skins", []):
         if "inverseBindMatrices" in skin:
             skin["inverseBindMatrices"] = old_to_new[skin["inverseBindMatrices"]]
@@ -463,8 +478,10 @@ def optimize(src, dst, drop_morph_normals=True, quantize=True,
 
     write_glb(dst, gltf, new_bin)
 
-    print(f"  animation keyframes : {anim_total} -> {anim_kept} "
-          f"({100 * anim_kept / max(anim_total, 1):.0f}%)")
+    print(
+        f"  animation keyframes : {anim_total} -> {anim_kept} "
+        f"({100 * anim_kept / max(anim_total, 1):.0f}%)"
+    )
     print(f"  quantised rotations : {quantised_rotations} channels")
     print(f"  morph deltas dropped: {dropped}")
     print(f"  binary              : {before / 1e6:.1f} MB -> {len(new_bin) / 1e6:.1f} MB")
@@ -475,27 +492,37 @@ def optimize(src, dst, drop_morph_normals=True, quantize=True,
     gz_path = dst + ".gz"
     with open(dst, "rb") as fin, gzip.GzipFile(gz_path, "wb", compresslevel=9, mtime=0) as fout:
         shutil.copyfileobj(fin, fout)
-    print(f"  wrote {os.path.basename(gz_path)}   : {os.path.getsize(gz_path) / 1e6:.1f} MB "
-          f"(what the browser actually downloads)")
+    print(
+        f"  wrote {os.path.basename(gz_path)}   : {os.path.getsize(gz_path) / 1e6:.1f} MB "
+        f"(what the browser actually downloads)"
+    )
     return 0
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("src")
     ap.add_argument("dst")
-    ap.add_argument("--keep-morph-normals", action="store_true",
-                    help="keep morph target NORMAL deltas (larger file, "
-                         "marginally different face shading)")
-    ap.add_argument("--no-quantize", action="store_true",
-                    help="keep cloth rotation/translation as float32")
-    ap.add_argument("--keep-windows", metavar="A-B,C-D,...",
-                    help="inclusive frame windows to keep, in the clip's own "
-                         "frame rate, overriding the female rig's. REQUIRED "
-                         "for any rig other than girl15 — see KEEP_WINDOWS.")
-    ap.add_argument("--no-trim-anim", action="store_true",
-                    help="keep every animation keyframe (skips pass 1)")
+    ap.add_argument(
+        "--keep-morph-normals",
+        action="store_true",
+        help="keep morph target NORMAL deltas (larger file, marginally different face shading)",
+    )
+    ap.add_argument(
+        "--no-quantize", action="store_true", help="keep cloth rotation/translation as float32"
+    )
+    ap.add_argument(
+        "--keep-windows",
+        metavar="A-B,C-D,...",
+        help="inclusive frame windows to keep, in the clip's own "
+        "frame rate, overriding the female rig's. REQUIRED "
+        "for any rig other than girl15 — see KEEP_WINDOWS.",
+    )
+    ap.add_argument(
+        "--no-trim-anim", action="store_true", help="keep every animation keyframe (skips pass 1)"
+    )
     a = ap.parse_args()
     windows = None
     if a.keep_windows:
@@ -503,9 +530,14 @@ def main():
         for part in a.keep_windows.split(","):
             lo, hi = part.split("-")
             windows.append((int(lo), int(hi)))
-    return optimize(a.src, a.dst, drop_morph_normals=not a.keep_morph_normals,
-                    quantize=not a.no_quantize, keep_windows=windows,
-                    trim_anim=not a.no_trim_anim)
+    return optimize(
+        a.src,
+        a.dst,
+        drop_morph_normals=not a.keep_morph_normals,
+        quantize=not a.no_quantize,
+        keep_windows=windows,
+        trim_anim=not a.no_trim_anim,
+    )
 
 
 if __name__ == "__main__":

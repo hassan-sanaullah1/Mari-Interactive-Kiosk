@@ -4,7 +4,7 @@
  * import it without pulling three.js into the initial bundle.
  */
 
-import type { Mode } from "@/hooks/useVoiceSession";
+import type { Mode } from "@/hooks/use-voice-session";
 import { AVATARS, DEFAULT_AVATAR } from "./models";
 
 export type AvatarState = "idle" | "listening" | "thinking" | "speaking";
@@ -31,11 +31,11 @@ export function avatarStateFor(mode: Mode): AvatarState {
  * default rig's URL under its original name, for app/netcheck, which times a
  * cold and a warm fetch of one representative model rather than of every rig.
  *
- * This is the .gz, and lib/avatarFetch.ts fetches it with ONE plain GET.
+ * This is the .gz, and lib/avatar-fetch.ts fetches it with ONE plain GET.
  *
  * An older comment here claimed the raw .glb was faster because the file was
  * pulled as six parallel byte ranges, which a gzip stream cannot be split into.
- * That implementation no longer exists — avatarFetch.ts is a single GET and says
+ * That implementation no longer exists — avatar-fetch.ts is a single GET and says
  * in its own header not to add Range headers, because ranged responses (206) are
  * never written to the browser's disk cache, so every reload re-downloaded the
  * whole model. The comment outlived the code and is corrected here.

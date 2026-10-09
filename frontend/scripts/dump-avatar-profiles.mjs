@@ -102,8 +102,8 @@ function constantsInComponents() {
   const sources = {
     "AvatarModel.tsx": "components/avatar/AvatarModel.tsx",
     "AvatarScene.tsx": "components/avatar/AvatarScene.tsx",
-    "blendshapePlayer.ts": "lib/blendshapePlayer.ts",
-    "a2fMorphs.ts": "lib/a2fMorphs.ts",
+    "blendshape-player.ts": "lib/blendshape-player.ts",
+    "a2f-morphs.ts": "lib/a2f-morphs.ts",
   };
   const wanted = [
     // The female-only makeup pass.

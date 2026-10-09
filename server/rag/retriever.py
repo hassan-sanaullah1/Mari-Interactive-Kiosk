@@ -13,7 +13,7 @@ Stages, in order:
   9. context assembly        joined, deduped, length-capped
 
 Every stage is timed, and a failure degrades the result rather than failing the turn.
-Measurements behind these choices: docs/retrieval_tuning_notes.md.
+Measurements behind these choices: docs/retrieval-tuning-notes.md.
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ import contextlib
 import logging
 import re
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -35,15 +36,16 @@ from .settings import RagSettings, get_settings
 from .store import Hit, QdrantStore
 from .transcript import correct_transcript
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class RetrievedChunk:
     text: str
     source: str
     heading_path: str
-    score: float           # rerank probability when reranked, else the RRF score
-    fusion_score: float    # always the RRF score, kept for tuning
+    score: float  # rerank probability when reranked, else the RRF score
+    fusion_score: float  # always the RRF score, kept for tuning
     reranked: bool
     # Appended by section expansion, not ranked. Its score is 0 and must not be
     # compared with a ranked chunk's.
@@ -56,16 +58,16 @@ class RetrievalResult:
     context: str = ""
     sources: list[str] = field(default_factory=list)
     glossary_block: str = ""
-    query: str = ""              # what was actually searched
-    original_query: str = ""     # what the visitor said
+    query: str = ""  # what was actually searched
+    original_query: str = ""  # what the visitor said
     rewritten: bool = False
     corrections: list[tuple[str, str]] = field(default_factory=list)
     timings_ms: dict[str, float] = field(default_factory=dict)
-    degraded: str = ""           # non-empty when a fallback was used; names the reason
+    degraded: str = ""  # non-empty when a fallback was used; names the reason
     cached: bool = False
     embedding_prestarted: bool = False
     expansion_terms: list[str] = field(default_factory=list)
-    section_expanded: int = 0    # chunks appended to complete the winning section
+    section_expanded: int = 0  # chunks appended to complete the winning section
 
     @property
     def total_ms(self) -> float:
@@ -79,7 +81,7 @@ class _Timer:
         self._into = into
 
     @contextlib.contextmanager
-    def __call__(self, stage: str):
+    def __call__(self, stage: str) -> Iterator[None]:
         t0 = time.perf_counter()
         try:
             yield
@@ -118,10 +120,10 @@ class Retriever:
         )
         for r in results:
             if isinstance(r, Exception):
-                log.warning("warmup step failed: %s: %s", type(r).__name__, r)
+                logger.warning("warmup step failed: %s: %s", type(r).__name__, r)
         await self.refresh_glossary()
         self._ready = True
-        log.info("retriever warmup finished in %.1fs", time.perf_counter() - t0)
+        logger.info("retriever warmup finished in %.1fs", time.perf_counter() - t0)
 
     async def _ensure_store(self) -> None:
         await self.store.ensure_collection()
@@ -135,9 +137,9 @@ class Retriever:
         try:
             texts = [p.get("text", "") async for p in self.store.scroll_all()]
             self.glossary = extract_glossary("\n".join(texts))
-            log.info("glossary: %d abbreviations from %d chunks", len(self.glossary), len(texts))
+            logger.info("glossary: %d abbreviations from %d chunks", len(self.glossary), len(texts))
         except Exception:  # noqa: BLE001
-            log.exception("glossary scan failed; abbreviation injection disabled this run")
+            logger.exception("glossary scan failed; abbreviation injection disabled this run")
             self.glossary = {}
 
     async def close(self) -> None:
@@ -176,9 +178,7 @@ class Retriever:
             expand_for_lexical(text) if self.settings.expand_urdu_lexical else (text, [])
         )
         # Dense also drops the company's own name (see strip_corpus_subject).
-        focused = (
-            strip_corpus_subject(text) if self.settings.strip_subject_for_dense else text
-        )
+        focused = strip_corpus_subject(text) if self.settings.strip_subject_for_dense else text
         dense, sparse = await asyncio.gather(
             self.embedding.embed_query_async(focused),
             self.embedding.embed_sparse_query_async(lexical),
@@ -193,7 +193,7 @@ class Retriever:
                 dense, sparse, terms = await task
                 return dense, sparse, terms, True
             except Exception:  # noqa: BLE001 - a failed pre-start just means embed now
-                log.debug("pre-started embedding failed; embedding inline")
+                logger.debug("pre-started embedding failed; embedding inline")
         dense, sparse, terms = await self._embed_both(text)
         return dense, sparse, terms, False
 
@@ -249,7 +249,8 @@ class Retriever:
 
             with timer("search"):
                 hits = await self.store.hybrid_search(
-                    dense, sparse,
+                    dense,
+                    sparse,
                     limit=s.rerank_candidates if s.rerank_enabled else top_k * 2,
                     prefetch_limit=s.prefetch_limit,
                 )
@@ -264,8 +265,9 @@ class Retriever:
             # Never fatal: the persona and core brief still go in, and the visitor hears
             # an honest "I don't have that". There is deliberately no fallback retriever;
             # empty context is the visible signal, and /healthz reports why.
-            log.warning("retrieval failed (%s); serving with no context",
-                        type(exc).__name__, exc_info=True)
+            logger.warning(
+                "retrieval failed (%s); serving with no context", type(exc).__name__, exc_info=True
+            )
             result.degraded = f"{type(exc).__name__}: {exc}"
             chunks = []
 
@@ -277,9 +279,11 @@ class Retriever:
         if use_cache and not result.degraded:
             self._cache_put(query, top_k, result)
         if s.log_stage_timings:
-            log.debug(
+            logger.debug(
                 "retrieve %r -> %d chunks in %.0f ms %s",
-                query, len(chunks), result.total_ms,
+                query,
+                len(chunks),
+                result.total_ms,
                 {k: round(v, 1) for k, v in timings.items()},
             )
         return result
@@ -294,7 +298,9 @@ class Retriever:
         """
         return sorted(hits, key=lambda h: (-h.score, h.source, h.chunk_index))
 
-    async def _rerank_and_gate(self, query: str, hits: list[Hit], top_k: int) -> list[RetrievedChunk]:
+    async def _rerank_and_gate(
+        self, query: str, hits: list[Hit], top_k: int
+    ) -> list[RetrievedChunk]:
         s = self.settings
         if not hits:
             return []
@@ -307,8 +313,7 @@ class Retriever:
             # Order by RRF, but gate on dense cosine: RRF is rank-based, so something is
             # always rank 1 and its score does not separate answerable questions.
             chunks = [
-                RetrievedChunk(h.text, h.source, h.heading_path, h.dense_similarity,
-                               h.score, False)
+                RetrievedChunk(h.text, h.source, h.heading_path, h.dense_similarity, h.score, False)
                 for h in hits[:top_k]
             ]
             return self._gate(chunks, s.dense_score_threshold)
@@ -329,7 +334,7 @@ class Retriever:
         """The section that owns rank 1, and only that one.
 
         Completing more sections raised recall but filled the context with the company
-        overview and made answers worse (see docs/retrieval_tuning_notes.md).
+        overview and made answers worse (see docs/retrieval-tuning-notes.md).
         """
         top = chunks[0].heading_path.split(" > ")[0].strip()
         return [top] if top else []
@@ -379,7 +384,7 @@ class Retriever:
             try:
                 siblings = await self.store.fetch_section(name)
             except Exception:  # noqa: BLE001 - completeness is an improvement, not a promise
-                log.debug("section expansion failed for %r", name, exc_info=True)
+                logger.debug("section expansion failed for %r", name, exc_info=True)
                 continue
             for hit in siblings:
                 if len(added) >= s.section_expansion_max_chunks or budget <= 0:
@@ -392,8 +397,9 @@ class Retriever:
                 seen.add(hit.text[:200])
                 budget -= len(hit.text)
                 added.append(
-                    RetrievedChunk(hit.text, hit.source, hit.heading_path, 0.0, 0.0,
-                                   False, expanded=True)
+                    RetrievedChunk(
+                        hit.text, hit.source, hit.heading_path, 0.0, 0.0, False, expanded=True
+                    )
                 )
         return chunks + added, len(added)
 

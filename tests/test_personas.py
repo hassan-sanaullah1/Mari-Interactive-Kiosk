@@ -34,9 +34,15 @@ def gen() -> GenerationService:
 
 # ── the prompt files exist and name the right person ─────────────────
 
+
 @pytest.mark.parametrize(
-    "name", ["system/male_english.md", "system/male_urdu.md",
-             "greeting/male_english.md", "greeting/male_urdu.md"]
+    "name",
+    [
+        "system/male_english.md",
+        "system/male_urdu.md",
+        "greeting/male_english.md",
+        "greeting/male_urdu.md",
+    ],
 )
 def test_the_male_prompt_files_load(name: str) -> None:
     assert load_prompt(name)
@@ -59,11 +65,12 @@ def test_the_male_greeting_still_demands_the_salam_and_a_name() -> None:
 
 def test_the_urdu_male_prompt_asks_for_masculine_agreement() -> None:
     ur = load_prompt("system/male_urdu.md")
-    assert "کر سکتا ہوں" in ur          # the form it wants
+    assert "کر سکتا ہوں" in ur  # the form it wants
     assert "مذکر صیغہ استعمال کریں" in ur
 
 
 # ── prompt assembly picks the right persona ──────────────────────────
+
 
 @pytest.mark.parametrize(
     "avatar,lang,expected",
@@ -107,6 +114,7 @@ def test_the_default_is_still_the_female_presenter(gen: GenerationService) -> No
 
 # ── gender agreement ─────────────────────────────────────────────────
 
+
 @pytest.mark.parametrize(
     "reply,expected",
     [
@@ -127,13 +135,13 @@ def test_the_female_presenter_gets_feminine_agreement_on_representative() -> Non
 
 
 def test_a_possessive_belonging_to_something_else_is_left_alone() -> None:
-    """"Mari Energies کے kiosk پر" agrees with the kiosk, not with the speaker."""
+    """ "Mari Energies کے kiosk پر" agrees with the kiosk, not with the speaker."""
     text = "میں Mari Energies کے kiosk پر موجود نمائندہ ہوں۔"
     assert masculine_agreement(text, "ur") == text
 
 
 def test_a_feminine_verb_about_the_company_is_not_the_speaker() -> None:
-    """"کام کر رہی ہے" is third person — the company — and must survive."""
+    """ "کام کر رہی ہے" is third person — the company — and must survive."""
     said = masculine_agreement("میں بتا رہی ہوں کہ کمپنی 1954 سے کام کر رہی ہے۔", "ur")
     assert "بتا رہا ہوں" in said and "کام کر رہی ہے" in said
 
@@ -164,6 +172,7 @@ def test_english_replies_are_untouched_by_either_agreement() -> None:
 
 
 # ── how the voice says each name ─────────────────────────────────────
+
 
 @pytest.mark.parametrize(
     "written,spoken", [("Maryam", "مریم"), ("Hamza", "حمزہ"), ("Hamzah", "حمزہ")]

@@ -102,9 +102,12 @@ async def stream(messages: list[dict], max_tokens: int) -> AsyncIterator[str]:
     a single {"error": ...} frame. It is raised, so the turn does not end silently.
     """
     payload = _payload(messages, max_tokens, stream=True)
-    async with httpx.AsyncClient(timeout=STREAM_TIMEOUT) as client, client.stream(
-        "POST", f"{config.LLM_BASE}/chat/completions", headers=_headers(), json=payload
-    ) as r:
+    async with (
+        httpx.AsyncClient(timeout=STREAM_TIMEOUT) as client,
+        client.stream(
+            "POST", f"{config.LLM_BASE}/chat/completions", headers=_headers(), json=payload
+        ) as r,
+    ):
         r.raise_for_status()
         async for line in r.aiter_lines():
             if not line or not line.startswith("data:"):

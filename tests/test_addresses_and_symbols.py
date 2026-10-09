@@ -16,9 +16,10 @@ from server.normalization import normalize_for_tts, spoken_addresses
 
 # ── chemical formulae ───────────────────────────────────────────────
 
+
 @pytest.mark.parametrize("written", ["CO₂", "CO2"])
 def test_co2_is_named_not_spelled(written: str) -> None:
-    """"CO₂" was heard as "seagull dough"; "CO2" became "COtwo". Spacing it to
+    """ "CO₂" was heard as "seagull dough"; "CO2" became "COtwo". Spacing it to
     "C O two" fixed both but is not what anyone says out loud — a formula is a
     compound with a name, so it is named."""
     said = normalize_for_tts(f"We produce food-grade {written}.", "en")
@@ -27,7 +28,7 @@ def test_co2_is_named_not_spelled(written: str) -> None:
 
 
 def test_co2_in_urdu_is_urdu() -> None:
-    """"C O 2" was the worst reading of all: the Latin letters were said in English
+    """ "C O 2" was the worst reading of all: the Latin letters were said in English
     and the digit in Urdu, giving "C-O-do"."""
     said = spoken_addresses("ہم food-grade CO₂ بناتے ہیں۔", "ur")
     assert "کاربن ڈائی آکسائیڈ" in said
@@ -43,6 +44,7 @@ def test_other_formulae_are_named_too(written: str, expected: str) -> None:
 
 
 # ── ampersand initialisms ───────────────────────────────────────────
+
 
 def test_e_and_p_in_english() -> None:
     """Untreated the Urdu voice said "ایم ای این پی"."""
@@ -60,9 +62,10 @@ def test_hr_and_r() -> None:
 
 # ── slashed title pairs ─────────────────────────────────────────────
 
+
 @pytest.mark.parametrize("written", ["MD/CEO", "MD & CEO", "CEO / Managing Director"])
 def test_title_pairs_are_separated_in_english(written: str) -> None:
-    """"MD/CEO" was heard as "MD/C8 August"; even "MD and CEO" collided across the "and"
+    """ "MD/CEO" was heard as "MD/C8 August"; even "MD and CEO" collided across the "and"
     ("ESDM didn't see EO"). Hyphenating the letters reads back as "MD and CEO"."""
     said = normalize_for_tts(f"The {written} is Faheem Haider.", "en")
     assert "C-E-O" in said and "/" not in said
@@ -92,14 +95,17 @@ def test_compound_chairman_md_ceo_does_not_say_and_twice() -> None:
 
 def test_a_lone_initialism_is_left_alone() -> None:
     """Only a *pair* joined by a separator breaks; "the CEO" on its own is fine."""
-    assert normalize_for_tts("He is the CEO of the company.", "en") == "He is the CEO of the company."
+    assert (
+        normalize_for_tts("He is the CEO of the company.", "en") == "He is the CEO of the company."
+    )
 
 
 # ── Islamabad sectors ───────────────────────────────────────────────
 
+
 @pytest.mark.parametrize("lang", ["en", "ur"])
 def test_sector_is_english_numbers_with_a_silent_slash(lang: str) -> None:
-    """"G-10/4" was "G-ten/four" in English and "ٹی جا سلاش ۴" in Urdu — the Urdu voice
+    """ "G-10/4" was "G-ten/four" in English and "ٹی جا سلاش ۴" in Urdu — the Urdu voice
     said the word "slash". A sector is read "G ten four" in both languages."""
     said = spoken_addresses("Our office is in G-10/4, Islamabad.", lang)
     assert "G ten four" in said
@@ -108,8 +114,9 @@ def test_sector_is_english_numbers_with_a_silent_slash(lang: str) -> None:
 
 # ── postcodes ───────────────────────────────────────────────────────
 
+
 def test_postcode_is_digits_not_a_quantity() -> None:
-    """"44000" was read "forty four thousand"."""
+    """ "44000" was read "forty four thousand"."""
     said = normalize_for_tts("Islamabad – 44000, Pakistan", "en")
     assert "postal code four four zero zero zero" in said
     assert "thousand" not in said
@@ -131,8 +138,9 @@ def test_a_city_is_required_before_a_postcode() -> None:
     assert "fourteen thousand one" in said
 
 
-@pytest.mark.parametrize("standard", ["ISO 9001", "ISO 14001", "ISO 26000", "ISO 27001",
-                                      "ISO 45001", "OHSAS 18001"])
+@pytest.mark.parametrize(
+    "standard", ["ISO 9001", "ISO 14001", "ISO 26000", "ISO 27001", "ISO 45001", "OHSAS 18001"]
+)
 def test_no_standard_in_the_corpus_is_read_as_a_postcode(standard: str) -> None:
     assert "postal code" not in normalize_for_tts(f"Certified to {standard}.", "en")
 
@@ -146,7 +154,7 @@ def test_the_urdu_voice_does_not_announce_a_postcode_either() -> None:
     [
         ("Islamabad – 44000, Pakistan", "Islamabad"),
         ("Karachi – 75600; Tel (+92) 21 111-410-410", "Karachi"),
-        ("Islamabad 44000", "Islamabad"),          # separator is optional
+        ("Islamabad 44000", "Islamabad"),  # separator is optional
         ("Islamabad, 44000", "Islamabad"),
     ],
 )
@@ -158,7 +166,7 @@ def test_a_real_postcode_still_gets_its_label(text: str, city: str) -> None:
 
 
 def test_the_edition_year_of_a_standard_is_not_run_into_its_number() -> None:
-    """"ISO 45001:2018" left the colon in, so the two numbers ran together."""
+    """ "ISO 45001:2018" left the colon in, so the two numbers ran together."""
     said = normalize_for_tts("Certified to ISO 45001:2018.", "en")
     assert "forty five thousand one, twenty eighteen" in said
     assert ":" not in said
@@ -170,8 +178,9 @@ def test_the_edition_year_uses_an_urdu_comma_in_urdu_mode() -> None:
 
 # ── ordinals, contact details ───────────────────────────────────────
 
+
 def test_street_ordinal() -> None:
-    """"3rd Road" was heard as "Teen Ardi Road" / "3 آر ڈی روڈ"."""
+    """ "3rd Road" was heard as "Teen Ardi Road" / "3 آر ڈی روڈ"."""
     assert "Third Road" in normalize_for_tts("21 Mauve Area, 3rd Road", "en")
     # "Road" itself stays Latin — the voice reads that correctly ("تھرڈ روڈ" came back
     # from the round trip); only the ordinal needed rewriting.
@@ -179,7 +188,7 @@ def test_street_ordinal() -> None:
 
 
 def test_extension_is_a_word_and_its_number_is_digits() -> None:
-    """"Ext. 483" was heard as "x483"; the number is an identifier, not a quantity."""
+    """ "Ext. 483" was heard as "x483"; the number is an identifier, not a quantity."""
     said = normalize_for_tts("Tel: 111-410-410 (Ext. 483).", "en")
     assert "extension four eight three" in said
     assert "Ext" not in said and "four hundred" not in said
@@ -197,8 +206,9 @@ def test_po_box_and_tel_are_spelled_out() -> None:
 
 # ── hyphenated prefixes ─────────────────────────────────────────────
 
+
 def test_anti_prefix_is_split_in_english() -> None:
-    """"anti-corruption" lost its final vowel and was heard as "ant"."""
+    """ "anti-corruption" lost its final vowel and was heard as "ant"."""
     assert "anti corruption" in normalize_for_tts("Our anti-corruption policy.", "en")
 
 
@@ -210,13 +220,14 @@ def test_anti_prefix_is_left_alone_in_urdu() -> None:
 
 # ── what must NOT change ────────────────────────────────────────────
 
+
 @pytest.mark.parametrize(
     "lang,text,must_keep",
     [
-        ("ur", "ہم 24/7 دستیاب ہیں۔", "24/7"),          # a ratio, not a sector
-        ("ur", "2024/25 کے دوران۔", "2024/25"),          # a financial year
-        ("ur", "منافع 65.14 ارب روپے۔", "65.14"),        # Urdu keeps its digits
-        ("ur", "Tier III/IV سرٹیفائیڈ۔", "Tier 3/4"),    # roman-numeral rule still wins
+        ("ur", "ہم 24/7 دستیاب ہیں۔", "24/7"),  # a ratio, not a sector
+        ("ur", "2024/25 کے دوران۔", "2024/25"),  # a financial year
+        ("ur", "منافع 65.14 ارب روپے۔", "65.14"),  # Urdu keeps its digits
+        ("ur", "Tier III/IV سرٹیفائیڈ۔", "Tier 3/4"),  # roman-numeral rule still wins
     ],
 )
 def test_existing_behaviour_is_untouched(lang: str, text: str, must_keep: str) -> None:
@@ -246,23 +257,29 @@ def test_po_box_number_is_digits_not_a_quantity() -> None:
 # back as other words in both languages: "UBL" → "above", "IBA" → "Eber", "NTN" → "MTN",
 # "PPL" → "TPL". English reads hyphenated letters correctly; Urdu reads Urdu letter names.
 
+
 @pytest.mark.parametrize(
     "written,english,urdu",
-    [("UET", "U-E-T", "یو ای ٹی"), ("UBL", "U-B-L", "یو بی ایل"),
-     ("NTN", "N-T-N", "این ٹی این"), ("ACCA", "A-C-C-A", "اے سی سی اے"),
-     ("SNGPL", "S-N-G-P-L", "ایس این جی پی ایل"), ("SLAs", "S-L-As", "ایس ایل اےز")],
+    [
+        ("UET", "U-E-T", "یو ای ٹی"),
+        ("UBL", "U-B-L", "یو بی ایل"),
+        ("NTN", "N-T-N", "این ٹی این"),
+        ("ACCA", "A-C-C-A", "اے سی سی اے"),
+        ("SNGPL", "S-N-G-P-L", "ایس این جی پی ایل"),
+        ("SLAs", "S-L-As", "ایس ایل اےز"),
+    ],
 )
 def test_initialisms_are_spelled_for_the_voice(written: str, english: str, urdu: str) -> None:
     assert english in normalize_for_tts(f"It works with {written} today.", "en")
     assert urdu in normalize_for_tts(f"یہ {written} کے ساتھ ہے۔", "ur")
 
 
-@pytest.mark.parametrize(
-    "written,urdu", [("LUMS", "لمز"), ("PARCO", "پارکو"), ("GEM", "جیم")]
-)
+@pytest.mark.parametrize("written,urdu", [("LUMS", "لمز"), ("PARCO", "پارکو"), ("GEM", "جیم")])
 def test_acronyms_said_as_words_are_not_spelled_out(written: str, urdu: str) -> None:
-    assert normalize_for_tts(f"It works with {written} today.", "en") == \
-        f"It works with {written} today."
+    assert (
+        normalize_for_tts(f"It works with {written} today.", "en")
+        == f"It works with {written} today."
+    )
     assert urdu in normalize_for_tts(f"یہ {written} کے ساتھ ہے۔", "ur")
 
 
@@ -283,7 +300,7 @@ def test_measured_english_initialisms_stay_latin() -> None:
 
 
 def test_urdu_spaced_ampersand_is_said_as_and() -> None:
-    """"ایم ڈی & سی ای او" came back as "ایم ڈی ایم پسند سی ای او"."""
+    """ "ایم ڈی & سی ای او" came back as "ایم ڈی ایم پسند سی ای او"."""
     said = normalize_for_tts("جو Fauji Foundation کے MD & CEO بھی ہیں۔", "ur")
     assert "ایم ڈی اور سی ای او" in said and "&" not in said
 
@@ -291,6 +308,7 @@ def test_urdu_spaced_ampersand_is_said_as_and() -> None:
 # ── units ───────────────────────────────────────────────────────────
 # A unit symbol was read as its letters: "kW" as "K W", and "MW"/"TB" were spelled by the
 # initialism pass. Round-tripped, the spelled-out names came back as the symbol.
+
 
 @pytest.mark.parametrize(
     "text,english,urdu",
@@ -315,8 +333,11 @@ def test_units_are_said_by_name(text: str, english: str, urdu: str) -> None:
 
 @pytest.mark.parametrize(
     "text,expected",
-    [("one 1 kW rack", "one kilowatt rack"), ("a 50-kW rack", "fifty kilowatt rack"),
-     ("a 100 MW plant", "one hundred megawatt plant")],
+    [
+        ("one 1 kW rack", "one kilowatt rack"),
+        ("a 50-kW rack", "fifty kilowatt rack"),
+        ("a 100 MW plant", "one hundred megawatt plant"),
+    ],
 )
 def test_a_unit_used_as_an_adjective_is_singular(text: str, expected: str) -> None:
     assert expected in normalize_for_tts(text, "en")

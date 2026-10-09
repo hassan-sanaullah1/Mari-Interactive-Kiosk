@@ -11,6 +11,7 @@ async def speak(text: str, lang: str, avatar: str | None = None) -> tuple[bytes,
     text = (text or "").strip()
     if text and provider.wants_spoken_form:
         # Kokoro is English-only, so it has no "lang"; Uplift carries the reply's language.
-        text = normalize_for_tts(text, getattr(provider, "lang", "en"),
-                                 getattr(provider, "engine", "uplift"))
+        text = normalize_for_tts(
+            text, getattr(provider, "lang", "en"), getattr(provider, "engine", "uplift")
+        )
     return await provider.synthesize(text)

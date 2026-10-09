@@ -32,8 +32,6 @@ Thumbs.db
 deploy/a2f/.env
 .run/
 
-# Local-only: a per-machine compose overlay (A2F network, local Matcha).
-docker-compose.override.yml
 
 # Node / frontend
 node_modules/
@@ -79,6 +77,9 @@ server/data/.rag_metadata.sqlite*
 # Scratch prompt drafts, kept locally but not shared — the live copies are in
 # server/prompts/.
 CODE_CLEANLINESS_REPORT.md
+
+# Personal Claude Code instructions; the shared rules are in AGENTS.md.
+/CLAUDE.md
 
 # Claude-generated reports, kept locally
 /claude_reports/

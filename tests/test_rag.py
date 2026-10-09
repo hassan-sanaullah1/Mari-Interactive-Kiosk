@@ -28,6 +28,7 @@ from server.rag.transcript import correct_transcript
 
 # ── settings ────────────────────────────────────────────────────────
 
+
 def test_e5_prefixes_are_resolved_from_the_model_name() -> None:
     """Asymmetric models need prefixes, and omitting them costs recall silently."""
     s = RagSettings(dense_model="intfloat/multilingual-e5-large")
@@ -53,14 +54,18 @@ def test_explicit_prefix_is_not_overridden() -> None:
 
 # ── transcript correction ───────────────────────────────────────────
 
-@pytest.mark.parametrize("said,expected", [
-    ("what happened at the har key field", "Daharki"),
-    ("tell me about foji foundation", "Fauji"),
-    ("who runs sky forty seven", "Sky47"),
-    ("what is the p s x symbol", "PSX"),
-    ("how many wells in waziri stan", "Waziristan"),
-    ("the bitay six well", "Bhitai"),
-])
+
+@pytest.mark.parametrize(
+    "said,expected",
+    [
+        ("what happened at the har key field", "Daharki"),
+        ("tell me about foji foundation", "Fauji"),
+        ("who runs sky forty seven", "Sky47"),
+        ("what is the p s x symbol", "PSX"),
+        ("how many wells in waziri stan", "Waziristan"),
+        ("the bitay six well", "Bhitai"),
+    ],
+)
 def test_mishearings_are_repaired(said: str, expected: str) -> None:
     corrected, applied = correct_transcript(said)
     assert expected in corrected
@@ -81,6 +86,7 @@ def test_correction_is_idempotent() -> None:
 
 
 # ── Urdu expansion ──────────────────────────────────────────────────
+
 
 def test_english_queries_are_not_expanded() -> None:
     text, terms = expand_for_lexical("Who is the chief executive?")
@@ -113,22 +119,32 @@ def test_has_urdu() -> None:
 
 # ── query rewriting triggers ────────────────────────────────────────
 
+
 def _settings() -> RagSettings:
     return RagSettings(rewrite_enabled=True, rewrite_min_content_words=4)
 
 
-@pytest.mark.parametrize("text", [
-    "what about their pricing?", "how much do they produce?", "and that one?",
-    "اس کا کیا فائدہ؟", "tell me more",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "what about their pricing?",
+        "how much do they produce?",
+        "and that one?",
+        "اس کا کیا فائدہ؟",
+        "tell me more",
+    ],
+)
 def test_elliptical_followups_trigger_a_rewrite(text: str) -> None:
     assert needs_rewrite(text, has_history=True, settings=_settings())
 
 
-@pytest.mark.parametrize("text", [
-    "What is the recruitment process at Mari Energies?",
-    "How many exploration blocks does the company hold?",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "What is the recruitment process at Mari Energies?",
+        "How many exploration blocks does the company hold?",
+    ],
+)
 def test_self_contained_questions_do_not(text: str) -> None:
     """Rewriting is an LLM call inside the latency budget; it must stay rare."""
     assert not needs_rewrite(text, has_history=True, settings=_settings())
@@ -146,9 +162,11 @@ def test_disabling_rewrite_is_honoured() -> None:
 
 # ── the relevance gate ──────────────────────────────────────────────
 
+
 def _chunk(score: float) -> RetrievedChunk:
-    return RetrievedChunk(text="t", source="s", heading_path="h",
-                          score=score, fusion_score=score, reranked=True)
+    return RetrievedChunk(
+        text="t", source="s", heading_path="h", score=score, fusion_score=score, reranked=True
+    )
 
 
 def _retriever(**kw) -> Retriever:
@@ -189,6 +207,7 @@ def test_gate_on_empty_input() -> None:
 
 # ── section expansion ───────────────────────────────────────────────
 
+
 class _FakeStore:
     """Stands in for Qdrant. `fetch_section` is the only method expansion touches."""
 
@@ -199,15 +218,27 @@ class _FakeStore:
     async def fetch_section(self, section: str, limit: int = 32):
         self.asked.append(section)
         return [
-            Hit(text=text, source="kb.md", heading_path=f"{section} > sub",
-                chunk_index=i, score=0.0, payload={})
+            Hit(
+                text=text,
+                source="kb.md",
+                heading_path=f"{section} > sub",
+                chunk_index=i,
+                score=0.0,
+                payload={},
+            )
             for i, text in enumerate(self.sections.get(section, []))
         ]
 
 
 def _ranked(section: str, text: str, score: float = 0.9) -> RetrievedChunk:
-    return RetrievedChunk(text=text, source="kb.md", heading_path=f"{section} > sub",
-                          score=score, fusion_score=score, reranked=True)
+    return RetrievedChunk(
+        text=text,
+        source="kb.md",
+        heading_path=f"{section} > sub",
+        score=score,
+        fusion_score=score,
+        reranked=True,
+    )
 
 
 def _expander(store, **kw) -> Retriever:
@@ -288,6 +319,7 @@ def test_expansion_can_be_turned_off() -> None:
 
 def test_a_store_failure_leaves_the_ranked_chunks_untouched() -> None:
     """Completeness is an improvement, not a promise — it must never fail a turn."""
+
     class _Broken(_FakeStore):
         async def fetch_section(self, section: str, limit: int = 32):
             raise RuntimeError("qdrant is down")
@@ -300,13 +332,14 @@ def test_a_store_failure_leaves_the_ranked_chunks_untouched() -> None:
 
 # ── context assembly ────────────────────────────────────────────────
 
+
 def test_assembly_dedupes_and_caps_length() -> None:
     r = _retriever(max_context_chars=100)
     chunks = [
         RetrievedChunk("A" * 60, "a.md", "h1", 1.0, 1.0, True),
-        RetrievedChunk("A" * 60, "a.md", "h1", 0.9, 0.9, True),   # duplicate
+        RetrievedChunk("A" * 60, "a.md", "h1", 0.9, 0.9, True),  # duplicate
         RetrievedChunk("B" * 60, "b.md", "h2", 0.8, 0.8, True),
-        RetrievedChunk("C" * 60, "c.md", "h3", 0.7, 0.7, True),   # over the cap
+        RetrievedChunk("C" * 60, "c.md", "h3", 0.7, 0.7, True),  # over the cap
     ]
     context, sources = r._assemble(chunks)
     assert context.count("A" * 60) == 1
@@ -316,6 +349,7 @@ def test_assembly_dedupes_and_caps_length() -> None:
 
 # ── prompt assembly ─────────────────────────────────────────────────
 
+
 def test_system_prompt_is_injected_even_with_no_context() -> None:
     """Persona must not collapse on an empty or failed index."""
     g = GenerationService()
@@ -324,14 +358,20 @@ def test_system_prompt_is_injected_even_with_no_context() -> None:
     assert "MARI" in prompt.system
     assert "CORE FACTS HERE" in prompt.system
     # and it must be told not to answer from its own memory
-    assert "do not answer" in prompt.system.lower() or "not have that information" in prompt.system.lower()
+    assert (
+        "do not answer" in prompt.system.lower()
+        or "not have that information" in prompt.system.lower()
+    )
 
 
 def test_context_and_glossary_reach_the_prompt_in_order() -> None:
     """Glossary before sections, so truncation never cuts the authoritative definitions."""
     g = GenerationService()
-    result = RetrievalResult(context="SECTION BODY", sources=["kb.md"],
-                             glossary_block="GLOSSARY: MSPC = Mari Seismic Processing Center")
+    result = RetrievalResult(
+        context="SECTION BODY",
+        sources=["kb.md"],
+        glossary_block="GLOSSARY: MSPC = Mari Seismic Processing Center",
+    )
     prompt = g.build_prompt(result, lang="en")
     assert prompt.grounded is True
     assert prompt.sources == ["kb.md"]
@@ -347,11 +387,14 @@ def test_urdu_prompt_is_used_for_urdu() -> None:
 
 def test_unknown_language_falls_back_to_english() -> None:
     g = GenerationService()
-    assert g.build_prompt(RetrievalResult(), lang="fr").system == \
-           g.build_prompt(RetrievalResult(), lang="en").system
+    assert (
+        g.build_prompt(RetrievalResult(), lang="fr").system
+        == g.build_prompt(RetrievalResult(), lang="en").system
+    )
 
 
 # ── metadata DB ─────────────────────────────────────────────────────
+
 
 def test_hash_check_skips_unchanged_and_retries_failed(tmp_path: Path) -> None:
     db = MetadataService(tmp_path / "m.sqlite")
@@ -377,13 +420,20 @@ def test_metadata_summary_counts(tmp_path: Path) -> None:
 
 # ── corpus-subject stripping (dense channel only) ───────────────────
 
-@pytest.mark.parametrize("query,expected", [
-    ("What discoveries has Mari Energies made recently?", "What discoveries has made recently?"),
-    ("Who is Mari Energies' CEO?", "Who is CEO?"),
-    ("What was MariEnergies' FY2024-25 net profit?", "What was FY2024-25 net profit?"),
-    ("MPCL history", "history"),
-    ("What is Mari Petroleum Company Limited's tagline?", "What is tagline?"),
-])
+
+@pytest.mark.parametrize(
+    "query,expected",
+    [
+        (
+            "What discoveries has Mari Energies made recently?",
+            "What discoveries has made recently?",
+        ),
+        ("Who is Mari Energies' CEO?", "Who is CEO?"),
+        ("What was MariEnergies' FY2024-25 net profit?", "What was FY2024-25 net profit?"),
+        ("MPCL history", "history"),
+        ("What is Mari Petroleum Company Limited's tagline?", "What is tagline?"),
+    ],
+)
 def test_the_corpus_subject_is_removed(query: str, expected: str) -> None:
     """Every chunk is about this company, so its name cannot pick between them — and a
     dense embedding, unlike BM25, has no document frequency to discount it with."""
@@ -391,15 +441,18 @@ def test_the_corpus_subject_is_removed(query: str, expected: str) -> None:
 
 
 def test_an_orphaned_possessive_does_not_survive() -> None:
-    """" ' " left dangling embeds as a token of its own and measurably hurt."""
+    """ " ' " left dangling embeds as a token of its own and measurably hurt."""
     assert "'" not in strip_corpus_subject("Where is Mari Energies' head office located?")
 
 
-@pytest.mark.parametrize("query", [
-    "Mari Energies?",
-    "tell me about MariEnergies",
-    "What is Mari Energies?",
-])
+@pytest.mark.parametrize(
+    "query",
+    [
+        "Mari Energies?",
+        "tell me about MariEnergies",
+        "What is Mari Energies?",
+    ],
+)
 def test_a_query_that_is_only_the_subject_is_left_alone(query: str) -> None:
     """Nothing retrievable survives the strip, and the overview section really is the
     right answer. The check counts content words, not tokens: "tell me about" is four

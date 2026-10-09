@@ -1,0 +1,9 @@
+# Local runs only: Compose merges this file into docker-compose.yml automatically.
+# Coolify reads docker-compose.yml alone, so nothing here reaches a server.
+services:
+  backend:
+    ports:
+      - "8010:8010"
+  frontend:
+    ports:
+      - "3000:3000"

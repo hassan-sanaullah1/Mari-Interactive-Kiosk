@@ -106,10 +106,14 @@ def draft_case(row: dict) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--csv", type=Path, default=CSV_PATH)
-    ap.add_argument("--status", default="Partial,Not Matched",
-                    help='comma-separated Status values to keep; "all" keeps every row')
-    ap.add_argument("--only-graded", action="store_true",
-                    help="every row the tester graded, including Matched")
+    ap.add_argument(
+        "--status",
+        default="Partial,Not Matched",
+        help='comma-separated Status values to keep; "all" keeps every row',
+    )
+    ap.add_argument(
+        "--only-graded", action="store_true", help="every row the tester graded, including Matched"
+    )
     ap.add_argument("--all", action="store_true", help="every row, graded or not")
     ap.add_argument("--ids", help="comma-separated Test Case IDs")
     args = ap.parse_args()

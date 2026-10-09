@@ -76,7 +76,9 @@ def test_lipsync_protocol_shape(expected) -> None:
 
         # Every clip id announced in a {"tts"} header must actually get frames, and
         # no clip may send frames the browser has no audio element for.
-        tts_clips = {f["clip"] for f in record["socket"] if f.get("type") == "tts" and f.get("clip")}
+        tts_clips = {
+            f["clip"] for f in record["socket"] if f.get("type") == "tts" and f.get("clip")
+        }
         assert set(by_clip) == tts_clips, f"{name}: lipsync clips and tts clips disagree"
 
 

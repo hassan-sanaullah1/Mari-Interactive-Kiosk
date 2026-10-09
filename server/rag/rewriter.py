@@ -18,7 +18,7 @@ import httpx
 from ..prompts import get_prompts
 from .settings import RagSettings, get_settings
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 # Words that cannot be resolved without the previous turn. English and Urdu, because the
 # kiosk takes both and an Urdu follow-up is every bit as elliptical ("اس کا کیا فائدہ؟").
@@ -32,14 +32,61 @@ _DEICTIC_RE = re.compile(
 # Stopwords stripped before counting "content words". A four-word question that is three
 # stopwords and a noun is not self-contained.
 _STOPWORDS = {
-    "a", "an", "the", "is", "are", "was", "were", "be", "am", "do", "does", "did",
-    "what", "who", "when", "where", "why", "how", "which", "and", "or", "of", "in",
-    "on", "at", "to", "for", "with", "about", "me", "you", "i", "please", "tell",
-    "کیا", "ہے", "ہیں", "کا", "کی", "کے", "کو", "سے", "میں", "پر", "اور", "بتائیں",
-    "بتائیے", "براہ", "کرم", "مجھے", "آپ",
+    "a",
+    "an",
+    "the",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "am",
+    "do",
+    "does",
+    "did",
+    "what",
+    "who",
+    "when",
+    "where",
+    "why",
+    "how",
+    "which",
+    "and",
+    "or",
+    "of",
+    "in",
+    "on",
+    "at",
+    "to",
+    "for",
+    "with",
+    "about",
+    "me",
+    "you",
+    "i",
+    "please",
+    "tell",
+    "کیا",
+    "ہے",
+    "ہیں",
+    "کا",
+    "کی",
+    "کے",
+    "کو",
+    "سے",
+    "میں",
+    "پر",
+    "اور",
+    "بتائیں",
+    "بتائیے",
+    "براہ",
+    "کرم",
+    "مجھے",
+    "آپ",
 }
 
 _WORD_RE = re.compile(r"[\w؀-ۿ]+", re.UNICODE)
+
 
 def needs_rewrite(text: str, has_history: bool, settings: RagSettings) -> bool:
     """Whether this query is worth spending a rewrite call on.
@@ -77,8 +124,10 @@ class QueryRewriter:
         turns = history[-self.settings.rewrite_history_turns * 2 :]
         messages = [{"role": "system", "content": get_prompts().query_rewriter}]
         messages += [
-            {"role": "user" if t.get("role") == "user" else "assistant",
-             "content": (t.get("text") or t.get("content") or "")[:500]}
+            {
+                "role": "user" if t.get("role") == "user" else "assistant",
+                "content": (t.get("text") or t.get("content") or "")[:500],
+            }
             for t in turns
         ]
         messages.append({"role": "user", "content": text})
@@ -91,18 +140,24 @@ class QueryRewriter:
             )
         except (TimeoutError, Exception) as exc:  # noqa: BLE001
             elapsed = (time.perf_counter() - t0) * 1000
-            log.debug("query rewrite skipped after %.0f ms (%s)", elapsed, type(exc).__name__)
+            logger.debug("query rewrite skipped after %.0f ms (%s)", elapsed, type(exc).__name__)
             return text, False, elapsed
 
         elapsed = (time.perf_counter() - t0) * 1000
         # Empty, or much longer than the question (the model answered instead): keep the original.
         if not rewritten or len(rewritten) > max(200, len(text) * 4):
             return text, False, elapsed
-        log.debug("rewrote %r -> %r in %.0f ms", text, rewritten, elapsed)
+        logger.debug("rewrote %r -> %r in %.0f ms", text, rewritten, elapsed)
         return rewritten, True, elapsed
 
-    async def _call(self, messages, api_base: str, api_key: str, model: str,
-                    timeout_s: float) -> str:
+    async def _call(
+        self,
+        messages: list[dict[str, str]],
+        api_base: str,
+        api_key: str,
+        model: str,
+        timeout_s: float,
+    ) -> str:
         headers = {"Content-Type": "application/json"}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"

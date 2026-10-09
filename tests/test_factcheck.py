@@ -12,35 +12,41 @@ import pytest
 from eval.factcheck import canon, hit, score
 
 
-@pytest.mark.parametrize("fact, reply", [
-    # Numerals against the number words the TTS normaliser produces.
-    ("40%", "The Fauji Foundation holds a forty percent stake"),
-    ("31%", "a 31 percent share of the country's gas output"),
-    ("127,000", "capacity stands at one hundred and twenty-seven thousand barrels"),
-    ("952", "reserves totalling nine hundred and fifty-two million barrels"),
-    ("1,760", "a team of one thousand, seven hundred and sixty people"),
-    ("35", "he brings over thirty-five years of leadership"),
-    # Thousands separators and dashes are never meaningful.
-    ("322,973", "we produced 322973 MMSCF of gas"),
-    ("1975–2006", "Operations Advisor at the World Bank from 1975-2006"),
-    ("2024-25", "in FY 2024 25 the company reported"),
-    # Initials and abbreviations survive canonicalisation.
-    ("A.F. Ferguson", "our auditors are A.F. Ferguson & Co."),
-    ("AAA/A1", "a credit rating of AAA/A1"),
-    ("G-10/4", "21 Mauve Area, 3rd Road, G 10/4, Islamabad"),
-])
+@pytest.mark.parametrize(
+    "fact, reply",
+    [
+        # Numerals against the number words the TTS normaliser produces.
+        ("40%", "The Fauji Foundation holds a forty percent stake"),
+        ("31%", "a 31 percent share of the country's gas output"),
+        ("127,000", "capacity stands at one hundred and twenty-seven thousand barrels"),
+        ("952", "reserves totalling nine hundred and fifty-two million barrels"),
+        ("1,760", "a team of one thousand, seven hundred and sixty people"),
+        ("35", "he brings over thirty-five years of leadership"),
+        # Thousands separators and dashes are never meaningful.
+        ("322,973", "we produced 322973 MMSCF of gas"),
+        ("1975–2006", "Operations Advisor at the World Bank from 1975-2006"),
+        ("2024-25", "in FY 2024 25 the company reported"),
+        # Initials and abbreviations survive canonicalisation.
+        ("A.F. Ferguson", "our auditors are A.F. Ferguson & Co."),
+        ("AAA/A1", "a credit rating of AAA/A1"),
+        ("G-10/4", "21 Mauve Area, 3rd Road, G 10/4, Islamabad"),
+    ],
+)
 def test_a_fact_said_either_way_is_found(fact, reply):
     assert hit([fact], reply)
 
 
-@pytest.mark.parametrize("fact, reply", [
-    # The exact omissions the tester flagged. These must NOT match, or the eval
-    # would score a reply as complete when the visitor never heard the fact.
-    ("A.F. Ferguson", "Our external auditors are Ferguson & Co., Chartered Accountants."),
-    ("P.O. Box 1614", "The head office is at 21 Mauve Area, G-10/4, Islamabad, 44000."),
-    ("Neptune Energy", "over 30 years with Union Texas Petroleum and BG Group"),
-    ("1,053,210", "held a 31 percent share of the country's gas output"),
-])
+@pytest.mark.parametrize(
+    "fact, reply",
+    [
+        # The exact omissions the tester flagged. These must NOT match, or the eval
+        # would score a reply as complete when the visitor never heard the fact.
+        ("A.F. Ferguson", "Our external auditors are Ferguson & Co., Chartered Accountants."),
+        ("P.O. Box 1614", "The head office is at 21 Mauve Area, G-10/4, Islamabad, 44000."),
+        ("Neptune Energy", "over 30 years with Union Texas Petroleum and BG Group"),
+        ("1,053,210", "held a 31 percent share of the country's gas output"),
+    ],
+)
 def test_a_fact_the_reply_omitted_is_not_found(fact, reply):
     assert not hit([fact], reply)
 
@@ -74,8 +80,12 @@ def test_no_facts_present_is_not_matched():
 
 def test_a_miss_is_blamed_on_generation_when_the_context_had_it():
     """The distinction the whole eval turns on: retrieval's fault, or the prompt's."""
-    got = score([["Neptune Energy"], ["Reko Diq"]], [], "He worked at BG Group.",
-                context="...career including OMV, BG Group and Neptune Energy.")
+    got = score(
+        [["Neptune Energy"], ["Reko Diq"]],
+        [],
+        "He worked at BG Group.",
+        context="...career including OMV, BG Group and Neptune Energy.",
+    )
     assert [e.cause for e in got.entries] == ["generation", "retrieval"]
 
 

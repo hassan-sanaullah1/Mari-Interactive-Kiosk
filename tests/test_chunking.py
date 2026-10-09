@@ -69,7 +69,7 @@ def test_tables_are_never_split() -> None:
 
 
 def test_oversized_table_is_emitted_whole() -> None:
-    rows = "\n".join(f"| {i} | {i*10} | {i*3} |" for i in range(200))
+    rows = "\n".join(f"| {i} | {i * 10} | {i * 3} |" for i in range(200))
     doc = f"# D\n\n## T\n\n| a | b | c |\n|---|---|---|\n{rows}\n"
     chunks = chunk_markdown(doc, "t.md", chunk_tokens=50, min_tokens=1, count_tokens=_count)
     holders = [c for c in chunks if "| 199 |" in c.text]
@@ -141,6 +141,7 @@ def test_plain_text_splits_on_paragraphs() -> None:
 
 
 # ── sentence splitting ──────────────────────────────────────────────
+
 
 def test_an_abbreviation_period_is_not_a_sentence_end() -> None:
     """Regression: "Lt. Gen. Anwar Ali Hyder" was split after "Lt." and after "Gen.",

@@ -1,0 +1,4 @@
+# Every file is owned by the repo's approver. The branch rulesets require a code owner's
+# approval, so a pull request into develop, master, main, staging or release/** cannot
+# merge until this person approves it.
+* @hassan-sanaullah1

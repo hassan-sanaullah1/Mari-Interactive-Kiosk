@@ -95,7 +95,7 @@
     "decoded": 67752008,
     "encoded": 42294045
    },
-   "cameraDistanceM": null,
+   "cameraDistanceM": 4.92,
    "darkThemeLighting": {
     "ambient": 0.45,
     "environment": 1,
@@ -171,9 +171,9 @@
   "AvatarModel.tsx:MAKEUP_MAX_HUE_DEG": "20",
   "AvatarModel.tsx:MAKEUP_MIN_SATURATION": "0.22",
   "AvatarModel.tsx:READY_FRAME_DELAY": "2",
-  "blendshapePlayer.ts:DEFAULT_GAIN": "0.55",
-  "blendshapePlayer.ts:DEFAULT_SHAPE_GAINS": "{ jawopen: 0.45 }",
-  "blendshapePlayer.ts:MAX_BUFFERED_CLIPS": "12"
+  "blendshape-player.ts:DEFAULT_GAIN": "0.55",
+  "blendshape-player.ts:DEFAULT_SHAPE_GAINS": "{ jawopen: 0.45 }",
+  "blendshape-player.ts:MAX_BUFFERED_CLIPS": "12"
  },
  "defaultAvatar": "female"
 }

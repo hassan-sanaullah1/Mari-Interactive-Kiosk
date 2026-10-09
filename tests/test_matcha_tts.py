@@ -39,8 +39,9 @@ def _fresh(monkeypatch):
 
 
 def _matcha(handler) -> MatchaTTS:
-    return MatchaTTS(base="http://matcha.test", client=httpx.AsyncClient(
-        transport=httpx.MockTransport(handler)))
+    return MatchaTTS(
+        base="http://matcha.test", client=httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    )
 
 
 def _record_uplift(monkeypatch) -> list[str]:
@@ -167,7 +168,9 @@ def test_a_bad_request_is_a_bug_not_a_fallback(monkeypatch) -> None:
 
 
 def test_warm_never_raises_when_the_server_is_down(monkeypatch) -> None:
-    monkeypatch.setattr(httpx, "get", lambda *a, **k: (_ for _ in ()).throw(httpx.ConnectError("x")))
+    monkeypatch.setattr(
+        httpx, "get", lambda *a, **k: (_ for _ in ()).throw(httpx.ConnectError("x"))
+    )
     MatchaTTS(base="http://matcha.test").warm()
 
 

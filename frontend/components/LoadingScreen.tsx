@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import styles from "./LoadingScreen.module.css";
 import { uiCopy, type Lang } from "@/lib/i18n";
-import { onAvatarProgress } from "@/lib/avatarFetch";
+import { onAvatarProgress } from "@/lib/avatar-fetch";
 
 export interface LoadingScreenProps {
   lang: Lang;
@@ -34,7 +34,7 @@ export default function LoadingScreen({ lang, ready }: LoadingScreenProps) {
     // new download opening at "99%" and counting down.
     setPct(null);
     setSlow(false);
-    // Subscribe to the one shared download (lib/avatarFetch.ts). This used to
+    // Subscribe to the one shared download (lib/avatar-fetch.ts). This used to
     // open its own fetch for the model, which on a slow link was a third
     // parallel copy of the same 20MB — a progress indicator that made the thing
     // it was measuring slower.

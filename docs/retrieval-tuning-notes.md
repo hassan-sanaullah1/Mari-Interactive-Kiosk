@@ -121,6 +121,6 @@ Qdrant speaks plaintext, so that shows up as an unrelated-looking connection err
 
 ## Corpus
 
-`server/data/README.md` is excluded (it matched questions about "the knowledge base").
+A `README.md` in the corpus folder is excluded (it matched questions about "the knowledge base").
 `sky47_knowledge_base.md` is excluded: the persona may only state what the Mari corpus
 contains, and ingesting both would duplicate every Sky47 fact across two sources.

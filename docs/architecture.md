@@ -1,8 +1,8 @@
 # Architecture
 
 How the MARI kiosk is put together and why. Read this before any structural change.
-For running it, see [README.md](README.md); for the conventions a change has to follow,
-[CLAUDE.md](CLAUDE.md).
+For running it, see [README.md](../README.md); for the conventions a change has to follow,
+[AGENTS.md](../AGENTS.md).
 
 ## 1. What it is
 
@@ -71,7 +71,7 @@ This follows the structure used by the open-source voice-agent frameworks
 ([Pipecat](https://docs.pipecat.ai/guides/learn/pipeline),
 [LiveKit Agents](https://docs.livekit.io/agents/)): a session object per connection, a
 turn assembled from stages, and one "service" class per vendor. We borrowed the shape
-rather than the dependency — see [docs/decisions/0002](docs/decisions/0002-borrow-pipecats-shape-not-pipecat.md).
+rather than the dependency — see [docs/decisions/0002](decisions/0002-borrow-pipecats-shape-not-pipecat.md).
 
 ## 4. The backend, package by package
 
@@ -117,7 +117,7 @@ A package may import from the ones **below** it in that diagram, never above, an
 in a cycle.
 
 This is not a convention — it is a contract in
-[`pyproject.toml`](pyproject.toml) (`[tool.importlinter]`) and CI runs `lint-imports`
+[`pyproject.toml`](../pyproject.toml) (`[tool.importlinter]`) and CI runs `lint-imports`
 on every change. Six wrong-way imports remain, each listed in that file by name with
 the step that removes it; the list can only shrink.
 
@@ -324,7 +324,7 @@ Things that are true today and must stay true. Each one is enforced, not just as
 | What the kiosk says does not change by accident | `tests/fixtures/golden.json` |
 | Synthesis stays pipelined | `tests/test_turn_timing.py` |
 | A presenter's look does not change by accident | `frontend/test/fixtures/avatar-profiles.json` |
-| Retrieval and answer quality do not regress | `eval/baselines/` (see its README) |
+| Retrieval and answer quality do not regress | `eval/baselines/` (see [eval-baselines.md](eval-baselines.md)) |
 
 ## 12. Where new code goes
 
@@ -373,15 +373,14 @@ Honest list, with where each is tracked:
 
 ## 15. Decisions
 
-Why things are the way they are, one file each, in [docs/decisions/](docs/decisions/).
+Why things are the way they are, one file each, in [docs/decisions/](decisions/).
 
 ## 16. Further reading
 
 | Topic | Where |
 |---|---|
-| Running, testing, deploying | [README.md](README.md) |
-| Conventions a change must follow | [CLAUDE.md](CLAUDE.md) |
-| Retrieval design and measurements | [README-RAG.md](README-RAG.md), [docs/retrieval_tuning_notes.md](docs/retrieval_tuning_notes.md) |
-| Why the speech rules are what they are | [docs/pronunciation_notes.md](docs/pronunciation_notes.md) |
-| The quality baselines and how to re-run them | [eval/baselines/README.md](eval/baselines/README.md) |
-| A full walkthrough of the code | [MARI_INTERACTIVE_KIOSK_GUIDE.md](MARI_INTERACTIVE_KIOSK_GUIDE.md) |
+| Running, testing, deploying | [README.md](../README.md) |
+| Conventions a change must follow | [AGENTS.md](../AGENTS.md) |
+| Retrieval design and measurements | [retrieval.md](retrieval.md), [retrieval-tuning-notes.md](retrieval-tuning-notes.md) |
+| Why the speech rules are what they are | [pronunciation-notes.md](pronunciation-notes.md) |
+| The quality baselines and how to re-run them | [eval-baselines.md](eval-baselines.md) |

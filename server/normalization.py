@@ -6,7 +6,7 @@ digits are read in Urdu. Every rule here fixes a word or shape that voice gets w
 This is a safety net for the persona prompts, not a replacement for them. Only the TTS
 payload changes; the visitor still reads the model's own text on screen.
 
-The evidence behind individual respellings is in docs/pronunciation_notes.md.
+The evidence behind individual respellings is in docs/pronunciation-notes.md.
 """
 
 from __future__ import annotations
@@ -65,9 +65,28 @@ def _lang_key(lang: str) -> str:
 # English replies only: the voice reads bare digits in Urdu ("65" → "پینسٹھ"), so
 # they are written out as English words. Urdu replies keep their digits.
 
-_ONES = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
-         "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
-         "seventeen", "eighteen", "nineteen")
+_ONES = (
+    "zero",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
+    "nineteen",
+)
 _TENS = ("", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety")
 _SCALES = ((1_000_000_000, "billion"), (1_000_000, "million"), (1_000, "thousand"))
 _DIGITS = {str(i): w for i, w in enumerate(_ONES[:10])}
@@ -127,15 +146,96 @@ def _spell_numbers(text: str, changes: Changes | None = None) -> str:
 # said as a century pair ("انیس سو چون"). 20xx years are left as digits, whose count
 # reading is already the correct one.
 _URDU_TENS_TAIL = (
-    "دس", "گیارہ", "بارہ", "تیرہ", "چودہ", "پندرہ", "سولہ", "سترہ", "اٹھارہ", "انیس",
-    "بیس", "اکیس", "بائیس", "تئیس", "چوبیس", "پچیس", "چھببیس", "ستائیس", "اٹھائیس", "انتیس",
-    "تیس", "اکتیس", "بتیس", "تینتیس", "چونتیس", "پینتیس", "چھتیس", "سینتیس", "اڑتیس", "انتالیس",
-    "چالیس", "اکتالیس", "بیالیس", "تینتالیس", "چوالیس", "پینتالیس", "چھیالیس", "سینتالیس", "اڑتالیس", "انچاس",
-    "پچاس", "اکاون", "باون", "ترپن", "چون", "پچپن", "چھپن", "ستاون", "اٹھاون", "انسٹھ",
-    "ساٹھ", "اکسٹھ", "باسٹھ", "تریسٹھ", "چوسٹھ", "پینسٹھ", "چھیاسٹھ", "سڑسٹھ", "اڑسٹھ", "انہتر",
-    "ستر", "اکہتر", "بہتر", "تہتر", "چوہتر", "پچہتر", "چھہتر", "ستتر", "اٹھہتر", "اناسی",
-    "اسی", "اکیاسی", "بیاسی", "تراسی", "چوراسی", "پچاسی", "چھیاسی", "ستاسی", "اٹھاسی", "نواسی",
-    "نوے", "اکانوے", "بانوے", "ترانوے", "چورانوے", "پچانوے", "چھیانوے", "ستانوے", "اٹھانوے", "ننانوے",
+    "دس",
+    "گیارہ",
+    "بارہ",
+    "تیرہ",
+    "چودہ",
+    "پندرہ",
+    "سولہ",
+    "سترہ",
+    "اٹھارہ",
+    "انیس",
+    "بیس",
+    "اکیس",
+    "بائیس",
+    "تئیس",
+    "چوبیس",
+    "پچیس",
+    "چھببیس",
+    "ستائیس",
+    "اٹھائیس",
+    "انتیس",
+    "تیس",
+    "اکتیس",
+    "بتیس",
+    "تینتیس",
+    "چونتیس",
+    "پینتیس",
+    "چھتیس",
+    "سینتیس",
+    "اڑتیس",
+    "انتالیس",
+    "چالیس",
+    "اکتالیس",
+    "بیالیس",
+    "تینتالیس",
+    "چوالیس",
+    "پینتالیس",
+    "چھیالیس",
+    "سینتالیس",
+    "اڑتالیس",
+    "انچاس",
+    "پچاس",
+    "اکاون",
+    "باون",
+    "ترپن",
+    "چون",
+    "پچپن",
+    "چھپن",
+    "ستاون",
+    "اٹھاون",
+    "انسٹھ",
+    "ساٹھ",
+    "اکسٹھ",
+    "باسٹھ",
+    "تریسٹھ",
+    "چوسٹھ",
+    "پینسٹھ",
+    "چھیاسٹھ",
+    "سڑسٹھ",
+    "اڑسٹھ",
+    "انہتر",
+    "ستر",
+    "اکہتر",
+    "بہتر",
+    "تہتر",
+    "چوہتر",
+    "پچہتر",
+    "چھہتر",
+    "ستتر",
+    "اٹھہتر",
+    "اناسی",
+    "اسی",
+    "اکیاسی",
+    "بیاسی",
+    "تراسی",
+    "چوراسی",
+    "پچاسی",
+    "چھیاسی",
+    "ستاسی",
+    "اٹھاسی",
+    "نواسی",
+    "نوے",
+    "اکانوے",
+    "بانوے",
+    "ترانوے",
+    "چورانوے",
+    "پچانوے",
+    "چھیانوے",
+    "ستانوے",
+    "اٹھانوے",
+    "ننانوے",
 )
 # Not part of a longer digit run, a decimal, or a hyphen/slash shape (fiscal pair,
 # date, well number), all of which the formats section has already rewritten.
@@ -232,8 +332,13 @@ _UNITS: tuple[tuple[str, str, str, str, bool], ...] = (
     (r"kV|KV", "kilovolt", "kilovolts", "کلو وولٹ", True),
     (r"Hz", "hertz", "hertz", "ہرٹز", True),
     (r"MMBtu|MMBTU|mmBtu", "million B-T-U", "million B-T-U", "ملین بی ٹی یو", True),
-    (r"tCO2e|tCO₂e", "tonne of carbon dioxide equivalent",
-     "tonnes of carbon dioxide equivalent", "ٹن کاربن ڈائی آکسائیڈ کے مساوی", True),
+    (
+        r"tCO2e|tCO₂e",
+        "tonne of carbon dioxide equivalent",
+        "tonnes of carbon dioxide equivalent",
+        "ٹن کاربن ڈائی آکسائیڈ کے مساوی",
+        True,
+    ),
     (r"°\s?C", "degree Celsius", "degrees Celsius", "ڈگری سینٹی گریڈ", True),
     (r"°\s?F", "degree Fahrenheit", "degrees Fahrenheit", "ڈگری فارن ہائیٹ", True),
     (r"km²|km2|sq\.?\s?km", "square kilometre", "square kilometres", "مربع کلومیٹر", True),
@@ -266,20 +371,27 @@ _UNITS: tuple[tuple[str, str, str, str, bool], ...] = (
 _SCALE_BEFORE_UNIT = r"thousand|million|billion|ہزار|لاکھ|کروڑ|ملین|بلین"
 # "50kW", "50 kW", "50-kW rack", "5 million kWh", and "kW/rack" (the slash is "per").
 _UNIT_RE = tuple(
-    (re.compile(
-        rf"(?:(?P<num>\d[\d,]*(?:\.\d+)?)(?:\s+(?P<scale>{_SCALE_BEFORE_UNIT}))?"
-        rf"(?P<sep>\s*-\s*|\s*)"
-        rf"|(?<![\w/.-]))"
-        rf"(?:{symbols})(?![\w²³])(?P<per>\s*/\s*(?=[A-Za-z]))?"
-    ), singular, plural, urdu, bare)
+    (
+        re.compile(
+            rf"(?:(?P<num>\d[\d,]*(?:\.\d+)?)(?:\s+(?P<scale>{_SCALE_BEFORE_UNIT}))?"
+            rf"(?P<sep>\s*-\s*|\s*)"
+            rf"|(?<![\w/.-]))"
+            rf"(?:{symbols})(?![\w²³])(?P<per>\s*/\s*(?=[A-Za-z]))?"
+        ),
+        singular,
+        plural,
+        urdu,
+        bare,
+    )
     for symbols, singular, plural, urdu, bare in _UNITS
 )
 _PER = {"en": " per ", "ur": " فی "}
 _ARTICLE_BEFORE_RE = re.compile(r"\b(?:a|an|A|An)\s+$")
 
 
-def _say_unit(match: re.Match[str], lang: str, singular: str, plural: str, urdu: str,
-              bare: bool) -> str:
+def _say_unit(
+    match: re.Match[str], lang: str, singular: str, plural: str, urdu: str, bare: bool
+) -> str:
     num, scale = match.group("num"), match.group("scale")
     if num is None and not bare:
         return match.group(0)
@@ -302,9 +414,14 @@ def spoken_units(text: str, lang: str = "en", changes: Changes | None = None) ->
         return text
     key = _lang_key(lang)
     for pattern, singular, plural, urdu, bare in _UNIT_RE:
-        text = _sub(pattern, lambda m, a=(singular, plural, urdu, bare): _say_unit(m, key, *a),
-                    text, changes)
+        text = _sub(
+            pattern,
+            lambda m, a=(singular, plural, urdu, bare): _say_unit(m, key, *a),
+            text,
+            changes,
+        )
     return text
+
 
 # The model splits "انفراسٹرکچر" into two mispronounced words.
 _INFRASTRUCTURE_SPLIT_RE = re.compile(r"انفرا\s+اسٹرکچر")
@@ -333,9 +450,7 @@ _KIOSK_RE = re.compile(r"[kک]iosk", re.I)
 _SUBSIDIARY_RE = re.compile(r"سب\s*سی?ڈی+(?:ا?ری)+")
 
 # Urdu only. "کولڈ" is how Urdu writes "cold", so the term goes to a Latin respelling.
-_LIQUID_COOLED_UR_RE = re.compile(
-    r"(?:liquid[\s-]*cooled|لیکویڈ[\s-]*کولڈ|لیکوئڈ[\s-]*کولڈ)", re.I
-)
+_LIQUID_COOLED_UR_RE = re.compile(r"(?:liquid[\s-]*cooled|لیکویڈ[\s-]*کولڈ|لیکوئڈ[\s-]*کولڈ)", re.I)
 
 # Urdu only. Neither Urdu spelling can produce the English short "u". Plural first.
 _CLUSTERS_UR_RE = re.compile(r"(?:کلاسٹرز|کلسٹرز|\bclusters\b)", re.I)
@@ -372,8 +487,10 @@ _SAY_AS = (
 # "ورٹیکلز (verticals)": the model glosses a loanword with its own Latin spelling, which
 # the respelling above would turn into "verticals (verticals)". Collapse it to one.
 _DEDUPE_GLOSS = tuple(
-    (re.compile(rf"{pattern.pattern}\s*\(\s*{re.escape(replacement)}\s*\)", pattern.flags),
-     replacement)
+    (
+        re.compile(rf"{pattern.pattern}\s*\(\s*{re.escape(replacement)}\s*\)", pattern.flags),
+        replacement,
+    )
     for pattern, replacement in _SAY_AS
 )
 
@@ -423,21 +540,19 @@ _ACRONYMS: dict[str, dict[str, str]] = {
     "MPCL": {"en": "M P C L", "ur": "ایم پی سی ایل"},
     "PSX": {"en": "P S X", "ur": "پی ایس ایکس"},
     "OGDCL": {"en": "O G D C L", "ur": "او جی ڈی سی ایل"},
-    "MMBOE": {"en": "million barrels of oil equivalent",
-              "ur": "ملین بیرل آئل ایکوی ویلنٹ"},
-    "KBOEPD": {"en": "thousand barrels of oil equivalent per day",
-               "ur": "ہزار بیرل آئل ایکوی ویلنٹ یومیہ"},
-    "MMSCFD": {"en": "million standard cubic feet per day",
-               "ur": "ملین اسٹینڈرڈ کیوبک فٹ یومیہ"},
+    "MMBOE": {"en": "million barrels of oil equivalent", "ur": "ملین بیرل آئل ایکوی ویلنٹ"},
+    "KBOEPD": {
+        "en": "thousand barrels of oil equivalent per day",
+        "ur": "ہزار بیرل آئل ایکوی ویلنٹ یومیہ",
+    },
+    "MMSCFD": {"en": "million standard cubic feet per day", "ur": "ملین اسٹینڈرڈ کیوبک فٹ یومیہ"},
     "MMSCF": {"en": "million standard cubic feet", "ur": "ملین اسٹینڈرڈ کیوبک فٹ"},
     "BSCF": {"en": "billion standard cubic feet", "ur": "بلین اسٹینڈرڈ کیوبک فٹ"},
-    "BOEPD": {"en": "barrels of oil equivalent per day",
-              "ur": "بیرل آئل ایکوی ویلنٹ یومیہ"},
+    "BOEPD": {"en": "barrels of oil equivalent per day", "ur": "بیرل آئل ایکوی ویلنٹ یومیہ"},
     "BOPD": {"en": "barrels of oil per day", "ur": "بیرل تیل یومیہ"},
     "BBLs": {"en": "barrels", "ur": "بیرل"},
     "BBL": {"en": "barrel", "ur": "بیرل"},
-    "D&PL": {"en": "development and production lease",
-             "ur": "ڈیولپمنٹ اینڈ پروڈکشن لیز"},
+    "D&PL": {"en": "development and production lease", "ur": "ڈیولپمنٹ اینڈ پروڈکشن لیز"},
     "MT": {"en": "metric tons", "ur": "میٹرک ٹن"},
     "REE": {"en": "rare earth elements", "ur": "نایاب معدنی عناصر"},
     "TCF": {"en": "trillion cubic feet", "ur": "ٹریلین کیوبک فٹ"},
@@ -490,9 +605,7 @@ _ACRONYMS: dict[str, dict[str, str]] = {
     "SDGs": {"en": "S D Gs", "ur": "ایس ڈی جیز"},
     "UN": {"en": "U N", "ur": "اقوام متحدہ"},
 }
-_ACRONYM_RULES = tuple(
-    (re.compile(rf"\b{re.escape(k)}\b"), v) for k, v in _ACRONYMS.items()
-)
+_ACRONYM_RULES = tuple((re.compile(rf"\b{re.escape(k)}\b"), v) for k, v in _ACRONYMS.items())
 
 # A credit rating, not a quantity: the number spell-out would say "Aone".
 _RATING_RE = re.compile(r"\bA1\b")
@@ -508,10 +621,14 @@ _SCALE_WORDS = {
 
 # Currency is said after the amount: "PKR 65bn" → "65 billion rupees".
 _CURRENCY = (
-    (re.compile(r"\b(?:PKR|Rs\.?)\s*([\d,.]+)\s*(billion|million|trillion|bn|mn|tn)?\b", re.I),
-     {"en": "rupees", "ur": "روپے"}),
-    (re.compile(r"\bUSD\s*([\d,.]+)\s*(billion|million|trillion|bn|mn|tn)?\b", re.I),
-     {"en": "US dollars", "ur": "امریکی ڈالر"}),
+    (
+        re.compile(r"\b(?:PKR|Rs\.?)\s*([\d,.]+)\s*(billion|million|trillion|bn|mn|tn)?\b", re.I),
+        {"en": "rupees", "ur": "روپے"},
+    ),
+    (
+        re.compile(r"\bUSD\s*([\d,.]+)\s*(billion|million|trillion|bn|mn|tn)?\b", re.I),
+        {"en": "US dollars", "ur": "امریکی ڈالر"},
+    ),
 )
 
 
@@ -522,8 +639,9 @@ def _scale(word: str | None, lang: str = "en") -> str:
     return f"{said} "
 
 
-def _respell_by_language(text: str, lang: str, changes: Changes | None = None,
-                         kokoro: bool = False) -> str:
+def _respell_by_language(
+    text: str, lang: str, changes: Changes | None = None, kokoro: bool = False
+) -> str:
     """The rules whose spoken form depends on the language."""
     key = _lang_key(lang)
     # Currency first: its pattern consumes "PKR"/"USD", which the acronym table would
@@ -532,12 +650,14 @@ def _respell_by_language(text: str, lang: str, changes: Changes | None = None,
         text = _sub(
             pattern,
             lambda m, u=unit[key]: f"{m.group(1)} {_scale(m.group(2), key)}{u}",
-            text, changes,
+            text,
+            changes,
         )
     if not kokoro:  # Kokoro's English lexicon already says "Huawei" correctly.
         text = _sub(_HUAWEI_RE, _HUAWEI_SAID[key], text, changes)
-    text = _sub(_NVIDIA_RE, lambda m, s=_NVIDIA_SAID[key]: f"{s} " if m.group(1) else s,
-                text, changes)
+    text = _sub(
+        _NVIDIA_RE, lambda m, s=_NVIDIA_SAID[key]: f"{s} " if m.group(1) else s, text, changes
+    )
     # Before the acronym table, which would claim "MT"-style symbols as initialisms.
     text = spoken_units(text, key, changes)
     for pattern, spoken in _ACRONYM_RULES:
@@ -593,20 +713,61 @@ _PERSON_NAMES: dict[str, str] = {
 # A reply often names someone by one word ("Ask Kazmi"), which the full-name table
 # cannot match. Applied after it.
 _WORD_FORMS: dict[str, str] = {
-    "Abbas": "عباس", "Abdullah": "عبداللہ", "Abid": "عابد", "Adil": "عادل",
-    "Ahmad": "احمد", "Ahmed": "احمد", "Ali": "علی", "Anwar": "انور",
-    "Aamir": "عامر", "Ashraf": "اشرف", "Asif": "آصف", "Aslam": "اسلم",
-    "Ayla": "عائلہ", "Afzal": "افضل", "Bakhsh": "بخش", "Bakhtiyar": "بختیار",
-    "Faheem": "فہیم", "Ghulam": "غلام", "Haider": "حیدر", "Hamed": "حامد",
-    "Hamid": "حامد", "Hasan": "حسن", "Hayat": "حیات", "Hazoor": "حضور",
-    "Hussain": "حسین", "Hyder": "حیدر", "Imtiaz": "امتیاز", "Ishfaq": "اشفاق",
-    "Janjua": "جنجوعہ", "Kazmi": "کاظمی", "Khalid": "خالد", "Khan": "خان",
-    "Lak": "لک", "Majid": "مجید", "Malik": "ملک", "Mehmood": "محمود",
-    "Muhammad": "محمد", "Mushtaq": "مشتاق", "Nabeel": "نبیل", "Nabi": "نبی",
-    "Nadeem": "ندیم", "Nawaz": "نواز", "Niaz": "نیاز", "Rasheed": "رشید",
-    "Raza": "رضا", "Sajjad": "سجاد", "Salim": "سلیم", "Seema": "سیما",
-    "Shaheen": "شاہین", "Shahzad": "شہزاد", "Sheikh": "شیخ", "Sumair": "سمیر",
-    "Syed": "سید", "Yaqoob": "یعقوب", "Zafar": "ظفر",
+    "Abbas": "عباس",
+    "Abdullah": "عبداللہ",
+    "Abid": "عابد",
+    "Adil": "عادل",
+    "Ahmad": "احمد",
+    "Ahmed": "احمد",
+    "Ali": "علی",
+    "Anwar": "انور",
+    "Aamir": "عامر",
+    "Ashraf": "اشرف",
+    "Asif": "آصف",
+    "Aslam": "اسلم",
+    "Ayla": "عائلہ",
+    "Afzal": "افضل",
+    "Bakhsh": "بخش",
+    "Bakhtiyar": "بختیار",
+    "Faheem": "فہیم",
+    "Ghulam": "غلام",
+    "Haider": "حیدر",
+    "Hamed": "حامد",
+    "Hamid": "حامد",
+    "Hasan": "حسن",
+    "Hayat": "حیات",
+    "Hazoor": "حضور",
+    "Hussain": "حسین",
+    "Hyder": "حیدر",
+    "Imtiaz": "امتیاز",
+    "Ishfaq": "اشفاق",
+    "Janjua": "جنجوعہ",
+    "Kazmi": "کاظمی",
+    "Khalid": "خالد",
+    "Khan": "خان",
+    "Lak": "لک",
+    "Majid": "مجید",
+    "Malik": "ملک",
+    "Mehmood": "محمود",
+    "Muhammad": "محمد",
+    "Mushtaq": "مشتاق",
+    "Nabeel": "نبیل",
+    "Nabi": "نبی",
+    "Nadeem": "ندیم",
+    "Nawaz": "نواز",
+    "Niaz": "نیاز",
+    "Rasheed": "رشید",
+    "Raza": "رضا",
+    "Sajjad": "سجاد",
+    "Salim": "سلیم",
+    "Seema": "سیما",
+    "Shaheen": "شاہین",
+    "Shahzad": "شہزاد",
+    "Sheikh": "شیخ",
+    "Sumair": "سمیر",
+    "Syed": "سید",
+    "Yaqoob": "یعقوب",
+    "Zafar": "ظفر",
 }
 
 # Also ordinary words or places, so respelling them alone would misfire.
@@ -666,13 +827,19 @@ _RANK_NAMES_EN = (
     "|Brigadier|Colonel|Captain|Major|Lieutenant"
 )
 _RANK_NAMES_UR = (
-    "لیفٹیننٹ جنرل|میجر جنرل|بریگیڈیئر جنرل|لیفٹیننٹ کرنل"
-    "|بریگیڈیئر|کرنل|کیپٹن|میجر|لیفٹیننٹ"
+    "لیفٹیننٹ جنرل|میجر جنرل|بریگیڈیئر جنرل|لیفٹیننٹ کرنل|بریگیڈیئر|کرنل|کیپٹن|میجر|لیفٹیننٹ"
 )
 
 _SUFFIX_EN = {"retd": "Retired", "retired": "Retired", "r": "Retired", "late": "the late"}
-_SUFFIX_UR = {"retd": "ریٹائرڈ", "retired": "ریٹائرڈ", "r": "ریٹائرڈ", "late": "مرحوم",
-              "ر": "ریٹائرڈ", "ریٹائرڈ": "ریٹائرڈ", "مرحوم": "مرحوم"}
+_SUFFIX_UR = {
+    "retd": "ریٹائرڈ",
+    "retired": "ریٹائرڈ",
+    "r": "ریٹائرڈ",
+    "late": "مرحوم",
+    "ر": "ریٹائرڈ",
+    "ریٹائرڈ": "ریٹائرڈ",
+    "مرحوم": "مرحوم",
+}
 
 _RANK_SUFFIX_EN_RE = re.compile(
     rf"\b({_RANK_NAMES_EN})\b(?P<name>(?:\s+[^\s(,.]+){{0,4}})\s*\((Retd\.?|Retired|R|Late)\)",
@@ -693,12 +860,24 @@ _BARE_SUFFIX_UR_RE = re.compile(rf"\s*\((?:{_SUFFIX_TOKEN_UR})\)", re.IGNORECASE
 # instead: it is a decoration, not a fact a visitor needs read aloud, and Urdu script
 # has no place in an English reply.
 _HONOUR_SAID = {
-    "HI": "ہلالے امتیاز ملٹری", "SI": "ستارۂ امتیاز ملٹری",
-    "TI": "تمغۂ امتیاز ملٹری", "NI": "نشانے امتیاز ملٹری",
+    "HI": "ہلالے امتیاز ملٹری",
+    "SI": "ستارۂ امتیاز ملٹری",
+    "TI": "تمغۂ امتیاز ملٹری",
+    "NI": "نشانے امتیاز ملٹری",
 }
 _HONOUR_UR_LETTERS = {"ایچ آئی": "HI", "ایس آئی": "SI", "ٹی آئی": "TI", "این آئی": "NI"}
-_HONOUR_WORDS = {"hilal": "HI", "ہلال": "HI", "sitara": "SI", "ستارہ": "SI", "ستارۂ": "SI",
-                 "tamgha": "TI", "تمغہ": "TI", "تمغۂ": "TI", "nishan": "NI", "نشان": "NI"}
+_HONOUR_WORDS = {
+    "hilal": "HI",
+    "ہلال": "HI",
+    "sitara": "SI",
+    "ستارہ": "SI",
+    "ستارۂ": "SI",
+    "tamgha": "TI",
+    "تمغہ": "TI",
+    "تمغۂ": "TI",
+    "nishan": "NI",
+    "نشان": "NI",
+}
 _HONOUR_TOKEN = (
     r"(?P<abbr>\b(?:HI|SI|TI|NI)|ایچ\s+آئی|ایس\s+آئی|ٹی\s+آئی|این\s+آئی)\s*\(\s*(?:M|ایم)\s*\)|"
     r"(?P<word>\b(?:Hilal|Sitara|Tamgha|Nishan)|ہلال|ستارۂ?|تمغۂ?|نشان)[ِ\s-]*(?:e|ے|ِ)?[\s-]*"
@@ -730,7 +909,9 @@ def _say_honour(match: re.Match[str], lang: str) -> str:
     # Keep the separator only if the honour followed something ("Hyder, HI(M)").
     lead = match.group(0)[:1]
     comma = "،" if lead in ",،" else (" " if lead.isspace() else "")
-    return f"{' ' + suffix if suffix else ''}{comma}{' ' if comma.strip() else ''}{_HONOUR_SAID[key]}"
+    return (
+        f"{' ' + suffix if suffix else ''}{comma}{' ' if comma.strip() else ''}{_HONOUR_SAID[key]}"
+    )
 
 
 # Honorifics before a name. English reads "Mr." and "Dr." correctly; Urdu needs them in
@@ -738,14 +919,18 @@ def _say_honour(match: re.Match[str], lang: str) -> str:
 # "Jinnah Dr. پر" (Drive) would match.
 _HONORIFIC_BEFORE_NAME = r"(?=\s+[A-Z])"
 _HONORIFICS = {
-    "en": ((re.compile(rf"\bEngr\.?{_HONORIFIC_BEFORE_NAME}"), "Engineer"),
-           (re.compile(rf"\bProf\.?{_HONORIFIC_BEFORE_NAME}"), "Professor")),
-    "ur": ((re.compile(rf"\bEngr\.?{_HONORIFIC_BEFORE_NAME}"), "انجینئر"),
-           (re.compile(rf"\bProf\.?{_HONORIFIC_BEFORE_NAME}"), "پروفیسر"),
-           (re.compile(rf"\bDr\.?{_HONORIFIC_BEFORE_NAME}"), "ڈاکٹر"),
-           (re.compile(rf"\bMrs\.?{_HONORIFIC_BEFORE_NAME}"), "مسز"),
-           (re.compile(rf"\bMr\.?{_HONORIFIC_BEFORE_NAME}"), "مسٹر"),
-           (re.compile(rf"\bMs\.?{_HONORIFIC_BEFORE_NAME}"), "مس")),
+    "en": (
+        (re.compile(rf"\bEngr\.?{_HONORIFIC_BEFORE_NAME}"), "Engineer"),
+        (re.compile(rf"\bProf\.?{_HONORIFIC_BEFORE_NAME}"), "Professor"),
+    ),
+    "ur": (
+        (re.compile(rf"\bEngr\.?{_HONORIFIC_BEFORE_NAME}"), "انجینئر"),
+        (re.compile(rf"\bProf\.?{_HONORIFIC_BEFORE_NAME}"), "پروفیسر"),
+        (re.compile(rf"\bDr\.?{_HONORIFIC_BEFORE_NAME}"), "ڈاکٹر"),
+        (re.compile(rf"\bMrs\.?{_HONORIFIC_BEFORE_NAME}"), "مسز"),
+        (re.compile(rf"\bMr\.?{_HONORIFIC_BEFORE_NAME}"), "مسٹر"),
+        (re.compile(rf"\bMs\.?{_HONORIFIC_BEFORE_NAME}"), "مس"),
+    ),
 }
 
 
@@ -756,8 +941,9 @@ def _move_suffix(match: re.Match[str], table: dict[str, str]) -> str:
     return f"{word} {rank}{name}"
 
 
-def spoken_names_and_ranks(text: str, lang: str = "en", changes: Changes | None = None,
-                           kokoro: bool = False) -> str:
+def spoken_names_and_ranks(
+    text: str, lang: str = "en", changes: Changes | None = None, kokoro: bool = False
+) -> str:
     if not text:
         return text
 
@@ -775,8 +961,12 @@ def spoken_names_and_ranks(text: str, lang: str = "en", changes: Changes | None 
         for pattern, replacement in _RANKS_EN:
             text = _sub(pattern, replacement, text, changes)
         text = _sub(_RANK_SUFFIX_EN_RE, lambda m: _move_suffix(m, _SUFFIX_EN), text, changes)
-        text = _sub(_BARE_SUFFIX_RE,
-                    lambda m: f" {_SUFFIX_EN[m.group(1).rstrip('.').lower()]}", text, changes)
+        text = _sub(
+            _BARE_SUFFIX_RE,
+            lambda m: f" {_SUFFIX_EN[m.group(1).rstrip('.').lower()]}",
+            text,
+            changes,
+        )
     for pattern, replacement in _HONORIFICS[_lang_key(lang)]:
         text = _sub(pattern, replacement, text, changes)
     if kokoro:  # Names are said by spoken_for_kokoro, not respelled in Urdu script.
@@ -822,8 +1012,13 @@ _AMP_RE = _words_re(_AMP_ABBR, bounded=False)
 # A slashed title pair ("MD/CEO") is run together; hyphenated letters joined by "and"
 # read back correctly. A lone initialism is fine and left alone.
 _TITLE_LETTERS = {
-    "MD": "M-D", "CEO": "C-E-O", "CFO": "C-F-O", "COO": "C-O-O",
-    "CTO": "C-T-O", "CIO": "C-I-O", "CISO": "C-I-S-O",
+    "MD": "M-D",
+    "CEO": "C-E-O",
+    "CFO": "C-F-O",
+    "COO": "C-O-O",
+    "CTO": "C-T-O",
+    "CIO": "C-I-O",
+    "CISO": "C-I-S-O",
     # One role written as a compound; "and" twice in a row would be wrong.
     "MD-CEO": "M-D C-E-O",
 }
@@ -845,9 +1040,7 @@ _CITY = (
     r"Ghotki|Daharki|اسلام\s*آباد|کراچی|لاہور|راولپنڈی|پشاور|کوئٹہ|ملتان|حیدرآباد|"
     r"سکھر|گھوٹکی|ڈہرکی"
 )
-_POSTCODE_RE = re.compile(
-    rf"({_CITY})[\s,–—-]+(\d{{5}})\b(?!\s*(?:million|billion|thousand))"
-)
+_POSTCODE_RE = re.compile(rf"({_CITY})[\s,–—-]+(\d{{5}})\b(?!\s*(?:million|billion|thousand))")
 _POSTAL_LABEL = {"en": "postal code", "ur": "پوسٹل کوڈ"}
 
 # "ISO 45001:2018": a comma between standard and edition, so the numbers don't run together.
@@ -857,11 +1050,16 @@ _STANDARD_EDITION_RE = re.compile(
 _DIGIT_WORDS = {"en": _ONES[:10], "ur": _UR_DIGIT_WORDS}
 
 _ORDINALS = {
-    "1st": {"en": "First", "ur": "فرسٹ"}, "2nd": {"en": "Second", "ur": "سیکنڈ"},
-    "3rd": {"en": "Third", "ur": "تھرڈ"}, "4th": {"en": "Fourth", "ur": "فورتھ"},
-    "5th": {"en": "Fifth", "ur": "فففتھ"}, "6th": {"en": "Sixth", "ur": "سکستھ"},
-    "7th": {"en": "Seventh", "ur": "سیونتھ"}, "8th": {"en": "Eighth", "ur": "ایتھ"},
-    "9th": {"en": "Ninth", "ur": "نائنتھ"}, "10th": {"en": "Tenth", "ur": "ٹینتھ"},
+    "1st": {"en": "First", "ur": "فرسٹ"},
+    "2nd": {"en": "Second", "ur": "سیکنڈ"},
+    "3rd": {"en": "Third", "ur": "تھرڈ"},
+    "4th": {"en": "Fourth", "ur": "فورتھ"},
+    "5th": {"en": "Fifth", "ur": "فففتھ"},
+    "6th": {"en": "Sixth", "ur": "سکستھ"},
+    "7th": {"en": "Seventh", "ur": "سیونتھ"},
+    "8th": {"en": "Eighth", "ur": "ایتھ"},
+    "9th": {"en": "Ninth", "ur": "نائنتھ"},
+    "10th": {"en": "Tenth", "ur": "ٹینتھ"},
 }
 _ORDINAL_RE = re.compile(rf"\b({'|'.join(_ORDINALS)})\b", re.IGNORECASE)
 
@@ -869,22 +1067,30 @@ _ORDINAL_RE = re.compile(rf"\b({'|'.join(_ORDINALS)})\b", re.IGNORECASE)
 _CONTACT = {
     "en": [
         (re.compile(r"\bExt\.?\s*(?=\d)", re.IGNORECASE), "extension "),
-        (re.compile(r"(?<=extension )(\d{2,5})\b"),
-         lambda m: " ".join(_DIGIT_WORDS["en"][int(d)] for d in m.group(1))),
+        (
+            re.compile(r"(?<=extension )(\d{2,5})\b"),
+            lambda m: " ".join(_DIGIT_WORDS["en"][int(d)] for d in m.group(1)),
+        ),
         (re.compile(r"\bP\.?\s?O\.?\s+Box\b", re.IGNORECASE), "Post Office Box"),
-        (re.compile(r"(?<=Post Office Box )(\d{1,6})\b"),
-         lambda m: " ".join(_DIGIT_WORDS["en"][int(d)] for d in m.group(1))),
+        (
+            re.compile(r"(?<=Post Office Box )(\d{1,6})\b"),
+            lambda m: " ".join(_DIGIT_WORDS["en"][int(d)] for d in m.group(1)),
+        ),
         (re.compile(r"\bTel\.?(?=[\s:])", re.IGNORECASE), "Telephone"),
         (re.compile(r"\bFax\.?(?=[\s:])", re.IGNORECASE), "Fax"),
         (re.compile(r"\bUAN\b"), "U A N"),
     ],
     "ur": [
         (re.compile(r"\bExt\.?\s*(?=\d)", re.IGNORECASE), "ایکسٹینشن "),
-        (re.compile(r"(?<=ایکسٹینشن )(\d{2,5})\b"),
-         lambda m: " ".join(_DIGIT_WORDS["ur"][int(d)] for d in m.group(1))),
+        (
+            re.compile(r"(?<=ایکسٹینشن )(\d{2,5})\b"),
+            lambda m: " ".join(_DIGIT_WORDS["ur"][int(d)] for d in m.group(1)),
+        ),
         (re.compile(r"\bP\.?\s?O\.?\s+Box\b", re.IGNORECASE), "پوسٹ آفس باکس"),
-        (re.compile(r"(?<=پوسٹ آفس باکس )(\d{1,6})\b"),
-         lambda m: " ".join(_DIGIT_WORDS["ur"][int(d)] for d in m.group(1))),
+        (
+            re.compile(r"(?<=پوسٹ آفس باکس )(\d{1,6})\b"),
+            lambda m: " ".join(_DIGIT_WORDS["ur"][int(d)] for d in m.group(1)),
+        ),
         (re.compile(r"\bTel\.?(?=[\s:])", re.IGNORECASE), "ٹیلیفون"),
         (re.compile(r"\bFax\.?(?=[\s:])", re.IGNORECASE), "فیکس"),
         (re.compile(r"\bUAN\b"), "یو اے این"),
@@ -940,7 +1146,8 @@ def spoken_addresses(text: str, lang: str = "en", changes: Changes | None = None
     text = _sub(
         _TITLE_PAIR_RE,
         lambda m: f"{_say_title(m.group(1))} {_AND[key]} {_say_title(m.group(2))}",
-        text, changes,
+        text,
+        changes,
     )
     text = _sub(_SECTOR_RE, _say_sector, text, changes)
 
@@ -950,9 +1157,12 @@ def spoken_addresses(text: str, lang: str = "en", changes: Changes | None = None
     digits = _DIGIT_WORDS[key]
     text = _sub(
         _POSTCODE_RE,
-        lambda m: f"{m.group(1)}{comma} {_POSTAL_LABEL[key]} "
-        + " ".join(digits[int(d)] for d in m.group(2)),
-        text, changes,
+        lambda m: (
+            f"{m.group(1)}{comma} {_POSTAL_LABEL[key]} "
+            + " ".join(digits[int(d)] for d in m.group(2))
+        ),
+        text,
+        changes,
     )
 
     text = _sub(_ORDINAL_RE, lambda m: _ORDINALS[m.group(1).lower()][key], text, changes)
@@ -980,10 +1190,34 @@ _NOT_PART_OF_A_NUMBER = r"(?![\d/-])(?!\.\d)"
 _FY_BARE_RE = re.compile(rf"(?<![\d./-])(\d{{4}})\s*[-–]\s*(\d{{2}}){_NOT_PART_OF_A_NUMBER}")
 
 _MONTHS = {
-    "en": ("January", "February", "March", "April", "May", "June",
-           "July", "August", "September", "October", "November", "December"),
-    "ur": ("جنوری", "فروری", "مارچ", "اپریل", "مئی", "جون",
-           "جولائی", "اگست", "ستمبر", "اکتوبر", "نومبر", "دسمبر"),
+    "en": (
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+    ),
+    "ur": (
+        "جنوری",
+        "فروری",
+        "مارچ",
+        "اپریل",
+        "مئی",
+        "جون",
+        "جولائی",
+        "اگست",
+        "ستمبر",
+        "اکتوبر",
+        "نومبر",
+        "دسمبر",
+    ),
 }
 _DATE_RE = re.compile(r"\b(\d{1,2})\s*/\s*(\d{1,2})\s*/\s*(\d{4})\b")
 
@@ -996,7 +1230,7 @@ _WELL_RE = re.compile(r"\b(?!(?:AM|PM)\b)([A-Za-z][A-Za-z]*)-(\d{1,2})\b", re.IG
 
 _SYMBOL_WORDS = {
     "~": {"en": "approximately ", "ur": "تقریباً "},
-    "−": {"en": "minus ", "ur": "منفی "},   # U+2212, not the ASCII hyphen
+    "−": {"en": "minus ", "ur": "منفی "},  # U+2212, not the ASCII hyphen
     "§": {"en": "section ", "ur": "سیکشن "},
 }
 _SYMBOL_RE = re.compile(r"[~−§](?=\s*[\d\w])")
@@ -1269,50 +1503,174 @@ def spoken_places(text: str, lang: str = "en", changes: Changes | None = None) -
 # Urdu: Urdu letter names, as the acronym table's Urdu column already does.
 
 _UR_LETTER_NAMES = {
-    "A": "اے", "B": "بی", "C": "سی", "D": "ڈی", "E": "ای", "F": "ایف", "G": "جی",
-    "H": "ایچ", "I": "آئی", "J": "جے", "K": "کے", "L": "ایل", "M": "ایم", "N": "این",
-    "O": "او", "P": "پی", "Q": "کیو", "R": "آر", "S": "ایس", "T": "ٹی", "U": "یو",
-    "V": "وی", "W": "ڈبلیو", "X": "ایکس", "Y": "وائی", "Z": "زیڈ",
+    "A": "اے",
+    "B": "بی",
+    "C": "سی",
+    "D": "ڈی",
+    "E": "ای",
+    "F": "ایف",
+    "G": "جی",
+    "H": "ایچ",
+    "I": "آئی",
+    "J": "جے",
+    "K": "کے",
+    "L": "ایل",
+    "M": "ایم",
+    "N": "این",
+    "O": "او",
+    "P": "پی",
+    "Q": "کیو",
+    "R": "آر",
+    "S": "ایس",
+    "T": "ٹی",
+    "U": "یو",
+    "V": "وی",
+    "W": "ڈبلیو",
+    "X": "ایکس",
+    "Y": "وائی",
+    "Z": "زیڈ",
 }
 
 # Said as a word, not letters. English keeps the Latin, which it reads correctly.
 _WORD_ACRONYMS_UR = {
-    "LUMS": "لمز", "PARCO": "پارکو", "GEM": "جیم", "SOAS": "سواس", "NUST": "نسٹ",
-    "NADRA": "نادرا", "WAPDA": "واپڈا", "NEPRA": "نیپرا", "OGRA": "اوگرا", "NAB": "نیب",
-    "FATA": "فاٹا", "SUPARCO": "سپارکو", "COMSATS": "کامسیٹس", "NATO": "نیٹو",
-    "OPEC": "اوپیک", "COVID": "کووڈ", "UNICEF": "یونیسیف", "UNESCO": "یونیسکو",
-    "NASA": "ناسا", "SMART": "سمارٹ", "SEED": "سیڈ", "RAG": "ریگ", "BTEX": "بی ٹیکس",
-    "FONGROW": "فون گرو", "IPSEC": "آئی پی سیک", "EBITDA": "EBITDA", "OHSAS": "OHSAS",
-    "ANSI": "اینسی", "PACRA": "پیکرا",
+    "LUMS": "لمز",
+    "PARCO": "پارکو",
+    "GEM": "جیم",
+    "SOAS": "سواس",
+    "NUST": "نسٹ",
+    "NADRA": "نادرا",
+    "WAPDA": "واپڈا",
+    "NEPRA": "نیپرا",
+    "OGRA": "اوگرا",
+    "NAB": "نیب",
+    "FATA": "فاٹا",
+    "SUPARCO": "سپارکو",
+    "COMSATS": "کامسیٹس",
+    "NATO": "نیٹو",
+    "OPEC": "اوپیک",
+    "COVID": "کووڈ",
+    "UNICEF": "یونیسیف",
+    "UNESCO": "یونیسکو",
+    "NASA": "ناسا",
+    "SMART": "سمارٹ",
+    "SEED": "سیڈ",
+    "RAG": "ریگ",
+    "BTEX": "بی ٹیکس",
+    "FONGROW": "فون گرو",
+    "IPSEC": "آئی پی سیک",
+    "EBITDA": "EBITDA",
+    "OHSAS": "OHSAS",
+    "ANSI": "اینسی",
+    "PACRA": "پیکرا",
 }
 # Mixed-case forms the all-caps pattern cannot see, and ones said neither as letters
 # nor as a word ("AAA" is "triple A").
 _SPECIAL_ACRONYMS = {
-    "MSc": {"en": "M-Sc", "ur": "ایم ایس سی"}, "BSc": {"en": "B-Sc", "ur": "بی ایس سی"},
-    "PhD": {"en": "P-H-D", "ur": "پی ایچ ڈی"}, "PwC": {"en": "P-W-C", "ur": "پی ڈبلیو سی"},
+    "MSc": {"en": "M-Sc", "ur": "ایم ایس سی"},
+    "BSc": {"en": "B-Sc", "ur": "بی ایس سی"},
+    "PhD": {"en": "P-H-D", "ur": "پی ایچ ڈی"},
+    "PwC": {"en": "P-W-C", "ur": "پی ڈبلیو سی"},
     "AAA": {"en": "triple A", "ur": "ٹرپل اے"},
 }
 _SPECIAL_ACRONYM_RE = _words_re(_SPECIAL_ACRONYMS)
 
 # Ordinary English words written in capitals, for emphasis or in a heading. Not
 # initialisms, in either language.
-_CAPS_WORDS = frozenset({
-    "A", "ALL", "AN", "AND", "ARE", "AS", "AT", "BE", "BUT", "BY", "DO", "DONT", "EVER",
-    "FIRST", "FOR", "FROM", "HAS", "HAVE", "IF", "IMPORTANT", "IN", "INTO", "IS", "IT",
-    "LAST", "MUST", "NAME", "NAMES", "NEVER", "NEW", "NO", "NOT", "NOTE", "OF", "ON",
-    "ONE", "ONLY", "OR", "OUR", "READ", "READER", "REPLY", "SEE", "SENIOR", "SHOULD",
-    "THAT", "THE", "THIS", "TO", "USE", "VOICE", "WARNING", "WE", "WITH", "YES", "YOU",
-    "YOUR", "MANAGEMENT", "ALWAYS", "WHAT", "WHO", "WHEN", "WHERE", "WHY", "HOW",
-})
+_CAPS_WORDS = frozenset(
+    {
+        "A",
+        "ALL",
+        "AN",
+        "AND",
+        "ARE",
+        "AS",
+        "AT",
+        "BE",
+        "BUT",
+        "BY",
+        "DO",
+        "DONT",
+        "EVER",
+        "FIRST",
+        "FOR",
+        "FROM",
+        "HAS",
+        "HAVE",
+        "IF",
+        "IMPORTANT",
+        "IN",
+        "INTO",
+        "IS",
+        "IT",
+        "LAST",
+        "MUST",
+        "NAME",
+        "NAMES",
+        "NEVER",
+        "NEW",
+        "NO",
+        "NOT",
+        "NOTE",
+        "OF",
+        "ON",
+        "ONE",
+        "ONLY",
+        "OR",
+        "OUR",
+        "READ",
+        "READER",
+        "REPLY",
+        "SEE",
+        "SENIOR",
+        "SHOULD",
+        "THAT",
+        "THE",
+        "THIS",
+        "TO",
+        "USE",
+        "VOICE",
+        "WARNING",
+        "WE",
+        "WITH",
+        "YES",
+        "YOU",
+        "YOUR",
+        "MANAGEMENT",
+        "ALWAYS",
+        "WHAT",
+        "WHO",
+        "WHEN",
+        "WHERE",
+        "WHY",
+        "HOW",
+    }
+)
 
 _ROMAN_NUMERALS = frozenset({"II", "III", "IV", "VI", "VII", "VIII", "IX", "XI", "XII"})
 # English: already read correctly as written, or an ordinary word in capitals.
-_KEEP_LATIN_EN = frozenset({
-    "AI", "IT", "HR", "ML", "CEO", "CFO", "COO", "MD", "ISO", "AM", "PM", "TV", "OK",
-    "US", "UK", "USA", "UAE",
-    # Word-read acronyms stay Latin, except PACRA: Latin came back "Petra", letters "PECRA".
-    *(_WORD_ACRONYMS_UR.keys() - {"PACRA"}),
-})
+_KEEP_LATIN_EN = frozenset(
+    {
+        "AI",
+        "IT",
+        "HR",
+        "ML",
+        "CEO",
+        "CFO",
+        "COO",
+        "MD",
+        "ISO",
+        "AM",
+        "PM",
+        "TV",
+        "OK",
+        "US",
+        "UK",
+        "USA",
+        "UAE",
+        # Word-read acronyms stay Latin, except PACRA: Latin came back "Petra", letters "PECRA".
+        *(_WORD_ACRONYMS_UR.keys() - {"PACRA"}),
+    }
+)
 
 # Standalone capitals; a hyphen on either side means the token is already spelled out
 # ("M-D") or part of a compound the earlier passes own.
@@ -1379,7 +1737,7 @@ _ABBR_RULES = tuple((re.compile(p, re.IGNORECASE), r) for p, r in _LATIN_ABBR.it
 
 
 def _say_time(match: re.Match[str]) -> str:
-    """"9:00 AM" → "9 AM"; "5:30 PM" → "5 30 PM"."""
+    """ "9:00 AM" → "9 AM"; "5:30 PM" → "5 30 PM"."""
     hour, minute, meridiem = match.group(1), match.group(2), match.group(3)
     said = hour if minute == "00" else f"{hour} {minute}"
     return f"{said} {meridiem}" if meridiem else said
@@ -1410,8 +1768,15 @@ _ARABIC_RE = re.compile(r"[؀-ۿݐ-ݿﭐ-﷿ﹰ-﻿]")
 # "Tier III" is read letter by letter. Anchored to a label so a stray "IV" in prose is
 # untouched; a bare "I" is absent because it collides with the pronoun.
 _ROMAN_VALUES = {
-    "II": "2", "III": "3", "IV": "4", "V": "5",
-    "VI": "6", "VII": "7", "VIII": "8", "IX": "9", "X": "10",
+    "II": "2",
+    "III": "3",
+    "IV": "4",
+    "V": "5",
+    "VI": "6",
+    "VII": "7",
+    "VIII": "8",
+    "IX": "9",
+    "X": "10",
 }
 _ROMAN_LABEL = r"(?:Tier|Phase|Annex|Annexure|Category|Class|ٹیئر|مرحلہ|درجہ)"
 _ROMAN_RE = re.compile(
@@ -1438,10 +1803,10 @@ def _roman_to_digits(match: re.Match[str]) -> str:
 def _fix_slashes(text: str, changes: Changes | None = None) -> str:
     out, last = [], 0
     for m in _UR_WORD_SLASH_RE.finditer(text):
-        window = text[max(0, m.start() - 1): m.end() + 1]
+        window = text[max(0, m.start() - 1) : m.end() + 1]
         if _NUMERIC_SLASH_RE.search(window):
             continue
-        out.append(text[last:m.start()])
+        out.append(text[last : m.start()])
         out.append(" اور ")
         if changes is not None:
             changes.append((m.group(0), " اور "))
@@ -1498,14 +1863,18 @@ def spoken_for_kokoro(text: str, slots: list[str], changes: Changes | None = Non
     # A name can mix audited pronunciations with words Kokoro says best as written
     # ("Zafar Abbas"), so each word of a full name is decided on its own.
     text = _KOKORO_FULL_NAME_RE.sub(
-        lambda m: " ".join(slot(w, [_KOKORO_WORDS[w]]) if w in _KOKORO_WORDS else w
-                           for w in m.group(0).split()), text)
+        lambda m: " ".join(
+            slot(w, [_KOKORO_WORDS[w]]) if w in _KOKORO_WORDS else w for w in m.group(0).split()
+        ),
+        text,
+    )
     return _KOKORO_WORD_RE.sub(lambda m: slot(m.group(0), [_KOKORO_WORDS[m.group(0)]]), text)
 
 
 def _restore_kokoro_slots(text: str, slots: list[str]) -> str:
     return _KOKORO_SLOT_RE.sub(
-        lambda m: slots[int("".join(str(ord(c) - _SLOT_DIGIT0) for c in m.group(1)))], text)
+        lambda m: slots[int("".join(str(ord(c) - _SLOT_DIGIT0) for c in m.group(1)))], text
+    )
 
 
 # ── Public API ──────────────────────────────────────────────────────

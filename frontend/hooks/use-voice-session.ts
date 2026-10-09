@@ -20,7 +20,7 @@
  * {"tts"} header now carries a `clip` id, and {"type":"lipsync",uid,names?,frames}
  * messages deliver that clip's ARKit blendshape keyframes. The audio path is
  * unchanged — the <audio> element that plays a sentence simply also becomes the
- * clock its lipsync clip is sampled against (see lib/blendshapePlayer.ts).
+ * clock its lipsync clip is sampled against (see lib/blendshape-player.ts).
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -31,7 +31,7 @@ import {
   handleClipMessage,
   stop as stopLipsync,
   waitForFrames,
-} from "@/lib/blendshapePlayer";
+} from "@/lib/blendshape-player";
 import type { Lang } from "@/lib/i18n";
 import { DEFAULT_AVATAR, type AvatarId } from "@/components/avatar/models";
 
@@ -47,7 +47,7 @@ const TARGET_SR = 16000;
 /**
  * How long a sentence's audio waits for its Audio2Face frames before playing
  * anyway. Only the first sentence of a reply normally waits at all — see
- * waitForFrames() in lib/blendshapePlayer.ts.
+ * waitForFrames() in lib/blendshape-player.ts.
  */
 const CLIP_FRAME_WAIT_MS = 700;
 /**

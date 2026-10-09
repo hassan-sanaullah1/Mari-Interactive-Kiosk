@@ -62,10 +62,11 @@ def test_english_greetings_open_with_one_assalamualaikum(reply: str) -> None:
     assert "Maryam" in said
 
 
-@pytest.mark.parametrize("reply", ["Highly productive fields.", "Heyward is a name.",
-                                   "Salamander facts."])
+@pytest.mark.parametrize(
+    "reply", ["Highly productive fields.", "Heyward is a name.", "Salamander facts."]
+)
 def test_a_word_that_merely_starts_like_a_greeting_is_not_eaten(reply: str) -> None:
-    """"hi" must not swallow the start of "Highly" — the opener match is word-bounded."""
+    """ "hi" must not swallow the start of "Highly" — the opener match is word-bounded."""
     assert force_salam(reply, "en") == f"Assalamualaikum! {reply}"
 
 
@@ -82,10 +83,14 @@ def test_an_empty_reply_is_not_turned_into_a_bare_salam() -> None:
 
 # ── returning a visitor's salam ─────────────────────────────────────
 
+
 @pytest.mark.parametrize(
     "reply",
-    ["Assalamualaikum! Welcome to Mari Energies, I am Maryam.",
-     "Walaikum assalam, I am Maryam.", "Hello! I am Maryam."],
+    [
+        "Assalamualaikum! Welcome to Mari Energies, I am Maryam.",
+        "Walaikum assalam, I am Maryam.",
+        "Hello! I am Maryam.",
+    ],
 )
 def test_a_visitors_salam_is_returned_in_english(reply: str) -> None:
     said = force_salam(reply, "en", returning=True)
@@ -95,8 +100,11 @@ def test_a_visitors_salam_is_returned_in_english(reply: str) -> None:
 
 @pytest.mark.parametrize(
     "reply",
-    ["السلام علیکم! میں مریم ہوں۔", "وعلیکم السلام، میں مریم ہوں۔",
-     "آپ کا خیر مقدم ہے، میں مریم ہوں۔"],
+    [
+        "السلام علیکم! میں مریم ہوں۔",
+        "وعلیکم السلام، میں مریم ہوں۔",
+        "آپ کا خیر مقدم ہے، میں مریم ہوں۔",
+    ],
 )
 def test_a_visitors_salam_is_returned_in_urdu(reply: str) -> None:
     said = force_salam(reply, "ur", returning=True)
@@ -106,9 +114,18 @@ def test_a_visitors_salam_is_returned_in_urdu(reply: str) -> None:
 
 @pytest.mark.parametrize(
     "text",
-    ["Assalamualaikum", "Assalam o Alaikum, who are you?", "As-salamu alaykum", "salam",
-     "Hi, assalamualaikum", "Asalamualaikum wa rahmatullahi wa barakatuh",
-     "السلام علیکم", "اسلام علیکم، آپ کون ہیں؟", "السلام و علیکم ورحمۃ اللہ وبرکاتہ", "سلام"],
+    [
+        "Assalamualaikum",
+        "Assalam o Alaikum, who are you?",
+        "As-salamu alaykum",
+        "salam",
+        "Hi, assalamualaikum",
+        "Asalamualaikum wa rahmatullahi wa barakatuh",
+        "السلام علیکم",
+        "اسلام علیکم، آپ کون ہیں؟",
+        "السلام و علیکم ورحمۃ اللہ وبرکاتہ",
+        "سلام",
+    ],
 )
 def test_every_salam_the_visitor_says_is_detected(text: str) -> None:
     assert said_salam(text)
@@ -131,6 +148,7 @@ def test_the_greeting_prompts_tell_the_model_to_return_a_salam() -> None:
 
 # ── which turns count as a greeting ──────────────────────────────────
 
+
 @pytest.mark.parametrize(
     "text", ["السلام علیکم", "ہیلو", "آپ کون ہیں؟", "آپ کون ہیں", "اپنا تعارف کرائیں؟", "hi"]
 )
@@ -139,7 +157,7 @@ def test_greeting_turns_are_detected(text: str) -> None:
 
 
 def test_urdu_question_mark_is_recognised() -> None:
-    """"؟" is U+061F, not ASCII "?" — with only the ASCII form in the pattern,
+    """ "؟" is U+061F, not ASCII "?" — with only the ASCII form in the pattern,
     "آپ کون ہیں؟" was never detected and an identity question got no introduction."""
     assert is_greeting("آپ کون ہیں؟")
 
@@ -150,26 +168,32 @@ def test_ordinary_questions_are_not_greetings(text: str) -> None:
     assert not is_greeting(text)
 
 
-@pytest.mark.parametrize("text", [
-    # A salam, an intro ask and a real question in one breath — how a visitor actually
-    # opens. This matched neither pattern, so the kiosk skipped its own introduction.
-    "السلام علیکم۔ اپنا انٹروڈکشن دیجیے، اور مجھے ماری انرجیز کے ورٹیکلز کے بارے میں بتائیے۔",
-    "سلام، مجھے verticals بتائیں",
-    # The borrowed "انٹروڈکشن" and the "دیجیے/دیں" verbs, not just "تعارف کرائیں".
-    "اپنا انٹروڈکشن دیجیے",
-    "اپنا انٹروڈکشن دیں",
-    "Hi, introduce yourself and tell me about the verticals",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        # A salam, an intro ask and a real question in one breath — how a visitor actually
+        # opens. This matched neither pattern, so the kiosk skipped its own introduction.
+        "السلام علیکم۔ اپنا انٹروڈکشن دیجیے، اور مجھے ماری انرجیز کے ورٹیکلز کے بارے میں بتائیے۔",
+        "سلام، مجھے verticals بتائیں",
+        # The borrowed "انٹروڈکشن" and the "دیجیے/دیں" verbs, not just "تعارف کرائیں".
+        "اپنا انٹروڈکشن دیجیے",
+        "اپنا انٹروڈکشن دیں",
+        "Hi, introduce yourself and tell me about the verticals",
+    ],
+)
 def test_a_greeting_followed_by_a_real_question_still_greets(text: str) -> None:
     assert is_greeting(text)
 
 
-@pytest.mark.parametrize("text", [
-    # The same question WITHOUT the greeting must not trigger the introduction.
-    "ماری انرجیز کے ورٹیکلز کے بارے میں بتائیے۔",
-    "tell me about Mari Energies",
-    "کمپنی کی تاریخ بتائیں",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        # The same question WITHOUT the greeting must not trigger the introduction.
+        "ماری انرجیز کے ورٹیکلز کے بارے میں بتائیے۔",
+        "tell me about Mari Energies",
+        "کمپنی کی تاریخ بتائیں",
+    ],
+)
 def test_the_same_question_without_a_greeting_does_not_greet(text: str) -> None:
     assert not is_greeting(text)
 
@@ -178,6 +202,7 @@ def test_the_same_question_without_a_greeting_does_not_greet(text: str) -> None:
 # Urdu marks gender on the possessive as well as on the verb. The prompt covers the
 # verbs and Qwen gets those right, but it intermittently writes "میں Mari Energies کا
 # AI Representative ہوں" — masculine "کا" for a female speaker.
+
 
 @pytest.mark.parametrize(
     "reply",
@@ -190,7 +215,7 @@ def test_the_same_question_without_a_greeting_does_not_greet(text: str) -> None:
 )
 def test_self_description_becomes_feminine(reply: str) -> None:
     said = feminine_agreement(reply, "ur")
-    assert "کی" in said                       # feminine possessive
+    assert "کی" in said  # feminine possessive
     assert "کا" not in said and "کے" not in said
 
 

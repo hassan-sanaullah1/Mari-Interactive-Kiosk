@@ -15,7 +15,7 @@ from pathlib import Path
 
 from .chunking import Chunk, CountTokens, chunk_markdown, chunk_text, strip_frontmatter
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 SUPPORTED_SUFFIXES = {".md", ".markdown", ".txt", ".pdf"}
 
@@ -118,7 +118,7 @@ def discover(corpus_dir: Path, exclude: Sequence[str] = ()) -> list[Path]:
     corpus, is never ingested as a document.
     """
     if not corpus_dir.exists():
-        log.warning("corpus dir %s does not exist — nothing to ingest", corpus_dir)
+        logger.warning("corpus dir %s does not exist — nothing to ingest", corpus_dir)
         return []
     skip = {name.lower() for name in exclude}
     return sorted(

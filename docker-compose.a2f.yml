@@ -1,0 +1,14 @@
+# Opt-in: joins the backend to the Audio2Face stack's network (deploy/a2f/), so
+# APP_A2F_URL=nim:52000 resolves by service name. Only usable on a machine running that
+# stack, because the network is external; `make dev` adds this file when it exists.
+# Never merge this into docker-compose.yml (see docs/deployment.md).
+services:
+  backend:
+    networks:
+      - default
+      - a2f
+
+networks:
+  a2f:
+    external: true
+    name: mari-a2f_default

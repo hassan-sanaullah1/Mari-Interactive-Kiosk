@@ -17,7 +17,7 @@ from qdrant_client import AsyncQdrantClient, models
 
 from .settings import RagSettings, get_settings
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 DENSE = "dense"
 SPARSE = "sparse"
@@ -45,7 +45,7 @@ class Hit:
     source: str
     heading_path: str
     chunk_index: int
-    score: float          # the fused RRF score
+    score: float  # the fused RRF score
     payload: dict
     # Query-to-chunk cosine. RRF scores are rank-based, so the relevance gate uses this.
     dense_similarity: float = 0.0
@@ -103,11 +103,11 @@ class QdrantStore:
                 },
                 sparse_vectors_config={SPARSE: self._sparse_params()},
             )
-            log.info("created Qdrant collection %s", name)
+            logger.info("created Qdrant collection %s", name)
         elif await self._sparse_modifier_missing(name):
             # Cannot be fixed in place. Ingestion re-embeds on this boot, since every
             # file's point count is now 0.
-            log.warning(
+            logger.warning(
                 "collection %s has no IDF modifier on its sparse index; recreating it "
                 "so BM25 scores are IDF-weighted (the corpus re-ingests on this boot)",
                 name,
@@ -123,7 +123,7 @@ class QdrantStore:
                     field_schema=models.PayloadSchemaType.KEYWORD,
                 )
             except Exception as exc:  # noqa: BLE001 - already-exists is the common case
-                log.debug("payload index on `%s` not created: %s", field, exc)
+                logger.debug("payload index on `%s` not created: %s", field, exc)
 
     async def _sparse_modifier_missing(self, name: str) -> bool:
         """True when an existing collection's sparse index predates the IDF modifier.
@@ -138,8 +138,9 @@ class QdrantStore:
                 return False
             return params.modifier != models.Modifier.IDF
         except Exception:  # noqa: BLE001
-            log.debug("could not read sparse config for %s; leaving it as is", name,
-                      exc_info=True)
+            logger.debug(
+                "could not read sparse config for %s; leaving it as is", name, exc_info=True
+            )
             return False
 
     async def recreate_collection(self) -> None:
@@ -193,7 +194,9 @@ class QdrantStore:
             collection_name=self.settings.qdrant_collection,
             points_selector=models.FilterSelector(
                 filter=models.Filter(
-                    must=[models.FieldCondition(key="source", match=models.MatchValue(value=source))]
+                    must=[
+                        models.FieldCondition(key="source", match=models.MatchValue(value=source))
+                    ]
                 )
             ),
             wait=True,
@@ -327,5 +330,8 @@ class QdrantStore:
                 "points": await self.count() if exists else 0,
             }
         except Exception as exc:  # noqa: BLE001
-            return {"reachable": False, "collection": self.settings.qdrant_collection,
-                    "error": f"{type(exc).__name__}: {exc}"}
+            return {
+                "reachable": False,
+                "collection": self.settings.qdrant_collection,
+                "error": f"{type(exc).__name__}: {exc}",
+            }

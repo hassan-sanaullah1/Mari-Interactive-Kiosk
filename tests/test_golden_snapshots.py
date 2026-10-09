@@ -33,13 +33,16 @@ def actual(expected) -> dict:
             mp.setitem(C.ENV, key, value)
 
     try:
-        return json.loads(json.dumps(collect(mp.setattr, set_env, expected["inputs"]),
-                                     ensure_ascii=False))
+        return json.loads(
+            json.dumps(collect(mp.setattr, set_env, expected["inputs"]), ensure_ascii=False)
+        )
     finally:
         mp.undo()
 
 
-@pytest.mark.parametrize("section", ["reply_fixes", "is_greeting", "expansion", "prompts", "canned"])
+@pytest.mark.parametrize(
+    "section", ["reply_fixes", "is_greeting", "expansion", "prompts", "canned"]
+)
 def test_section_matches(expected, actual, section) -> None:
     assert actual[section] == expected[section]
 
@@ -48,8 +51,9 @@ def test_section_matches(expected, actual, section) -> None:
 def test_tts_normalization_matches(expected, actual, lang) -> None:
     diffs = [
         (text, want, got)
-        for text, want, got in zip(expected["inputs"]["tts"], expected["normalize"][lang],
-                                   actual["normalize"][lang])
+        for text, want, got in zip(
+            expected["inputs"]["tts"], expected["normalize"][lang], actual["normalize"][lang]
+        )
         if want != got
     ]
     assert not diffs[:5], f"{len(diffs)} normalization outputs changed"

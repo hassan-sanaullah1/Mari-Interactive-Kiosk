@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, type RefObject } from "react";
 import styles from "./ControlDock.module.css";
-import { CloseIcon, PauseIcon, PlayIcon, WaveformIcon } from "./icons";
+import { CloseIcon, PauseIcon, PlayIcon, WaveformIcon } from "./Icons";
 import { uiCopy, type Gender, type Lang } from "@/lib/i18n";
-import type { Mode } from "@/hooks/useVoiceSession";
+import type { Mode } from "@/hooks/use-voice-session";
 
 type Props = {
   className?: string;

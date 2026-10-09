@@ -19,7 +19,7 @@ from .metadata import MetadataService
 from .settings import RagSettings, get_settings
 from .store import QdrantStore
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -72,19 +72,22 @@ class IngestionService:
                 if await self.store.count_by_source(path.name) > 0:
                     report.skipped.append(path.name)
                     continue
-                log.warning(
-                    "%s is recorded as ingested but has no chunks in the index; "
-                    "re-ingesting", path.name,
+                logger.warning(
+                    "%s is recorded as ingested but has no chunks in the index; re-ingesting",
+                    path.name,
                 )
             try:
                 count = await self._ingest_file(path, digest)
                 report.ingested.append(path.name)
                 report.chunks += count
             except Exception as exc:  # noqa: BLE001 - one bad file must not stop the rest
-                log.exception("ingest failed for %s", path.name)
+                logger.exception("ingest failed for %s", path.name)
                 self.metadata.mark_failed(
-                    path.name, digest, path.suffix.lstrip("."),
-                    path.stat().st_size, f"{type(exc).__name__}: {exc}",
+                    path.name,
+                    digest,
+                    path.suffix.lstrip("."),
+                    path.stat().st_size,
+                    f"{type(exc).__name__}: {exc}",
                 )
                 report.failed[path.name] = f"{type(exc).__name__}: {exc}"
 
@@ -99,7 +102,7 @@ class IngestionService:
 
         self.embedding.clear_caches()
         report.duration_s = time.perf_counter() - t0
-        log.info("ingest complete: %s", report.as_dict())
+        logger.info("ingest complete: %s", report.as_dict())
         return report
 
     async def _ingest_file(self, path: Path, digest: str) -> int:
@@ -149,7 +152,7 @@ class IngestionService:
             total += await self.store.upsert_chunks(texts, dense, sparse, payloads)
 
         self.metadata.mark_ready(path.name, digest, file_type, size, total)
-        log.info("ingested %s: %d chunks", path.name, total)
+        logger.info("ingested %s: %d chunks", path.name, total)
         return total
 
     async def delete_source(self, filename: str) -> None:

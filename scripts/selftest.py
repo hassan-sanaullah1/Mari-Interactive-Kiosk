@@ -47,9 +47,12 @@ def _mp3_to_wav16k(mp3: bytes) -> bytes:
     cont.close()
     pcm = np.concatenate(chunks).astype(np.int16).tobytes() if chunks else b""
     hdr = (
-        b"RIFF" + struct.pack("<I", 36 + len(pcm)) + b"WAVEfmt "
+        b"RIFF"
+        + struct.pack("<I", 36 + len(pcm))
+        + b"WAVEfmt "
         + struct.pack("<IHHIIHH", 16, 1, 1, 16000, 32000, 2, 16)
-        + b"data" + struct.pack("<I", len(pcm))
+        + b"data"
+        + struct.pack("<I", len(pcm))
     )
     return hdr + pcm
 

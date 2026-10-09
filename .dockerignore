@@ -1,4 +1,8 @@
 .git
+# Real values must never enter a build context, even for files the Dockerfile skips.
+.env*
+!.env.example
+docs
 .venv
 .venv312
 venv

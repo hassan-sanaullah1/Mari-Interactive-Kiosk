@@ -17,6 +17,7 @@ from server.providers.stt import _fix_misheard_mari
 
 # ── followed by a word from the company's own name ──────────────────
 
+
 @pytest.mark.parametrize(
     "text,expected",
     [
@@ -42,6 +43,7 @@ def test_mari_followed_by_company_word_is_corrected(text: str, expected: str) ->
 
 # ── standing in for the company on its own ──────────────────────────
 
+
 @pytest.mark.parametrize(
     "text,expected",
     [
@@ -63,17 +65,17 @@ def test_bare_mari_in_a_kiosk_question_is_corrected(text: str, expected: str) ->
 
 @pytest.mark.parametrize(
     "text",
-    ["The Maori people of New Zealand", "We celebrated Mardi Gras",
-     "Tell me about Mardi Gras"],
+    ["The Maori people of New Zealand", "We celebrated Mardi Gras", "Tell me about Mardi Gras"],
 )
 def test_maori_and_mardi_gras_as_real_words_are_left_alone(text: str) -> None:
-    """"Maori" and "Mardi Gras" are real, common phrases in their own right — the
+    """ "Maori" and "Mardi Gras" are real, common phrases in their own right — the
     correction must not fire just because the sound-alike appears; it needs the
     company-context anchor too, and "Mardi Gras" specifically is excluded outright."""
     assert _fix_misheard_mari(text, "en") == text
 
 
 # ── what must NOT change ─────────────────────────────────────────────
+
 
 @pytest.mark.parametrize(
     "text",
@@ -93,6 +95,7 @@ def test_an_unrelated_mary_is_left_alone(text: str) -> None:
 
 # ── Urdu ──────────────────────────────────────────────────────────────
 
+
 @pytest.mark.parametrize(
     "text,expected",
     [
@@ -111,7 +114,7 @@ def test_urdu_mari_is_corrected(text: str, expected: str) -> None:
     ["میری بہن آج نہیں آئی", "یہ میری کتاب ہے"],
 )
 def test_urdu_possessive_meri_is_left_alone(text: str) -> None:
-    """"میری" also means "my" — the genuine possessive must survive untouched."""
+    """ "میری" also means "my" — the genuine possessive must survive untouched."""
     assert _fix_misheard_mari(text, "ur") == text
 
 

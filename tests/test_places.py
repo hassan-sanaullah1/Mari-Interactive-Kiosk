@@ -23,12 +23,12 @@ from server.normalization import _ALL_PLACES, normalize_for_tts, spoken_places
 @pytest.mark.parametrize(
     "text,expected",
     [
-        ("The Daharki field.", "ڈھرکی"),          # 13× — the most frequent field
-        ("Our Sujawal Block.", "سجاول"),           # 7×
-        ("The Ghazij formation.", "غازیج"),        # 7×
-        ("A Shewa discovery.", "شیوہ"),            # 7×
-        ("Spinwam acreage.", "سپین وام"),          # 5×
-        ("In Waziristan.", "وزیرستان"),            # 12×
+        ("The Daharki field.", "ڈھرکی"),  # 13× — the most frequent field
+        ("Our Sujawal Block.", "سجاول"),  # 7×
+        ("The Ghazij formation.", "غازیج"),  # 7×
+        ("A Shewa discovery.", "شیوہ"),  # 7×
+        ("Spinwam acreage.", "سپین وام"),  # 5×
+        ("In Waziristan.", "وزیرستان"),  # 12×
         ("Sachal complex.", "سچل"),
         ("Kawagarh formation.", "کاواگڑھ"),
         ("Zarghun Medical Camp.", "زرغون"),
@@ -47,7 +47,7 @@ def test_fields_and_places_are_respelled(text: str, expected: str) -> None:
         # one correct spoken form.
         ("Mari Mobile Dastarkhawn.", "دسترخوان"),
         ("Roshan Mustaqbil Program.", "روشن مستقبل"),
-        ("Fauji Foundation holds it.", "فوجی"),   # 25× — the majority shareholder
+        ("Fauji Foundation holds it.", "فوجی"),  # 25× — the majority shareholder
     ],
 )
 def test_programme_and_group_names_are_respelled(text: str, expected: str) -> None:
@@ -70,15 +70,21 @@ def test_a_well_identifier_keeps_its_number(sample: None = None) -> None:
 
 
 def test_the_brand_still_wins_over_a_place() -> None:
-    """"Mari" has its own brand rule and is deliberately not in this table."""
+    """ "Mari" has its own brand rule and is deliberately not in this table."""
     assert "ماڑی غازیج" in normalize_for_tts("Mari Ghazij-1 well.", "en")
 
 
 @pytest.mark.parametrize(
     "name,urdu",
-    [("Islamabad", "اسلام آباد"), ("Karachi", "کراچی"),
-     ("Sindh", "سندھ"), ("Balochistan", "بلوچستان"), ("Karakoram", "قراقرم"),
-     ("Punjab", "پنجاب"), ("Lahore", "لاہور")],
+    [
+        ("Islamabad", "اسلام آباد"),
+        ("Karachi", "کراچی"),
+        ("Sindh", "سندھ"),
+        ("Balochistan", "بلوچستان"),
+        ("Karakoram", "قراقرم"),
+        ("Punjab", "پنجاب"),
+        ("Lahore", "لاہور"),
+    ],
 )
 def test_familiar_names_are_respelled_too(name: str, urdu: str) -> None:
     """These were once held back as "internationally familiar", which was the biggest
@@ -90,7 +96,7 @@ def test_familiar_names_are_respelled_too(name: str, urdu: str) -> None:
 
 
 def test_pakistan_gets_its_accent_without_urdu_script() -> None:
-    """"Pakistan" is the one name in this table that must stay in the Latin alphabet.
+    """ "Pakistan" is the one name in this table that must stay in the Latin alphabet.
 
     The ماڑی trick — hand the Urdu-first voice Urdu letters and it reaches for
     Pakistani phonemes — fails on this word specifically: "پاکستان" came back as
@@ -115,7 +121,7 @@ def test_pakistan_gets_its_accent_without_urdu_script() -> None:
     ],
 )
 def test_the_derived_forms_get_the_accent_too(text: str, expected: str) -> None:
-    """"Pakistani" was missed by the bare "Pakistan" entry: the trailing "i" is a word
+    """ "Pakistani" was missed by the bare "Pakistan" entry: the trailing "i" is a word
     character, so the \\b boundary never lands after "Pakistan". Longest-first matching
     is what lets the adjective and plural win over the shorter key."""
     assert expected in normalize_for_tts(text, "en")
@@ -123,12 +129,19 @@ def test_the_derived_forms_get_the_accent_too(text: str, expected: str) -> None:
 
 @pytest.mark.parametrize(
     "name",
-    ["Lockhart", "Neptune", "Miyawaki", "Chevening", "Dundee", "Wolverhampton",
-     # "Indus" is a translation risk, not an accent choice: the entry this table once
-     # had for it ("سندھ دریا") was the words "the Sindh river", not a respelling — see
-     # the note above test_indus_does_not_fire_inside_industry. Left out on that
-     # narrower ground; unlike "Pakistan" it was never about accent versus mangling.
-     "Indus"],
+    [
+        "Lockhart",
+        "Neptune",
+        "Miyawaki",
+        "Chevening",
+        "Dundee",
+        "Wolverhampton",
+        # "Indus" is a translation risk, not an accent choice: the entry this table once
+        # had for it ("سندھ دریا") was the words "the Sindh river", not a respelling — see
+        # the note above test_indus_does_not_fire_inside_industry. Left out on that
+        # narrower ground; unlike "Pakistan" it was never about accent versus mangling.
+        "Indus",
+    ],
 )
 def test_genuinely_foreign_names_are_left_alone(name: str) -> None:
     """The narrow, and correct, ground for exclusion: these are not Urdu words at all,
@@ -139,14 +152,14 @@ def test_genuinely_foreign_names_are_left_alone(name: str) -> None:
 
 
 def test_indus_does_not_fire_inside_industry() -> None:
-    """"Indus" is a substring of "industry"/"industrial", which occur far more often
+    """ "Indus" is a substring of "industry"/"industrial", which occur far more often
     than the basin does. Whole-word anchoring is what keeps them apart."""
     said = normalize_for_tts("The industry and industrial output grew.", "en")
     assert "industry" in said and "industrial" in said
 
 
 def test_longest_key_wins() -> None:
-    """"Mughal Kot" must not be broken up by a shorter overlapping key."""
+    """ "Mughal Kot" must not be broken up by a shorter overlapping key."""
     assert "مغل کوٹ" in normalize_for_tts("The Mughal Kot Sst formation.", "en")
 
 
@@ -159,6 +172,7 @@ def test_unknown_text_is_untouched() -> None:
 # Kot formation", "the Dost scheme", "Reko Diq" split across a clause. Each component
 # word has its own entry, and longest-first matching keeps the phrase winning when the
 # whole phrase is present.
+
 
 @pytest.mark.parametrize(
     "phrase,part,phrase_urdu,part_urdu",
@@ -196,8 +210,12 @@ def test_no_local_origin_word_in_the_corpus_is_left_in_latin() -> None:
     import collections
     import re
 
-    kb = (Path(__file__).resolve().parent.parent
-          / "server" / "data" / "mari_energies_knowledge_base.md").read_text()
+    kb = (
+        Path(__file__).resolve().parent.parent
+        / "server"
+        / "data"
+        / "mari_energies_knowledge_base.md"
+    ).read_text()
     try:
         with open("/usr/share/dict/words") as words:
             english = {w.strip().capitalize() for w in words if len(w.strip()) > 2}
@@ -206,32 +224,68 @@ def test_no_local_origin_word_in_the_corpus_is_left_in_latin() -> None:
 
     # Report vocabulary, abbreviations owned by other passes, and non-Urdu names.
     allowed = {
-        "Pvt", "Retd", "Hons", "Lst", "Sst", "Ext", "Pre", "Sustainability",
-        "Condensate", "Defence", "Rebranding", "Shareholding", "Decarbonization",
-        "Whistleblowing", "Geoscientists", "Tagline", "Commerciality", "Analytics",
-        "Digitalization", "Recordable", "Bowsers", "Onymous", "Trainings", "Abled",
-        "Centre", "Financials", "Newsroom", "Recognitions", "Ipieca", "Miyawaki",
-        "Chevening", "Dundee", "Wolverhampton", "Lockhart", "Malik",
+        "Pvt",
+        "Retd",
+        "Hons",
+        "Lst",
+        "Sst",
+        "Ext",
+        "Pre",
+        "Sustainability",
+        "Condensate",
+        "Defence",
+        "Rebranding",
+        "Shareholding",
+        "Decarbonization",
+        "Whistleblowing",
+        "Geoscientists",
+        "Tagline",
+        "Commerciality",
+        "Analytics",
+        "Digitalization",
+        "Recordable",
+        "Bowsers",
+        "Onymous",
+        "Trainings",
+        "Abled",
+        "Centre",
+        "Financials",
+        "Newsroom",
+        "Recognitions",
+        "Ipieca",
+        "Miyawaki",
+        "Chevening",
+        "Dundee",
+        "Wolverhampton",
+        "Lockhart",
+        "Malik",
         # "Indus" is a translation risk (see test_genuinely_foreign_names_are_left_alone
         # above); "Cantt"/"Maroc" are the same. "Pakistan" is NOT here — it is
         # deliberately respelled for the accent, and this sweep should keep catching it
         # if that entry is ever removed again.
-        "Indus", "Cantt", "Maroc",
+        "Indus",
+        "Cantt",
+        "Maroc",
         # Sky47 cloud/AI vocabulary (§3.1.3): a Chinese vendor, an open-source
         # project and a model family. Foreign brand names, not local words —
         # the voice should say them as written, like "Lockhart" above.
-        "Huawei", "Kubernetes", "Pangu",
+        "Huawei",
+        "Kubernetes",
+        "Pangu",
     }
     words = collections.Counter(re.findall(r"\b[A-Z][a-z]{2,}\b", kb))
     missed = [
-        w for w in words
-        if w not in english and w not in allowed
+        w
+        for w in words
+        if w not in english
+        and w not in allowed
         and not any(ord(c) > 0x600 for c in normalize_for_tts(f"About {w} today.", "en"))
     ]
     assert not missed, f"still read as English: {sorted(missed)}"
 
 
 # ── Urdu spellings the model writes itself ──────────────────────────
+
 
 @pytest.mark.parametrize(
     "written,expected",

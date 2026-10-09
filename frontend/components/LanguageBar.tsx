@@ -6,7 +6,7 @@ import {
   FemaleAvatarIcon,
   MaleAvatarIcon,
   MoonIcon,
-} from "./icons";
+} from "./Icons";
 import { uiCopy, type Lang } from "@/lib/i18n";
 import type { Theme } from "@/lib/theme";
 import { AVATARS, type AvatarConfig, type AvatarId } from "./avatar/models";

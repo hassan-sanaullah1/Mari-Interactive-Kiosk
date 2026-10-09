@@ -1,0 +1,273 @@
+[
+  {
+    "backend": "hybrid",
+    "questions": 150,
+    "positives": 134,
+    "negatives": 16,
+    "hit@1": 0.7835820895522388,
+    "hit@3": 0.9328358208955224,
+    "hit@5": 0.9552238805970149,
+    "mrr": 0.8555970149253732,
+    "fact_recall": 1.0,
+    "abstain_rate": 0.0,
+    "latency_ms": {
+      "p50": 56.249634999858245,
+      "p95": 102.82823899979121,
+      "mean": 66.62936326665961
+    },
+    "stage_ms_p50": {
+      "assemble": 0.11779100032072165,
+      "correct": 0.03582249973987928,
+      "embed": 42.858369999976276,
+      "expand": 1.8573379998088058,
+      "rerank": 0.017892999949253863,
+      "search": 11.322310000196012
+    },
+    "failures": [
+      {
+        "id": "ur-sec-013",
+        "kind": "miss",
+        "question": "کمپنی کے ورٹیکلز کیا ہیں؟",
+        "want": "1.11",
+        "missing_facts": [],
+        "got": [
+          "1. Overview of Mari Energies Limited > 1.4 Legal Entity and Corporate Identity",
+          "3. Corporate Group Structure and Associated Companies > 3.2 Vision 2030 — Diversification Strategy",
+          "18. Frequently Referenced Figures (Quick Reference)",
+          "3. Corporate Group Structure and Associated Companies > 3.2 Vision 2030 — Diversification Strategy",
+          "1. Overview of Mari Energies Limited > 1.4 Legal Entity and Corporate Identity"
+        ]
+      },
+      {
+        "id": "ur-sec-019",
+        "kind": "miss",
+        "question": "ماری منرلز کیا کرتی ہے؟",
+        "want": "3.",
+        "missing_facts": [],
+        "got": [
+          "1. Overview of Mari Energies Limited > 1.8 Principal Business Activities",
+          "1. Overview of Mari Energies Limited > 1.11 Our Verticals",
+          "1. Overview of Mari Energies Limited > 1.1 Mari Energies Limited (formerly Mari Petroleum Company Limited /",
+          "14. CSR and Community Initiatives > 14.3 Mari Meal Program — \"Nourish to Flourish\"",
+          "18. Frequently Referenced Figures (Quick Reference)"
+        ]
+      },
+      {
+        "id": "ur-sec-043",
+        "kind": "miss",
+        "question": "پائیداری کی رپورٹ",
+        "want": "12.",
+        "missing_facts": [],
+        "got": [
+          "2. Our History and Rebranding > 2.5 Sustainability Journey (Key Dates)",
+          "15. Investor Relations > 15.5 Financial Reports",
+          "11. Financial Performance > 11.2 Key Performance Ratios (FY2024-25 vs prior years)",
+          "2. Our History and Rebranding > 2.5 Sustainability Journey (Key Dates)",
+          "15. Investor Relations > 15.5 Financial Reports"
+        ]
+      },
+      {
+        "id": "ur-fact-074",
+        "kind": "miss",
+        "question": "ڈہرکی فیلڈ کہاں ہے؟",
+        "want": "2.",
+        "missing_facts": [],
+        "got": [
+          "7. Field Development Highlights > 7.1 Waziristan Block — Shewa Development",
+          "1. Overview of Mari Energies Limited > 1.10 Contact / Head Office",
+          "7. Field Development Highlights > 7.2 Spinwam-1 Discovery — Waziristan",
+          "14. CSR and Community Initiatives > 14.4 Education Initiatives",
+          "14. CSR and Community Initiatives > 14.4 Education Initiatives"
+        ]
+      },
+      {
+        "id": "ur-fact-076",
+        "kind": "miss",
+        "question": "سجاول بلاک کا کیا حال ہے؟",
+        "want": "7.3",
+        "missing_facts": [],
+        "got": [
+          "7. Field Development Highlights > 7.1 Waziristan Block — Shewa Development",
+          "5. Upstream Oil & Gas — Exploration Portfolio > 5.4 Onshore Frontier Exploration",
+          "6. Discoveries (Chronological)",
+          "17. Recent Developments and Announcements (2025–2026) > 17.6 12 June 2026",
+          "6. Discoveries (Chronological)"
+        ]
+      },
+      {
+        "id": "en-134",
+        "kind": "miss",
+        "question": "How many employees does Mari Energies have?",
+        "want": "18.",
+        "missing_facts": [],
+        "got": [
+          "12. Sustainability and ESG > 12.6 Workforce Composition (as of June 30, 2025)",
+          "5. Upstream Oil & Gas — Exploration Portfolio > 5.3 Offshore Expansion",
+          "12. Sustainability and ESG > 12.5 Social",
+          "13. Life at Mari — Culture, Talent, and Careers > 13.2 Talent Development",
+          "2. Our History and Rebranding > 2.5 Sustainability Journey (Key Dates)"
+        ]
+      },
+      {
+        "id": "en-135",
+        "kind": "should-abstain",
+        "question": "What is the share price of Apple today?",
+        "got": [
+          "11. Financial Performance > 11.2 Key Performance Ratios (FY2024-25 vs prior years)",
+          "11. Financial Performance > 11.1 Five-Year Financial Summary (PKR in billion, unless noted)",
+          "1. Overview of Mari Energies Limited > 1.6 Corporate Vision and Mission"
+        ]
+      },
+      {
+        "id": "en-136",
+        "kind": "should-abstain",
+        "question": "How do I cook biryani?",
+        "got": [
+          "14. CSR and Community Initiatives > 14.3 Mari Meal Program — \"Nourish to Flourish\"",
+          "12. Sustainability and ESG > 12.4 Environmental",
+          "14. CSR and Community Initiatives > 14.4 Education Initiatives"
+        ]
+      },
+      {
+        "id": "en-137",
+        "kind": "should-abstain",
+        "question": "کیا آپ موسم بتا سکتی ہیں؟",
+        "got": [
+          "6. Discoveries (Chronological)",
+          "17. Recent Developments and Announcements (2025–2026)",
+          "14. CSR and Community Initiatives > 14.4 Education Initiatives"
+        ]
+      },
+      {
+        "id": "neg-138",
+        "kind": "should-abstain",
+        "question": "What is OGDCL's annual profit?",
+        "got": [
+          "4. Governance — Board of Directors and Committees > 4.2 Board Members",
+          "11. Financial Performance > 11.1 Five-Year Financial Summary (PKR in billion, unless noted)",
+          "11. Financial Performance > 11.1 Five-Year Financial Summary (PKR in billion, unless noted)"
+        ]
+      },
+      {
+        "id": "neg-139",
+        "kind": "should-abstain",
+        "question": "How does Mari Energies compare to Pakistan Petroleum Limited?",
+        "got": [
+          "1. Overview of Mari Energies Limited > 1.1 Mari Energies Limited (formerly Mari Petroleum Company Limited /",
+          "1. Overview of Mari Energies Limited > 1.4 Legal Entity and Corporate Identity",
+          "4. Governance — Board of Directors and Committees > 4.2 Board Members"
+        ]
+      },
+      {
+        "id": "neg-140",
+        "kind": "should-abstain",
+        "question": "What will the share price be next year?",
+        "got": [
+          "11. Financial Performance > 11.1 Five-Year Financial Summary (PKR in billion, unless noted)",
+          "11. Financial Performance > 11.2 Key Performance Ratios (FY2024-25 vs prior years)",
+          "11. Financial Performance > 11.1 Five-Year Financial Summary (PKR in billion, unless noted)"
+        ]
+      },
+      {
+        "id": "neg-141",
+        "kind": "should-abstain",
+        "question": "Who is the Prime Minister of Pakistan?",
+        "got": [
+          "17. Recent Developments and Announcements (2025–2026)",
+          "15. Investor Relations > 15.4 Press Notices (Recent)",
+          "9. Digital Transformation and Technology > 9.7 Data Center / Technology Ventures"
+        ]
+      },
+      {
+        "id": "neg-142",
+        "kind": "should-abstain",
+        "question": "What is the weather in Islamabad today?",
+        "got": [
+          "12. Sustainability and ESG > 12.4 Environmental",
+          "14. CSR and Community Initiatives > 14.4 Education Initiatives",
+          "1. Overview of Mari Energies Limited > 1.6 Corporate Vision and Mission"
+        ]
+      },
+      {
+        "id": "neg-143",
+        "kind": "should-abstain",
+        "question": "Can you book me a taxi?",
+        "got": [
+          "1. Overview of Mari Energies Limited > 1.4 Legal Entity and Corporate Identity",
+          "11. Financial Performance > 11.2 Key Performance Ratios (FY2024-25 vs prior years)",
+          "12. Sustainability and ESG > 12.7 Governance"
+        ]
+      },
+      {
+        "id": "neg-144",
+        "kind": "should-abstain",
+        "question": "What is the capital of France?",
+        "got": [
+          "18. Frequently Referenced Figures (Quick Reference)",
+          "12. Sustainability and ESG > 12.4 Environmental",
+          "11. Financial Performance > 11.2 Key Performance Ratios (FY2024-25 vs prior years)"
+        ]
+      },
+      {
+        "id": "neg-145",
+        "kind": "should-abstain",
+        "question": "او جی ڈی سی ایل کا منافع کتنا ہے؟",
+        "got": [
+          "18. Frequently Referenced Figures (Quick Reference)",
+          "4. Governance — Board of Directors and Committees > 4.2 Board Members",
+          "11. Financial Performance > 11.2 Key Performance Ratios (FY2024-25 vs prior years)"
+        ]
+      },
+      {
+        "id": "neg-146",
+        "kind": "should-abstain",
+        "question": "آج ڈالر کا ریٹ کیا ہے؟",
+        "got": [
+          "15. Investor Relations > 15.5 Financial Reports",
+          "18. Frequently Referenced Figures (Quick Reference)",
+          "11. Financial Performance > 11.2 Key Performance Ratios (FY2024-25 vs prior years)"
+        ]
+      },
+      {
+        "id": "neg-147",
+        "kind": "should-abstain",
+        "question": "پاکستان کا وزیر اعظم کون ہے؟",
+        "got": [
+          "3. Corporate Group Structure and Associated Companies > 3.1.3 Sky47 Limited — Cloud Services, AI Infrastructure, and the Huawei Partnership > 3.1.3.1 Sky47 Cloud — Sovereign Cloud Services",
+          "17. Recent Developments and Announcements (2025–2026)",
+          "1. Overview of Mari Energies Limited > 1.1 Mari Energies Limited (formerly Mari Petroleum Company Limited /"
+        ]
+      },
+      {
+        "id": "neg-148",
+        "kind": "should-abstain",
+        "question": "مجھے ایک لطیفہ سنائیں",
+        "got": [
+          "1. Overview of Mari Energies Limited > 1.4 Legal Entity and Corporate Identity",
+          "14. CSR and Community Initiatives > 14.4 Education Initiatives",
+          "18. Frequently Referenced Figures (Quick Reference)"
+        ]
+      },
+      {
+        "id": "neg-149",
+        "kind": "should-abstain",
+        "question": "کرکٹ میچ کا اسکور کیا ہے؟",
+        "got": [
+          "3. Corporate Group Structure and Associated Companies > 3.2 Vision 2030 — Diversification Strategy",
+          "14. CSR and Community Initiatives > 14.8 Sports Sponsorship",
+          "14. CSR and Community Initiatives > 14.4 Education Initiatives"
+        ]
+      },
+      {
+        "id": "neg-150",
+        "kind": "should-abstain",
+        "question": "اسلام آباد میں آج موسم کیسا ہے؟",
+        "got": [
+          "12. Sustainability and ESG > 12.4 Environmental",
+          "1. Overview of Mari Energies Limited > 1.10 Contact / Head Office",
+          "18. Frequently Referenced Figures (Quick Reference)"
+        ]
+      }
+    ]
+  }
+]

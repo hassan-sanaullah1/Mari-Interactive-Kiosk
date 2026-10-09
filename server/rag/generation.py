@@ -14,7 +14,7 @@ from ..prompts import LANGS, PromptLibrary, get_prompts
 from .retriever import RetrievalResult
 from .settings import RagSettings, get_settings
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 CORE_FACTS_HEADER = "MARI ENERGIES KNOWLEDGE — core facts:"
 # Everything after this header is retrieved context, the only part safe to trim when
@@ -30,7 +30,6 @@ class Prompt:
 
 
 class GenerationService:
-
     def __init__(self, settings: RagSettings | None = None) -> None:
         self.settings = settings or get_settings()
         self._templates: dict[tuple[str, str], str] = {}
@@ -43,7 +42,7 @@ class GenerationService:
         self._templates = dict(prompts.system)
         self._greetings = dict(prompts.greeting)
         self._no_context = dict(prompts.no_context)
-        log.info("loaded prompt templates for %s", sorted(self._templates))
+        logger.info("loaded prompt templates for %s", sorted(self._templates))
 
     def rules(self, lang: str, avatar: str | None = None) -> str:
         if not self._templates:

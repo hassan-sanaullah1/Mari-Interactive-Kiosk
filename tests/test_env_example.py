@@ -57,9 +57,7 @@ def test_every_provider_setting_is_documented() -> None:
     way. The retrieval tunables are held to a weaker rule below, because they have
     measured defaults and their own documentation.
     """
-    missing = sorted(
-        _settings_config_reads() - _declared_in_example() - NOT_FOR_DEPLOYMENTS
-    )
+    missing = sorted(_settings_config_reads() - _declared_in_example() - NOT_FOR_DEPLOYMENTS)
     assert not missing, (
         "these settings are read by server/config.py but missing from .env.example, so "
         f"nobody deploying this can know they exist: {missing}"
@@ -84,9 +82,7 @@ def test_no_documented_setting_is_dead() -> None:
     """A key in the file that nothing reads sends people to configure the wrong thing."""
     known = _settings_config_reads() | _rag_setting_names() | NOT_FOR_DEPLOYMENTS
     dead = sorted(
-        key
-        for key in _declared_in_example() - known
-        if key.startswith(("APP_", "MARI_"))
+        key for key in _declared_in_example() - known if key.startswith(("APP_", "MARI_"))
     )
     assert not dead, (
         f".env.example documents settings the code never reads: {dead}. Either wire "

@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import styles from "./AvatarStage.module.css";
 import { avatarStateFor } from "./avatar/state";
 import { DEFAULT_AVATAR, type AvatarId } from "./avatar/models";
-import type { Mode } from "@/hooks/useVoiceSession";
+import type { Mode } from "@/hooks/use-voice-session";
 import type { Theme } from "@/lib/theme";
 
 /**

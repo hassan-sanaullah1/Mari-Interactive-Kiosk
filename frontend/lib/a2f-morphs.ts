@@ -23,7 +23,7 @@
  */
 
 import * as THREE from "three";
-import { isDisabled, sample as sampleBlendshapes } from "./blendshapePlayer";
+import { isDisabled, sample as sampleBlendshapes } from "./blendshape-player";
 
 interface ResolvedMesh {
   mesh: THREE.SkinnedMesh | THREE.Mesh;

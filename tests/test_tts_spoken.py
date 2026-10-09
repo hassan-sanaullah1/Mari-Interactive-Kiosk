@@ -54,8 +54,8 @@ def test_urdu_digits_are_left_alone(text: str) -> None:
         ("گیس فیلڈ 1954 میں دریافت ہوا۔", "انیس سو چون"),
         ("کمپنی 1984 میں قائم ہوئی۔", "انیس سو چوراسی"),
         ("1866 میں۔", "اٹھارہ سو چھیاسٹھ"),
-        ("1905 میں۔", "انیس سو پانچ"),      # a single-digit tail takes no "صفر"
-        ("1900 میں۔", "انیس سو"),            # a round century has no tail at all
+        ("1905 میں۔", "انیس سو پانچ"),  # a single-digit tail takes no "صفر"
+        ("1900 میں۔", "انیس سو"),  # a round century has no tail at all
     ],
 )
 def test_urdu_years_are_said_as_century_pairs(text: str, expected: str) -> None:
@@ -68,10 +68,10 @@ def test_urdu_years_are_said_as_century_pairs(text: str, expected: str) -> None:
 @pytest.mark.parametrize(
     "text",
     [
-        "2024 میں منافع بڑھا۔",       # 20xx: the cardinal reading IS the year reading
-        "FY2024-25 میں۔",             # a fiscal pair, owned by the formats pass
-        "2017-2020 کے دوران۔",        # a year range, already spelt with "تا"
-        "24/06/2022 کو۔",             # a date, already split into day/month/year
+        "2024 میں منافع بڑھا۔",  # 20xx: the cardinal reading IS the year reading
+        "FY2024-25 میں۔",  # a fiscal pair, owned by the formats pass
+        "2017-2020 کے دوران۔",  # a year range, already spelt with "تا"
+        "24/06/2022 کو۔",  # a date, already split into day/month/year
     ],
 )
 def test_the_urdu_year_rule_leaves_the_other_shapes_alone(text: str) -> None:
@@ -95,7 +95,7 @@ def test_acronyms_apply_in_both_languages() -> None:
 
 
 def test_mari_is_said_with_the_retroflex_flap() -> None:
-    """"Mari" is spelled with ر in both scripts, but said with ڑ, not a tapped ر."""
+    """ "Mari" is spelled with ر in both scripts, but said with ڑ, not a tapped ر."""
     assert "ماڑی" in normalize_for_tts("MARI welcomes you to Mari Energies.", "en")
     assert "ماڑی" in normalize_for_tts("آپ ماری ہیں — Mari Energies کی نمائندگی کرتی ہیں۔", "ur")
 
@@ -106,8 +106,14 @@ def test_mari_respelling_does_not_touch_unrelated_words() -> None:
 
 @pytest.mark.parametrize(
     "n,said",
-    [(0, "zero"), (13, "thirteen"), (21, "twenty one"), (101, "one hundred and one"),
-     (3000, "three thousand"), (952, "nine hundred and fifty two")],
+    [
+        (0, "zero"),
+        (13, "thirteen"),
+        (21, "twenty one"),
+        (101, "one hundred and one"),
+        (3000, "three thousand"),
+        (952, "nine hundred and fifty two"),
+    ],
 )
 def test_say_int(n: int, said: str) -> None:
     assert _say_int(n) == said
@@ -116,6 +122,7 @@ def test_say_int(n: int, said: str) -> None:
 # ── report formats and symbols ──────────────────────────────────────
 # normalization.spoken_formats, measured against the shapes that occur
 # in server/data/mari_energies_knowledge_base.md. These run in BOTH languages.
+
 
 @pytest.mark.parametrize(
     "text,expected",
@@ -192,13 +199,13 @@ def test_report_formats_apply_in_urdu_too(text: str, expected: str) -> None:
 @pytest.mark.parametrize(
     "lang,text,must_keep",
     [
-        ("en", "A 20-year ratio.", "twenty-year"),   # digits before the hyphen
+        ("en", "A 20-year ratio.", "twenty-year"),  # digits before the hyphen
         ("en", "An 18-inch pipeline.", "eighteen-inch"),
         # A full year-to-year span reads as two years, not as a fiscal pair — and not
         # as a dialling code, which is what the phone rule made of "2017-2020".
         ("en", "Tenure 2017-2020.", "twenty seventeen to twenty twenty"),
-        ("ur", "ہم 24/7 دستیاب ہیں۔", "24/7"),        # a ratio, not a date
-        ("ur", "2024/25 کے دوران۔", "2024/25"),        # a financial year, not a date
+        ("ur", "ہم 24/7 دستیاب ہیں۔", "24/7"),  # a ratio, not a date
+        ("ur", "2024/25 کے دوران۔", "2024/25"),  # a financial year, not a date
     ],
 )
 def test_formats_do_not_touch_what_already_reads_correctly(
@@ -227,12 +234,15 @@ def test_a_respelled_loanword_beside_its_own_gloss_is_not_said_twice() -> None:
     assert said.count("verticals") == 1
 
 
-@pytest.mark.parametrize("text", [
-    "GEM Energy جو میتھین مٹی گیشن میں ماہر ہے۔",
-    "GEM Energy جو میٹھین مٹیگیشن میں ماہر ہے۔",
-    # "CH4" is expanded to "میتھین" by the address pass, after the first phrase rule.
-    "GEM Energy جو CH4 مٹیگیشن میں ماہر ہے۔",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "GEM Energy جو میتھین مٹی گیشن میں ماہر ہے۔",
+        "GEM Energy جو میٹھین مٹیگیشن میں ماہر ہے۔",
+        # "CH4" is expanded to "میتھین" by the address pass, after the first phrase rule.
+        "GEM Energy جو CH4 مٹیگیشن میں ماہر ہے۔",
+    ],
+)
 def test_methane_mitigation_is_said_in_one_script(text: str) -> None:
     """Fixing the two words separately left the phrase half Latin ("methayn") and half
     Urdu ("مٹی گیشن"). Uplift takes its vowels from the script it is reading, and the
@@ -242,11 +252,14 @@ def test_methane_mitigation_is_said_in_one_script(text: str) -> None:
     assert "مٹی گیشن" not in said
 
 
-@pytest.mark.parametrize("text", [
-    "GEM Energy works on methane mitigation.",
-    "Methane Mitigation is one of our verticals.",
-    "Mari Minerals mines rare earth elements and copper.",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "GEM Energy works on methane mitigation.",
+        "Methane Mitigation is one of our verticals.",
+        "Mari Minerals mines rare earth elements and copper.",
+    ],
+)
 def test_english_phrases_are_left_unpunctuated(text: str) -> None:
     """No sentence stop is spliced into these phrases any more.
 
@@ -263,10 +276,13 @@ def test_english_phrases_are_left_unpunctuated(text: str) -> None:
     assert "food. Grade" not in said
 
 
-@pytest.mark.parametrize("text", [
-    "We produce food-grade CO2.",
-    "We produce food grade CO2.",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "We produce food-grade CO2.",
+        "We produce food grade CO2.",
+    ],
+)
 def test_food_grade_keeps_its_space_and_gains_no_stop(text: str) -> None:
     """The voice says "grade" as "great" whatever punctuation it is given, so the stop
     bought nothing and only widened the gap. The corpus's hyphen is still normalised to
@@ -285,10 +301,13 @@ def test_the_english_phrase_rules_leave_urdu_alone() -> None:
     assert "methane. Mitigation" not in said
 
 
-@pytest.mark.parametrize("text", [
-    "Huawei Cloud Stack powers Sky47 Cloud.",
-    "Huawei Ascend NPUs power the AI Farm.",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Huawei Cloud Stack powers Sky47 Cloud.",
+        "Huawei Ascend NPUs power the AI Farm.",
+    ],
+)
 def test_huawei_is_respelled_for_the_english_voice(text: str) -> None:
     """English runs through the same Uplift Urdu-first voice, which gives Latin
     "Huawei" English letter values ("hoo-AH-way"). Urdu script is what that voice
@@ -305,10 +324,13 @@ def test_huawei_in_urdu_script_is_left_alone() -> None:
     assert "ہواوے" in said
 
 
-@pytest.mark.parametrize("text", [
-    "liquid-cooled for AI training",
-    "liquid cooled for AI training",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "liquid-cooled for AI training",
+        "liquid cooled for AI training",
+    ],
+)
 def test_liquid_cooled_hyphen_is_not_swallowed_in_english(text: str) -> None:
     """The hyphen carries no sound but the voice ran the compound into one non-word.
     A space is what it needs; the visitor still reads the written form."""
@@ -318,7 +340,7 @@ def test_liquid_cooled_hyphen_is_not_swallowed_in_english(text: str) -> None:
 
 
 def test_kw_is_spoken_as_a_unit_in_english() -> None:
-    """"50kW" is closed up against its number, so the \\b-anchored acronym table could
+    """ "50kW" is closed up against its number, so the \\b-anchored acronym table could
     never match it and the unit was dropped: the voice said "fifty" and moved on."""
     said = normalize_for_tts("up to 50kW per rack density", "en")
     assert "fifty kilowatts" in said
@@ -349,10 +371,13 @@ def test_kw_number_is_said_in_english_not_urdu() -> None:
     assert "50" not in said
 
 
-@pytest.mark.parametrize("text,expected", [
-    ("Huawei Ascend NPU clusters", "اینپیو"),
-    ("Huawei Ascend NPUs power the AI Farm", "اینپیوز"),
-])
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("Huawei Ascend NPU clusters", "اینپیو"),
+        ("Huawei Ascend NPUs power the AI Farm", "اینپیوز"),
+    ],
+)
 def test_npu_is_letter_named_in_english(text: str, expected: str) -> None:
     """English runs through the same Uplift Urdu-first voice, which does not reliably
     read spaced Latin capitals as letter NAMES: "N P U" was three separate tokens and
@@ -384,10 +409,13 @@ def test_gpu_plural_is_spaced_too() -> None:
     assert "G P Us" in normalize_for_tts("GPUs are fast", "en")
 
 
-@pytest.mark.parametrize("text,expected", [
-    ("ہواوے Ascend NPU پر", "این پی یو"),
-    ("NPUs کے ساتھ", "این پی یوز"),
-])
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("ہواوے Ascend NPU پر", "این پی یو"),
+        ("NPUs کے ساتھ", "این پی یوز"),
+    ],
+)
 def test_npu_is_urdu_script_in_urdu(text: str, expected: str) -> None:
     """Latin letters handed to the Urdu-first voice are read with English letter names
     dropped into an Urdu sentence — the failure the Urdu column of this table exists
@@ -395,14 +423,17 @@ def test_npu_is_urdu_script_in_urdu(text: str, expected: str) -> None:
     assert expected in normalize_for_tts(text, "ur")
 
 
-@pytest.mark.parametrize("text", [
-    "یہ liquid-cooled ریک ہیں۔",
-    # Both earlier Urdu-script respellings, which SAID "cold" — "کولڈ" is how Urdu
-    # writes the English word. They are mapped out too, so a reply written either way
-    # is still corrected.
-    "یہ لیکویڈ کولڈ ریک ہیں۔",
-    "یہ لیکوئڈ کولڈ ریک ہیں۔",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "یہ liquid-cooled ریک ہیں۔",
+        # Both earlier Urdu-script respellings, which SAID "cold" — "کولڈ" is how Urdu
+        # writes the English word. They are mapped out too, so a reply written either way
+        # is still corrected.
+        "یہ لیکویڈ کولڈ ریک ہیں۔",
+        "یہ لیکوئڈ کولڈ ریک ہیں۔",
+    ],
+)
 def test_liquid_cooled_is_said_in_english_in_urdu_too(text: str) -> None:
     """Latin "cooled" is read by the Urdu-first voice with one long "o" and loses the
     "-ed", so "liquid cooled" was heard as "liquid cold". The term is wanted in English,
@@ -415,13 +446,19 @@ def test_liquid_cooled_is_said_in_english_in_urdu_too(text: str) -> None:
     assert "cooled" not in said
 
 
-@pytest.mark.parametrize("spelling", [
-    "سبسڈیری", "سبسڈییری", "سب سڈیری", "سبسیڈیری",
-    # Malformed, as the model actually wrote it in a live reply: a repeated tail.
-    "سبسیڈیریاری",
-])
+@pytest.mark.parametrize(
+    "spelling",
+    [
+        "سبسڈیری",
+        "سبسڈییری",
+        "سب سڈیری",
+        "سبسیڈیری",
+        # Malformed, as the model actually wrote it in a live reply: a repeated tail.
+        "سبسیڈیریاری",
+    ],
+)
 def test_subsidiary_is_respelled_for_the_urdu_voice(spelling: str) -> None:
-    """"سبسڈیری" has no vowel between its ب-س clusters, so the voice ran the syllables
+    """ "سبسڈیری" has no vowel between its ب-س clusters, so the voice ran the syllables
     together and dropped the middle one. The model spells the word many ways, and
     sometimes malforms it with a repeated tail — matching only the well-formed prefix
     rewrote the head and left the garbage attached ("سب سِڈی ریاری"), making the word
@@ -431,10 +468,13 @@ def test_subsidiary_is_respelled_for_the_urdu_voice(spelling: str) -> None:
     assert spelling not in said
 
 
-@pytest.mark.parametrize("text", [
-    "Nvidia کلسٹرز",
-    "NVIDIA-compatible GPU کلسٹرز",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Nvidia کلسٹرز",
+        "NVIDIA-compatible GPU کلسٹرز",
+    ],
+)
 def test_nvidia_is_urdu_script_in_urdu(text: str) -> None:
     """Latin in an otherwise-Urdu sentence is read letter-wise and loses the initial
     "en-"; the corpus's all-caps "NVIDIA-compatible" is worse still."""
@@ -490,19 +530,21 @@ def test_nvidia_respelling_is_a_single_token() -> None:
     assert nvidia == "Envidia"
 
 
-
-@pytest.mark.parametrize("text,expected", [
-    ("GPU کلسٹرز", "klusturz"),
-    ("یہ کلسٹر ہے۔", "klustur"),
-    # The earlier Urdu-script respelling, which said a long "aa" ("klaaster"). It is
-    # mapped out too, so a reply written that way is still corrected.
-    ("یہ کلاسٹر ہے۔", "klustur"),
-    ("GPU کلاسٹرز", "klusturz"),
-    # The model writes the Latin spelling in an Urdu reply too.
-    ("NVIDIA GPU clusters استعمال کرتا ہے۔", "klusturz"),
-])
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("GPU کلسٹرز", "klusturz"),
+        ("یہ کلسٹر ہے۔", "klustur"),
+        # The earlier Urdu-script respelling, which said a long "aa" ("klaaster"). It is
+        # mapped out too, so a reply written that way is still corrected.
+        ("یہ کلاسٹر ہے۔", "klustur"),
+        ("GPU کلاسٹرز", "klusturz"),
+        # The model writes the Latin spelling in an Urdu reply too.
+        ("NVIDIA GPU clusters استعمال کرتا ہے۔", "klusturz"),
+    ],
+)
 def test_clusters_is_said_in_english_in_urdu_too(text: str, expected: str) -> None:
-    """"Clusters" is a technical term and is wanted in English, said the English way.
+    """ "Clusters" is a technical term and is wanted in English, said the English way.
     Neither Urdu spelling can produce the English short "u", so both map out to a Latin
     phonetic respelling — the same trick as "kaeosk" and "methayn"."""
     said = normalize_for_tts(text, "ur")
@@ -528,10 +570,13 @@ def test_clusters_is_left_alone_in_english() -> None:
     assert "klustur" not in said
 
 
-@pytest.mark.parametrize(("lang", "expected"), [
-    ("en", "AI and ML"),
-    ("ur", "اے آئی اور ایم ایل"),
-])
+@pytest.mark.parametrize(
+    ("lang", "expected"),
+    [
+        ("en", "AI and ML"),
+        ("ur", "اے آئی اور ایم ایل"),
+    ],
+)
 def test_ai_ml_names_both_acronyms(lang: str, expected: str) -> None:
     """The slash rules split "AI/ML", but only "AI" had an acronym entry — "ML" fell
     through as bare Latin and the Urdu-first voice read it as a non-word."""

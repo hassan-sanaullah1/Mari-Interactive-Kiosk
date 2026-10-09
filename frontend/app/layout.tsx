@@ -27,7 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         {/* No <link rel="preload"> for the avatar.
             It looks like free parallelism, but the model is fetched as six
-            parallel byte ranges (lib/avatarFetch.ts) because this host throttles
+            parallel byte ranges (lib/avatar-fetch.ts) because this host throttles
             per connection — a preload would be a seventh connection pulling the
             whole file serially, competing with the six that are doing the real
             work, and its response is not the one the loader ends up using. The

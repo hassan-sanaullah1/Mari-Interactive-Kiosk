@@ -28,9 +28,12 @@ from server.rag.store import QdrantStore  # noqa: E402
 async def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--force", action="store_true", help="re-ingest even unchanged files")
-    ap.add_argument("--recreate", action="store_true",
-                    help="delete and recreate the collection (needed after a dense-model "
-                         "or dimension change, which the existing vectors are incompatible with)")
+    ap.add_argument(
+        "--recreate",
+        action="store_true",
+        help="delete and recreate the collection (needed after a dense-model "
+        "or dimension change, which the existing vectors are incompatible with)",
+    )
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
 

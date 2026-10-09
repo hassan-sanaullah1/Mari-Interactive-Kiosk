@@ -42,7 +42,7 @@ const nextConfig: NextConfig = {
         // real files on disk, so they go out with a real Content-Length, unlike
         // Next's on-the-fly gzip which cannot know the length and falls back to
         // chunked. Content-Encoding tells the browser to inflate transparently, so
-        // GLTFLoader still receives plain GLB bytes and lib/avatarFetch.ts gets an
+        // GLTFLoader still receives plain GLB bytes and lib/avatar-fetch.ts gets an
         // honest progress total.
         //
         // Not a micro-optimisation: the raw rigs are 30MB and 65MB, and a real

@@ -77,8 +77,9 @@ _GREETING_PREFIX_RE = re.compile(
 
 def is_greeting(text: str) -> bool:
     stripped = (text or "").strip()
-    return bool(_GREETING_RE.match(stripped) or _GREETING_PREFIX_RE.match(stripped)
-                or said_salam(stripped))
+    return bool(
+        _GREETING_RE.match(stripped) or _GREETING_PREFIX_RE.match(stripped) or said_salam(stripped)
+    )
 
 
 def said_salam(text: str) -> bool:

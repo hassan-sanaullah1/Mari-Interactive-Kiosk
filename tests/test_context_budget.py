@@ -21,8 +21,9 @@ from server.rag.generation import CONTEXT_HEADER
 
 
 def _msgs(n: int, chars: int) -> list[dict]:
-    return [{"role": "user" if i % 2 == 0 else "assistant", "content": "x" * chars}
-            for i in range(n)]
+    return [
+        {"role": "user" if i % 2 == 0 else "assistant", "content": "x" * chars} for i in range(n)
+    ]
 
 
 def test_history_is_trimmed_until_the_request_fits() -> None:
@@ -31,11 +32,14 @@ def test_history_is_trimmed_until_the_request_fits() -> None:
     # messages, then offer far more than that.
     budget = A.LLM_CONTEXT_TOKENS - 420 - A.LLM_CONTEXT_SAFETY_TOKENS
     system = "s" * int((budget - 800) * A.LLM_CHARS_PER_TOKEN_LATIN)
-    history = _msgs(20, 400)       # far more than the ~800 tokens of room left for it
+    history = _msgs(20, 400)  # far more than the ~800 tokens of room left for it
     kept = A.fit_history(system, "q" * 60, history, reply_tokens=420)
     assert len(kept) < len(history)
-    used = (A.estimate_tokens(system) + A.estimate_tokens("q" * 60)
-            + sum(A.estimate_tokens(m["content"]) + 4 for m in kept))
+    used = (
+        A.estimate_tokens(system)
+        + A.estimate_tokens("q" * 60)
+        + sum(A.estimate_tokens(m["content"]) + 4 for m in kept)
+    )
     assert used <= budget
 
 
@@ -97,18 +101,32 @@ def test_an_upstream_error_frame_is_not_swallowed(monkeypatch) -> None:
 
     class _Resp:
         status_code = 200
-        def raise_for_status(self): pass
+
+        def raise_for_status(self):
+            pass
+
         async def aiter_lines(self):
             for f in frames:
                 yield f
-        async def __aenter__(self): return self
-        async def __aexit__(self, *a): return False
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
 
     class _Client:
-        def __init__(self, *a, **k): pass
-        async def __aenter__(self): return self
-        async def __aexit__(self, *a): return False
-        def stream(self, *a, **k): return _Resp()
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        def stream(self, *a, **k):
+            return _Resp()
 
     monkeypatch.setattr(llm.httpx, "AsyncClient", _Client)
     monkeypatch.setattr(C, "llm_ready", lambda: True)
@@ -151,7 +169,7 @@ def test_a_prompt_that_already_fits_is_untouched() -> None:
 def test_a_prompt_with_no_retrieved_context_is_never_cut() -> None:
     """With no retrieved section there is only persona and core brief left, and
     cutting those costs the kiosk its identity. Send it and let the error show."""
-    prompt = "PERSONA AND CORE BRIEF " * 5_000   # no context marker at all
+    prompt = "PERSONA AND CORE BRIEF " * 5_000  # no context marker at all
     assert A.fit_system_prompt(prompt, "q", reply_tokens=420) == prompt
 
 

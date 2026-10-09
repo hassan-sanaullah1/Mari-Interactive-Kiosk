@@ -69,33 +69,52 @@ class MetadataService:
         return conn
 
     def get(self, filename: str) -> DocumentRecord | None:
-        row = self._connect().execute(
-            "SELECT * FROM documents WHERE filename = ?", (filename,)
-        ).fetchone()
+        row = (
+            self._connect()
+            .execute("SELECT * FROM documents WHERE filename = ?", (filename,))
+            .fetchone()
+        )
         return self._to_record(row) if row else None
 
     def all(self) -> list[DocumentRecord]:
-        rows = self._connect().execute(
-            "SELECT * FROM documents ORDER BY filename"
-        ).fetchall()
+        rows = self._connect().execute("SELECT * FROM documents ORDER BY filename").fetchall()
         return [self._to_record(r) for r in rows]
 
     def mark_processing(self, filename: str, content_hash: str, file_type: str, size: int) -> None:
         self._upsert(filename, content_hash, file_type, size, "processing", 0, None, {})
 
-    def mark_ready(self, filename: str, content_hash: str, file_type: str, size: int,
-                   chunk_count: int, extra: dict | None = None) -> None:
-        self._upsert(filename, content_hash, file_type, size, "ready", chunk_count, None, extra or {})
+    def mark_ready(
+        self,
+        filename: str,
+        content_hash: str,
+        file_type: str,
+        size: int,
+        chunk_count: int,
+        extra: dict | None = None,
+    ) -> None:
+        self._upsert(
+            filename, content_hash, file_type, size, "ready", chunk_count, None, extra or {}
+        )
 
-    def mark_failed(self, filename: str, content_hash: str, file_type: str, size: int,
-                    error: str) -> None:
+    def mark_failed(
+        self, filename: str, content_hash: str, file_type: str, size: int, error: str
+    ) -> None:
         # The hash of the file that failed is stored deliberately. Re-running ingest
         # should retry a file that failed (its content may now parse against a fixed
         # parser) but must not silently treat the failure as success.
         self._upsert(filename, content_hash, file_type, size, "failed", 0, error[:2000], {})
 
-    def _upsert(self, filename: str, content_hash: str, file_type: str, size: int,
-                status: str, chunk_count: int, error: str | None, extra: dict) -> None:
+    def _upsert(
+        self,
+        filename: str,
+        content_hash: str,
+        file_type: str,
+        size: int,
+        status: str,
+        chunk_count: int,
+        error: str | None,
+        extra: dict,
+    ) -> None:
         conn = self._connect()
         with conn:
             conn.execute(
@@ -114,8 +133,17 @@ class MetadataService:
                     ingested_at  = excluded.ingested_at,
                     extra        = excluded.extra
                 """,
-                (filename, content_hash, file_type, size, status, chunk_count,
-                 error, time.time(), json.dumps(extra)),
+                (
+                    filename,
+                    content_hash,
+                    file_type,
+                    size,
+                    status,
+                    chunk_count,
+                    error,
+                    time.time(),
+                    json.dumps(extra),
+                ),
             )
 
     def delete(self, filename: str) -> None:
@@ -154,8 +182,12 @@ class MetadataService:
             "failed": sum(1 for r in records if r.status == "failed"),
             "chunks": sum(r.chunk_count for r in records),
             "files": [
-                {"filename": r.filename, "status": r.status, "chunks": r.chunk_count,
-                 "error": r.error}
+                {
+                    "filename": r.filename,
+                    "status": r.status,
+                    "chunks": r.chunk_count,
+                    "error": r.error,
+                }
                 for r in records
             ],
         }

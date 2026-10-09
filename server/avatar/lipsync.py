@@ -76,9 +76,7 @@ def decode_to_pcm16_16k(data: bytes, mime: str = "") -> bytes:
     import av
 
     container = av.open(io.BytesIO(data))
-    resampler = av.audio.resampler.AudioResampler(
-        format="s16", layout="mono", rate=A2F_SAMPLE_RATE
-    )
+    resampler = av.audio.resampler.AudioResampler(format="s16", layout="mono", rate=A2F_SAMPLE_RATE)
     chunks: list[np.ndarray] = []
     try:
         for frame in container.decode(audio=0):

@@ -56,7 +56,7 @@ def _budget_tokens(reply_tokens: int) -> int:
     return max(LLM_CONTEXT_TOKENS - reply_tokens - LLM_CONTEXT_SAFETY_TOKENS, 0)
 
 
-def history_messages(history) -> list[dict]:
+def history_messages(history: object) -> list[dict]:
     """The browser's conversation history as chat messages.
 
     History lives in the browser tab and is untrusted: only user/assistant text
@@ -78,8 +78,9 @@ def history_messages(history) -> list[dict]:
     return out
 
 
-def fit_history(system_prompt: str, question: str, history: list[dict],
-                reply_tokens: int) -> list[dict]:
+def fit_history(
+    system_prompt: str, question: str, history: list[dict], reply_tokens: int
+) -> list[dict]:
     """Drop the oldest history messages until the request fits.
 
     The system prompt and question are never trimmed here. If they alone overflow,
@@ -103,7 +104,10 @@ def fit_history(system_prompt: str, question: str, history: list[dict],
     if len(kept) < len(history):
         logger.info(
             "history trimmed to fit context: %d/%d messages, ~%d of %d tokens",
-            len(kept), len(history), fixed + used, budget,
+            len(kept),
+            len(history),
+            fixed + used,
+            budget,
         )
     return kept
 
@@ -124,8 +128,9 @@ def fit_system_prompt(system_prompt: str, question: str, reply_tokens: int) -> s
     found = system_prompt.find(CONTEXT_HEADER)
     if found == -1:
         logger.warning(
-            "system prompt is ~%d tokens against a %d budget and has no retrieved "
-            "context to trim", total, room,
+            "system prompt is ~%d tokens against a %d budget and has no retrieved context to trim",
+            total,
+            room,
         )
         return system_prompt
 
@@ -133,7 +138,9 @@ def fit_system_prompt(system_prompt: str, question: str, reply_tokens: int) -> s
     used = estimate_tokens(system_prompt[:cut])
     end = cut
     for ch in system_prompt[cut:]:
-        cost = 1 / (LLM_CHARS_PER_TOKEN_URDU if _URDU_SCRIPT.match(ch) else LLM_CHARS_PER_TOKEN_LATIN)
+        cost = 1 / (
+            LLM_CHARS_PER_TOKEN_URDU if _URDU_SCRIPT.match(ch) else LLM_CHARS_PER_TOKEN_LATIN
+        )
         if used + cost > room:
             break
         used += cost
@@ -141,6 +148,8 @@ def fit_system_prompt(system_prompt: str, question: str, reply_tokens: int) -> s
     trimmed = system_prompt[:end].rstrip()
     logger.info(
         "retrieved context trimmed to fit: prompt ~%d -> ~%d tokens (budget %d)",
-        total, estimate_tokens(trimmed), room,
+        total,
+        estimate_tokens(trimmed),
+        room,
     )
     return trimmed

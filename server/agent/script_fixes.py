@@ -37,8 +37,10 @@ _URDU_CHAR = "\u0600-\u06ff"
 _MARI = r"(?:ماری|ماڑی|میری|مریم)"
 _BRAND_RULES = (
     (re.compile(rf"{_MARI}\s*(?:گیس|Gas)\s*(?:فیلڈ|Field)", re.I), "Mari Gas Field"),
-    (re.compile(rf"{_MARI}\s*(?:انرجیز|Energies)|(?:ماری|ماڑی)\s*انرجی(?![{_URDU_CHAR}])", re.I),
-     "Mari Energies"),
+    (
+        re.compile(rf"{_MARI}\s*(?:انرجیز|Energies)|(?:ماری|ماڑی)\s*انرجی(?![{_URDU_CHAR}])", re.I),
+        "Mari Energies",
+    ),
     (re.compile(rf"{_MARI}\s*(?:پٹرولیم|پیٹرولیم|Petroleum)", re.I), "Mari Petroleum"),
     (re.compile(rf"{_MARI}\s*(?:سروسز|Services)", re.I), "Mari Services"),
     (re.compile(rf"{_MARI}\s*(?:منرلز|Minerals)", re.I), "Mari Minerals"),
@@ -57,7 +59,7 @@ _RANK_RE = re.compile(r"(?:لیٹنٹ|لیٹیننٹ|لفٹیننٹ|لیفٹنٹ
 
 # ── Abbreviations spelled as Urdu letter names ──────────────────────
 _LETTERS: dict[str, tuple[str, ...]] = {urdu: (latin,) for latin, urdu in _UR_LETTER_NAMES.items()}
-_LETTERS["ای"] = ("E", "A")          # the model writes A as «ای» as often as «اے»
+_LETTERS["ای"] = ("E", "A")  # the model writes A as «ای» as often as «اے»
 _LETTERS["ائی"] = ("I",)
 _LETTER_TOKEN = "|".join(sorted(map(re.escape, _LETTERS), key=len, reverse=True))
 _LETTER_RUN_RE = re.compile(
@@ -95,7 +97,11 @@ def _latin_letters(run: str) -> str:
     known = _known_acronyms()
     for size in range(len(tokens), 1, -1):
         for start in range(len(tokens) - size + 1):
-            before, window, after = tokens[:start], tokens[start:start + size], tokens[start + size:]
+            before, window, after = (
+                tokens[:start],
+                tokens[start : start + size],
+                tokens[start + size :],
+            )
             if not set(before + after) <= _ALSO_WORDS:
                 continue
             # «کے» is also the everyday postposition: a two-letter "K?" is too often a false hit.
@@ -113,10 +119,25 @@ _SAME_GLOSS_RE = re.compile(r"\b([A-Z][A-Za-z&]{1,7})\s*\(\s*\1\s*\)")
 _GLOSS_AFTER_URDU_RE = re.compile(rf"(?<=[{_URDU_CHAR}])\s*\(\s*([A-Z]{{2,7}})\s*\)")
 
 # ── Person names ────────────────────────────────────────────────────
-_SKELETON_MAP = str.maketrans({
-    "ح": "ہ", "ھ": "ہ", "ۃ": "ہ", "ة": "ہ", "ذ": "ز", "ض": "ز", "ظ": "ز", "ص": "س", "ث": "س",
-    "ط": "ت", "ٹ": "ت", "ق": "ک", "ك": "ک", "ڈ": "د", "ي": "ی",
-})
+_SKELETON_MAP = str.maketrans(
+    {
+        "ح": "ہ",
+        "ھ": "ہ",
+        "ۃ": "ہ",
+        "ة": "ہ",
+        "ذ": "ز",
+        "ض": "ز",
+        "ظ": "ز",
+        "ص": "س",
+        "ث": "س",
+        "ط": "ت",
+        "ٹ": "ت",
+        "ق": "ک",
+        "ك": "ک",
+        "ڈ": "د",
+        "ي": "ی",
+    }
+)
 _SKELETON_DROP_RE = re.compile(r"[اآعوىیےئؤء\u064b-\u065f\u0670]")
 # Urdu letters only: «،» and «۔» sit in the same Unicode block but end a word.
 _URDU_WORD_RE = re.compile(r"[\u0621-\u063a\u0641-\u064a\u064b-\u065f\u0670-\u06d3\u06fa-\u06ff]+")
@@ -137,7 +158,7 @@ def _close(a: str, b: str) -> bool:
     if len(a) == len(b):
         return sum(x != y for x, y in zip(a, b, strict=False)) == 1
     short, long_ = sorted((a, b), key=len)
-    return any(long_[:i] + long_[i + 1:] == short for i in range(len(long_)))
+    return any(long_[:i] + long_[i + 1 :] == short for i in range(len(long_)))
 
 
 # (Latin words, skeletons of the Urdu spelling) for every known person.
@@ -165,7 +186,9 @@ def _trustworthy(skels: list[str], exact: list[bool]) -> bool:
     return len(anchors) >= 2 and any(len(s) >= 2 for s in anchors)
 
 
-def _match_at(tokens: list[re.Match[str]], i: int, text: str, exact: bool):
+def _match_at(
+    tokens: list[re.Match[str]], i: int, text: str, exact: bool
+) -> tuple[int, list[str]] | None:
     """Longest known-name window starting at token i: (tokens consumed, Latin words)."""
     best: tuple[int, list[str]] | None = None
     close = (lambda a, b: a == b) if exact else _close
@@ -174,17 +197,21 @@ def _match_at(tokens: list[re.Match[str]], i: int, text: str, exact: bool):
             ti, ni, used, hits = i, start, 0, []
             while ni < len(skels) and ti < len(tokens):
                 # Tokens must be separated by whitespace only.
-                if ti > i and text[tokens[ti - 1].end():tokens[ti].start()].strip():
+                if ti > i and text[tokens[ti - 1].end() : tokens[ti].start()].strip():
                     break
                 one = _skeleton(tokens[ti].group())
                 if len(skels[ni]) <= 1 and tokens[ti].group() not in _ONE_LETTER_SPELLINGS.get(
-                        latin[ni], frozenset()):
+                    latin[ni], frozenset()
+                ):
                     break
                 # One name word split in two («شاہ زاد» for «شہزاد»). Exact only: a fuzzy join
                 # swallowed the «اور» in «نبی اور سیما».
-                two = (_skeleton(tokens[ti].group() + tokens[ti + 1].group())
-                       if ti + 1 < len(tokens)
-                       and not text[tokens[ti].end():tokens[ti + 1].start()].strip() else None)
+                two = (
+                    _skeleton(tokens[ti].group() + tokens[ti + 1].group())
+                    if ti + 1 < len(tokens)
+                    and not text[tokens[ti].end() : tokens[ti + 1].start()].strip()
+                    else None
+                )
                 if close(one, skels[ni]):
                     hits.append(one == skels[ni])
                     ti += 1
@@ -196,8 +223,11 @@ def _match_at(tokens: list[re.Match[str]], i: int, text: str, exact: bool):
                 ni += 1
                 used = ti - i
             matched = ni - start
-            if (matched >= 2 and _trustworthy(skels[start:ni], hits)
-                    and (best is None or matched > len(best[1]))):
+            if (
+                matched >= 2
+                and _trustworthy(skels[start:ni], hits)
+                and (best is None or matched > len(best[1]))
+            ):
                 best = (used, latin[start:ni])
     return best
 
@@ -212,7 +242,7 @@ def _latin_names(text: str) -> str:
         hit = fuzzy if fuzzy and (not exact or len(fuzzy[1]) > len(exact[1])) else exact
         if hit:
             used, latin = hit
-            out.append(text[last:tokens[i].start()])
+            out.append(text[last : tokens[i].start()])
             out.append(" ".join(latin))
             last = tokens[i + used - 1].end()
             i += used
@@ -228,15 +258,50 @@ def _latin_names(text: str) -> str:
 # the Urdu letters are replaced by their Latin sound. Where a letter has more than one
 # (ک is k, c or q), the spelling the knowledge base uses wins, with its capitalisation.
 _LATIN_SOUNDS: dict[str, tuple[str, ...]] = {
-    "ا": ("a",), "آ": ("a",), "ع": ("a",), "ب": ("b",), "پ": ("p",), "ت": ("t",),
-    "ٹ": ("t",), "ث": ("s",), "ج": ("j",), "چ": ("ch",), "ح": ("h",), "خ": ("kh",),
-    "د": ("d",), "ڈ": ("d",), "ذ": ("z",), "ر": ("r",), "ڑ": ("r",), "ز": ("z", "s"),
-    "ژ": ("zh",), "س": ("s", "c"), "ش": ("sh",), "ص": ("s",), "ض": ("z",), "ط": ("t",),
-    "ظ": ("z",), "غ": ("gh",), "ف": ("f", "ph"), "ق": ("q", "k"), "ک": ("k", "c", "q"),
-    "ك": ("k", "c"), "گ": ("g",), "ل": ("l",), "م": ("m",), "ن": ("n",), "و": ("w", "v"),
-    "ہ": ("h",), "ھ": ("h",), "ی": ("y", "i", "e"), "ي": ("y", "i"), "ے": ("e",),
+    "ا": ("a",),
+    "آ": ("a",),
+    "ع": ("a",),
+    "ب": ("b",),
+    "پ": ("p",),
+    "ت": ("t",),
+    "ٹ": ("t",),
+    "ث": ("s",),
+    "ج": ("j",),
+    "چ": ("ch",),
+    "ح": ("h",),
+    "خ": ("kh",),
+    "د": ("d",),
+    "ڈ": ("d",),
+    "ذ": ("z",),
+    "ر": ("r",),
+    "ڑ": ("r",),
+    "ز": ("z", "s"),
+    "ژ": ("zh",),
+    "س": ("s", "c"),
+    "ش": ("sh",),
+    "ص": ("s",),
+    "ض": ("z",),
+    "ط": ("t",),
+    "ظ": ("z",),
+    "غ": ("gh",),
+    "ف": ("f", "ph"),
+    "ق": ("q", "k"),
+    "ک": ("k", "c", "q"),
+    "ك": ("k", "c"),
+    "گ": ("g",),
+    "ل": ("l",),
+    "م": ("m",),
+    "ن": ("n",),
+    "و": ("w", "v"),
+    "ہ": ("h",),
+    "ھ": ("h",),
+    "ی": ("y", "i", "e"),
+    "ي": ("y", "i"),
+    "ے": ("e",),
 }
-_MIXED_WORD_RE = re.compile(rf"(?<![{_URDU_CHAR}A-Za-z])([{''.join(_LATIN_SOUNDS)}]{{1,2}})([A-Za-z]{{2,}})\b")
+_MIXED_WORD_RE = re.compile(
+    rf"(?<![{_URDU_CHAR}A-Za-z])([{''.join(_LATIN_SOUNDS)}]{{1,2}})([A-Za-z]{{2,}})\b"
+)
 
 
 @lru_cache(maxsize=1)
@@ -280,5 +345,6 @@ def latin_terms(reply: str, lang: str = "ur") -> str:
     reply = _LETTER_RUN_RE.sub(lambda m: _latin_letters(m.group()), reply)
     reply = _SAME_GLOSS_RE.sub(r"\1", reply)
     reply = _GLOSS_AFTER_URDU_RE.sub(
-        lambda m: "" if m.group(1) in _known_acronyms() else m.group(0), reply)
+        lambda m: "" if m.group(1) in _known_acronyms() else m.group(0), reply
+    )
     return _latin_names(reply)

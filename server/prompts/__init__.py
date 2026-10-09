@@ -24,10 +24,10 @@ _LANGUAGE_NAMES = {"en": "english", "ur": "urdu"}
 
 @dataclass(frozen=True)
 class PromptLibrary:
-    system: dict[tuple[str, str], str]      # (persona, lang) -> rules
-    greeting: dict[tuple[str, str], str]    # (persona, lang) -> greeting instructions
+    system: dict[tuple[str, str], str]  # (persona, lang) -> rules
+    greeting: dict[tuple[str, str], str]  # (persona, lang) -> greeting instructions
     core_brief: str
-    no_context: dict[str, str]              # lang -> instruction
+    no_context: dict[str, str]  # lang -> instruction
     query_rewriter: str
     replies: dict[str, dict[str, dict[str, str]]]  # name -> persona -> lang -> line
 

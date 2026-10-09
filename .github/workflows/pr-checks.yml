@@ -1,0 +1,38 @@
+# The checks a pull request must pass before it merges (project-setup §10). Coolify
+# deploys; this only judges a PR. The job names are what the branch rulesets list as
+# required status checks.
+name: pr-checks
+on:
+  pull_request:
+    branches: [develop, staging, main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The eslint hook runs the frontend's own linter, which needs its packages.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend packages
+        run: npm ci
+        working-directory: frontend
+      - name: Run the same hooks developers run on commit
+        run: pipx run pre-commit run --all-files --show-diff-on-failure
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Image builds
+        # Compose refuses to read the file without the Qdrant key; any value works for a build.
+        env:
+          MARI_RAG_QDRANT_API_KEY: ci-build-only
+        run: docker compose build

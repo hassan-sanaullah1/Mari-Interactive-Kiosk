@@ -112,13 +112,11 @@ def feminine_agreement(reply: str, lang: str = "ur") -> str:
 # agrees with the object, so past-tense verbs are never rewritten.
 
 _BREAK_WORDS = ("کہ", "اور", "جو", "جب", "لیکن", "کیونکہ", "تاکہ")
-_SPEAKER_SPAN = (
-    r"(?:(?!" + "|".join(rf"{w}\b" for w in _BREAK_WORDS) + r")[^۔!؟\n،,]){0,60}?"
-)
+_SPEAKER_SPAN = r"(?:(?!" + "|".join(rf"{w}\b" for w in _BREAK_WORDS) + r")[^۔!؟\n،,]){0,60}?"
 
 _FEM_VERB_RE = (
-    (re.compile(r"تی(?=\s+ہوں)"), "تا"),      # کر سکتی ہوں → کر سکتا ہوں
-    (re.compile(r"رہی(?=\s+ہوں)"), "رہا"),    # بتا رہی ہوں → بتا رہا ہوں
+    (re.compile(r"تی(?=\s+ہوں)"), "تا"),  # کر سکتی ہوں → کر سکتا ہوں
+    (re.compile(r"رہی(?=\s+ہوں)"), "رہا"),  # بتا رہی ہوں → بتا رہا ہوں
     # "سکی" alone is also correct for other subjects ("ٹیم مدد کر سکی").
     (re.compile(rf"(میں\b{_SPEAKER_SPAN})سکی\b"), r"\1سکا"),
     (re.compile(rf"(میں\b{_SPEAKER_SPAN})پائی\b"), r"\1پایا"),

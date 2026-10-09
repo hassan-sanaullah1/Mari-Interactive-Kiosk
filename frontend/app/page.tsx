@@ -7,7 +7,7 @@ import ChatPanel from "@/components/ChatPanel";
 import ControlDock from "@/components/ControlDock";
 import LanguageBar from "@/components/LanguageBar";
 import LoadingScreen from "@/components/LoadingScreen";
-import { useVoiceSession } from "@/hooks/useVoiceSession";
+import { useVoiceSession } from "@/hooks/use-voice-session";
 import { applyTheme, readTheme, type Theme } from "@/lib/theme";
 import { applyAvatar, readAvatar } from "@/lib/avatar";
 import { avatarConfig, DEFAULT_AVATAR, type AvatarId } from "@/components/avatar/models";

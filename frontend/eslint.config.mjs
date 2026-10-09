@@ -25,19 +25,19 @@ const scheduled = [
   {
     // Phase 4.4: the hook splits into micCapture / vad / replyQueue, every empty catch
     // either logs in debug mode or narrows, and the presenter id stops being compared.
-    files: ["hooks/useVoiceSession.ts"],
+    files: ["hooks/use-voice-session.ts"],
     rules: { "no-empty": "off", "no-restricted-syntax": "off", complexity: "off" },
   },
   {
     // Phase 4.1: these two read the avatar registry, which moves down into
     // lib/avatar/ so the import points the right way.
-    files: ["lib/avatar.ts", "lib/avatarFetch.ts"],
+    files: ["lib/avatar.ts", "lib/avatar-fetch.ts"],
     rules: { "no-restricted-imports": "off" },
   },
   {
     // Phase 4.5/4.6: the lipsync logging moves behind lib/debug.ts, and AvatarModel
     // splits into hooks.
-    files: ["lib/blendshapePlayer.ts", "lib/a2fMorphs.ts", "components/avatar/AvatarModel.tsx"],
+    files: ["lib/blendshape-player.ts", "lib/a2f-morphs.ts", "components/avatar/AvatarModel.tsx"],
     rules: { "no-console": "off", complexity: "off" },
   },
   {

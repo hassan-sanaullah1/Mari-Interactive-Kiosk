@@ -1,6 +1,6 @@
-# server/prompts
+# Prompts
 
-Everything the LLM is told, and the fixed lines spoken without it. Loaded once by
+Everything the LLM is told, and the fixed lines spoken without it, lives in `server/prompts/`. Loaded once by
 `server/prompts/__init__.py`; a missing or empty file stops the server at startup.
 
 | File | Used for |
@@ -19,7 +19,8 @@ no-context instruction.
 ## The two personas
 
 The browser sends which presenter is on screen with every turn (`avatar`, mirroring
-`AvatarId` in `frontend/components/avatar/models.ts`). An unknown id falls back to female.
+`AvatarId` in `frontend/components/avatar/models.ts`). An unknown id falls back to the first
+presenter in `server/personas.toml`.
 
 | Rig | Speaks as | Files |
 |---|---|---|

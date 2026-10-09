@@ -67,7 +67,7 @@ def split_sentences(text: str) -> list[str]:
     for m in _SENTENCE_SPLIT_RE.finditer(text):
         if m.group(1) is None:
             continue  # an abbreviation, not a boundary
-        parts.append(text[last:m.start(1)])
+        parts.append(text[last : m.start(1)])
         last = m.end(1)
     parts.append(text[last:])
     return [p for p in parts if p]
@@ -128,7 +128,9 @@ def _blocks(body: str) -> list[_Block]:
         if _TABLE_ROW_RE.match(line) and i + 1 < len(lines) and _TABLE_SEP_RE.match(lines[i + 1]):
             flush_paragraph()
             block = []
-            while i < len(lines) and (_TABLE_ROW_RE.match(lines[i]) or _TABLE_SEP_RE.match(lines[i])):
+            while i < len(lines) and (
+                _TABLE_ROW_RE.match(lines[i]) or _TABLE_SEP_RE.match(lines[i])
+            ):
                 block.append(lines[i])
                 i += 1
             out.append(_Block("\n".join(block), atomic=True))

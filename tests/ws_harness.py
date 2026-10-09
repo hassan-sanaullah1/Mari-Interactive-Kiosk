@@ -188,10 +188,17 @@ def configure(a, setattr_, *, a2f: bool) -> dict:
     net = FakeNet()
     setattr_(httpx, "AsyncClient", net.client_class())
     for key, value in {
-        "LLM_BASE": "http://llm.test/v1", "LLM_KEY": "k", "LLM_MODEL": "qwen3.5",
-        "LLM_PROVIDER": "vllm", "FORCE_DEMO": False, "UPLIFT_KEY": "u",
-        "EN_TTS": "uplift", "UR_TTS": "uplift", "SONIOX_KEY": "soniox-test-key",
-        "UPLIFT_VOICE": "v_8eelc901v6", "UPLIFT_VOICE_EN": "v_8eelc901v6",
+        "LLM_BASE": "http://llm.test/v1",
+        "LLM_KEY": "k",
+        "LLM_MODEL": "qwen3.5",
+        "LLM_PROVIDER": "vllm",
+        "FORCE_DEMO": False,
+        "UPLIFT_KEY": "u",
+        "EN_TTS": "uplift",
+        "UR_TTS": "uplift",
+        "SONIOX_KEY": "soniox-test-key",
+        "UPLIFT_VOICE": "v_8eelc901v6",
+        "UPLIFT_VOICE_EN": "v_8eelc901v6",
         "UPLIFT_VOICE_MALE": "v_8eelc901v6",
     }.items():
         setattr_(settings, key, value)
@@ -369,6 +376,7 @@ def run_scenarios(a, setattr_) -> dict:
 
     # ── the LLM stream breaking mid-reply ──
     for mode in ("error_frame", "midstream_fail", "connect_fail"):
+
         def llm_broken(ws, handles, mode=mode):
             handles["net"].llm_reply = REPLY_EN
             handles["net"].llm_mode = mode

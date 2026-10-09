@@ -31,6 +31,7 @@ class _FakeWS:
         async def gen():
             for m in self._messages:
                 yield m
+
         return gen()
 
     async def send(self, data) -> None:
@@ -55,11 +56,14 @@ async def _transcript(messages: list[dict]) -> str:
     return await stream.finish(grace=0)
 
 
-@pytest.mark.parametrize("tail", [
-    pytest.param({"tokens": []}, id="keepalive-with-no-tokens"),
-    pytest.param({"tokens": [{"text": "<end>", "is_final": False}]}, id="filtered-marker-only"),
-    pytest.param({}, id="message-with-no-tokens-key"),
-])
+@pytest.mark.parametrize(
+    "tail",
+    [
+        pytest.param({"tokens": []}, id="keepalive-with-no-tokens"),
+        pytest.param({"tokens": [{"text": "<end>", "is_final": False}]}, id="filtered-marker-only"),
+        pytest.param({}, id="message-with-no-tokens-key"),
+    ],
+)
 def test_a_tokenless_message_does_not_erase_the_partial(tail: dict) -> None:
     """The bug: these arrive after the speech and blanked ``last_partial``, so the
     turn that the visitor had just watched appear on screen was thrown away."""
@@ -70,12 +74,16 @@ def test_a_tokenless_message_does_not_erase_the_partial(tail: dict) -> None:
 def test_finalized_tokens_still_replace_the_partial() -> None:
     """The normal path must be unchanged: once Soniox finalizes a span, the partial
     that was standing in for it is dropped rather than repeated."""
-    said = asyncio.run(_transcript([
-        _partial("السلام علیکم"),
-        _final("السلام علیکم"),
-        _partial(" ماری"),
-        _final(" ماری انرجیز"),
-    ]))
+    said = asyncio.run(
+        _transcript(
+            [
+                _partial("السلام علیکم"),
+                _final("السلام علیکم"),
+                _partial(" ماری"),
+                _final(" ماری انرجیز"),
+            ]
+        )
+    )
     assert said == "السلام علیکم ماری انرجیز"
 
 

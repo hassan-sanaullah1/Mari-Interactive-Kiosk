@@ -75,8 +75,13 @@ def _string_literals(path: Path) -> list[str]:
 def collect_inputs(a) -> dict:
     tests = ROOT / "tests"
     tts_sources = [
-        "test_tts_spoken.py", "test_english_normalise.py", "test_addresses_and_symbols.py",
-        "test_names_and_ranks.py", "test_places.py", "test_personas.py", "test_prompts_and_glossary.py",
+        "test_tts_spoken.py",
+        "test_english_normalise.py",
+        "test_addresses_and_symbols.py",
+        "test_names_and_ranks.py",
+        "test_places.py",
+        "test_personas.py",
+        "test_prompts_and_glossary.py",
     ]
     literals: list[str] = []
     for name in tts_sources:
@@ -87,7 +92,9 @@ def collect_inputs(a) -> dict:
 
     prompt_lines: list[str] = []
     for md in sorted((ROOT / "server" / "prompts").glob("*/*.md")):
-        prompt_lines += [ln.strip() for ln in md.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        prompt_lines += [
+            ln.strip() for ln in md.read_text(encoding="utf-8").splitlines() if ln.strip()
+        ]
 
     brief_lines = [ln for ln in a["core_brief"].splitlines() if ln.strip()]
     tts_texts = sorted(set(literals + paragraphs + prompt_lines + brief_lines))
@@ -125,7 +132,7 @@ class FakeNet:
 
     def __init__(self) -> None:
         self.llm_reply = ""
-        self.llm_mode = "ok"      # ok | error_frame | midstream_fail | connect_fail
+        self.llm_mode = "ok"  # ok | error_frame | midstream_fail | connect_fail
         self.calls: list[dict] = []
 
     def client_class(net):  # noqa: N805
@@ -152,7 +159,7 @@ class FakeNet:
                 text = net.llm_reply
                 cut = len(text) // 2 if net.llm_mode == "midstream_fail" else len(text)
                 for i in range(0, cut, 3):
-                    frame = {"choices": [{"delta": {"content": text[i:i + 3]}}]}
+                    frame = {"choices": [{"delta": {"content": text[i : i + 3]}}]}
                     yield "data: " + json.dumps(frame, ensure_ascii=False)
                 if net.llm_mode == "midstream_fail":
                     raise httpx.ReadTimeout("mid-stream")
@@ -229,13 +236,20 @@ LLM_REPLIES = {
 }
 
 TRANSCRIPTS = {
-    "en": ["hello", "What is Mari's net profit?", "Please introduce yourself and tell me about Sky47"],
+    "en": [
+        "hello",
+        "What is Mari's net profit?",
+        "Please introduce yourself and tell me about Sky47",
+    ],
     "ur": ["السلام علیکم", "ماری انرجیز کا منافع کتنا ہے؟", "آپ کون ہیں؟"],
 }
 
 HISTORY = [
     {"role": "user", "text": "Tell me about the verticals"},
-    {"role": "assistant", "text": "We have four verticals: Mari Services, Mari Minerals, Sky47 and GEM Energy."},
+    {
+        "role": "assistant",
+        "text": "We have four verticals: Mari Services, Mari Minerals, Sky47 and GEM Energy.",
+    },
     {"role": "system", "text": "ignored"},
     {"role": "user", "text": "x" * 900},
 ]
@@ -250,11 +264,18 @@ def _configure(a, monkeypatch_setattr) -> FakeNet:
     net = FakeNet()
     monkeypatch_setattr(httpx, "AsyncClient", net.client_class())
     for key, value in {
-        "LLM_BASE": "http://llm.test/v1", "LLM_KEY": "k", "LLM_MODEL": "qwen3.5",
-        "LLM_PROVIDER": "vllm", "FORCE_DEMO": False, "UPLIFT_KEY": "u",
-        "EN_TTS": "uplift", "SONIOX_KEY": "", "A2F_URL": "",
+        "LLM_BASE": "http://llm.test/v1",
+        "LLM_KEY": "k",
+        "LLM_MODEL": "qwen3.5",
+        "LLM_PROVIDER": "vllm",
+        "FORCE_DEMO": False,
+        "UPLIFT_KEY": "u",
+        "EN_TTS": "uplift",
+        "SONIOX_KEY": "",
+        "A2F_URL": "",
         # Voice ids land in every TTS payload, so a developer's .env must not leak in.
-        "UPLIFT_VOICE": "v_8eelc901v6", "UPLIFT_VOICE_EN": "v_8eelc901v6",
+        "UPLIFT_VOICE": "v_8eelc901v6",
+        "UPLIFT_VOICE_EN": "v_8eelc901v6",
         "UPLIFT_VOICE_MALE": "v_8eelc901v6",
     }.items():
         monkeypatch_setattr(C, key, value)
@@ -288,8 +309,13 @@ def run_turns(a, monkeypatch_setattr, set_env) -> dict:
             for i, transcript in enumerate(TRANSCRIPTS[lang]):
                 net.llm_mode = "ok"
                 net.llm_reply = LLM_REPLIES[lang][i % 2]
-                turn(f"ws/{lang}/{avatar}/{i}", transcript, lang, avatar,
-                     history=HISTORY if i == 1 else None)
+                turn(
+                    f"ws/{lang}/{avatar}/{i}",
+                    transcript,
+                    lang,
+                    avatar,
+                    history=HISTORY if i == 1 else None,
+                )
             for mode in ("error_frame", "midstream_fail", "connect_fail"):
                 net.llm_mode = mode
                 net.llm_reply = LLM_REPLIES[lang][0]
@@ -297,14 +323,20 @@ def run_turns(a, monkeypatch_setattr, set_env) -> dict:
             net.llm_mode = "ok"
             turn(f"ws/{lang}/{avatar}/empty_spoke", "", lang, avatar, spoke=True)
             turn(f"ws/{lang}/{avatar}/empty_silent", "", lang, avatar, spoke=False)
-            turn(f"ws/{lang}/{avatar}/typed", TRANSCRIPTS[lang][2], lang, avatar,
-                 echo_transcript=False)
+            turn(
+                f"ws/{lang}/{avatar}/typed",
+                TRANSCRIPTS[lang][2],
+                lang,
+                avatar,
+                echo_transcript=False,
+            )
 
             for i, transcript in enumerate(TRANSCRIPTS[lang]):
                 net.calls.clear()
                 net.llm_reply = LLM_REPLIES[lang][i % 2]
-                body = a["ChatIn"](text=transcript, lang=lang, avatar=avatar,
-                                   history=HISTORY if i == 1 else None)
+                body = a["ChatIn"](
+                    text=transcript, lang=lang, avatar=avatar, history=HISTORY if i == 1 else None
+                )
                 reply = asyncio.run(a["chat"](body))
                 out[f"chat/{lang}/{avatar}/{i}"] = {"reply": reply, "net": list(net.calls)}
 
@@ -334,23 +366,32 @@ def collect(monkeypatch_setattr, set_env, inputs: dict | None = None) -> dict:
             [a["force_salam"](r, lang), a["gender_agreement"](r, lang, avatar)]
             for r in inputs["replies"]
         ]
-        for lang in LANGS for avatar in AVATARS
+        for lang in LANGS
+        for avatar in AVATARS
     }
     greetings = [a["is_greeting"](q) for q in inputs["queries"]]
     expansion = [list(a["expand"](q)) for q in inputs["queries"]]
 
     gen = a["GenerationService"]()
     RR = a["RetrievalResult"]
-    with_context = RR(context="## 1.5 Shareholding\nFauji Foundation 40 percent.",
-                      sources=["kb#1.5"], glossary_block="ABBREVIATIONS:\nMPCL = Mari Petroleum")
+    with_context = RR(
+        context="## 1.5 Shareholding\nFauji Foundation 40 percent.",
+        sources=["kb#1.5"],
+        glossary_block="ABBREVIATIONS:\nMPCL = Mari Petroleum",
+    )
     prompts = {}
     for avatar in (*AVATARS, "unknown"):
         for lang in (*LANGS, "xx"):
             for greeting in (False, True):
                 for label, result in (("context", with_context), ("empty", RR())):
-                    p = gen.build_prompt(result, lang, core_brief=a["core_brief"],
-                                         greeting=greeting, avatar=avatar)
-                    prompts[f"{avatar}/{lang}/{greeting}/{label}"] = [p.system, p.sources, p.grounded]
+                    p = gen.build_prompt(
+                        result, lang, core_brief=a["core_brief"], greeting=greeting, avatar=avatar
+                    )
+                    prompts[f"{avatar}/{lang}/{greeting}/{label}"] = [
+                        p.system,
+                        p.sources,
+                        p.grounded,
+                    ]
 
     canned = {}
     for name in ("demo", "no_speech"):

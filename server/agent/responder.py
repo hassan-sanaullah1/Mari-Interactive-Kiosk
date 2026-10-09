@@ -37,8 +37,9 @@ def split_sentences(text: str) -> list[str]:
     return out
 
 
-async def build_messages(text: str, lang: str, history: list | None,
-                         avatar: str | None = None) -> tuple[list[dict], int]:
+async def build_messages(
+    text: str, lang: str, history: list | None, avatar: str | None = None
+) -> tuple[list[dict], int]:
     """The exact message list and reply cap one turn sends to the LLM.
 
     Public because the answer eval (eval/run_answers.py) grades the real prompt, and
@@ -56,8 +57,9 @@ async def build_messages(text: str, lang: str, history: list | None,
     return messages, reply_tokens
 
 
-async def respond(text: str, lang: str, history: list | None = None,
-                  avatar: str | None = None) -> str:
+async def respond(
+    text: str, lang: str, history: list | None = None, avatar: str | None = None
+) -> str:
     """The whole reply in one call. Raises on LLM failure; the caller falls back."""
     messages, reply_tokens = await build_messages(text, lang, history, avatar)
     reply = await llm.complete(messages, reply_tokens)
@@ -119,8 +121,9 @@ class _ReplyFixer:
         return sentence
 
 
-async def respond_sentences(text: str, lang: str, history: list | None = None,
-                            avatar: str | None = None) -> AsyncIterator[tuple[str, bool]]:
+async def respond_sentences(
+    text: str, lang: str, history: list | None = None, avatar: str | None = None
+) -> AsyncIterator[tuple[str, bool]]:
     """Yield (sentence, is_demo) as the reply streams. Never raises for LLM failures."""
     if (stand_in := fallback_reply(lang, avatar)) is not None:
         for sentence in split_sentences(stand_in.text):
@@ -145,19 +148,27 @@ async def respond_sentences(text: str, lang: str, history: list | None = None,
         except Exception as exc:
             # Nothing said yet: a fresh connection usually lands, so try again.
             if not emitted and not splitter.pending and attempt + 1 < llm.CONNECT_ATTEMPTS:
-                logger.warning("LLM stream attempt %d/%d failed, retrying: %s",
-                               attempt + 1, llm.CONNECT_ATTEMPTS, exc)
+                logger.warning(
+                    "LLM stream attempt %d/%d failed, retrying: %s",
+                    attempt + 1,
+                    llm.CONNECT_ATTEMPTS,
+                    exc,
+                )
                 await asyncio.sleep(llm.RETRY_BACKOFF * (attempt + 1))
                 continue
-            logger.warning("LLM reply failed after %d attempt(s), falling back to demo line: %s",
-                           attempt + 1, exc)
+            logger.warning(
+                "LLM reply failed after %d attempt(s), falling back to demo line: %s",
+                attempt + 1,
+                exc,
+            )
             for sentence, is_demo in _salvage(splitter, fixer, emitted, lang, avatar):
                 yield sentence, is_demo
             return
 
 
-def _salvage(splitter: _SentenceSplitter, fixer: _ReplyFixer, emitted: bool,
-             lang: str, avatar: str | None) -> list[tuple[str, bool]]:
+def _salvage(
+    splitter: _SentenceSplitter, fixer: _ReplyFixer, emitted: bool, lang: str, avatar: str | None
+) -> list[tuple[str, bool]]:
     """What to say after the stream failed: the partial reply, or the demo line.
 
     Half an answer is better than an apology, so anything already received is spoken.

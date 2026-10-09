@@ -65,9 +65,9 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useAnimations, useGLTF } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { fetchAvatar, releaseAvatar } from "@/lib/avatarFetch";
-import { applyA2FLipsync, createA2FMorphState } from "@/lib/a2fMorphs";
-import { setRigCalibration } from "@/lib/blendshapePlayer";
+import { fetchAvatar, releaseAvatar } from "@/lib/avatar-fetch";
+import { applyA2FLipsync, createA2FMorphState } from "@/lib/a2f-morphs";
+import { setRigCalibration } from "@/lib/blendshape-player";
 import { publishProbe } from "@/lib/debug";
 import type { AvatarState } from "./state";
 import {
@@ -796,7 +796,7 @@ export default function AvatarModel({
   onReady,
 }: AvatarModelProps) {
   const segments = config.segments;
-  // The loader is pointed at the single shared download (lib/avatarFetch.ts)
+  // The loader is pointed at the single shared download (lib/avatar-fetch.ts)
   // rather than issuing its own request. Without this the preload, this loader
   // and the progress readout are three separate requests for the same 20MB;
   // they only collapse into one when the first finishes before the others

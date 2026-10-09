@@ -186,9 +186,7 @@ def evaluate(backend, cases: list[Case], k: int) -> dict:
     def hit_at(n: int) -> float:
         return sum(1 for r in ranks if r is not None and r <= n) / max(len(ranks), 1)
 
-    abstained = sum(
-        1 for f in failures if f["kind"] == "should-abstain"
-    )
+    abstained = sum(1 for f in failures if f["kind"] == "should-abstain")
     return {
         "backend": backend.name,
         "questions": len(cases),
@@ -205,17 +203,17 @@ def evaluate(backend, cases: list[Case], k: int) -> dict:
             "p95": sorted(latencies)[max(int(len(latencies) * 0.95) - 1, 0)],
             "mean": statistics.fmean(latencies),
         },
-        "stage_ms_p50": {
-            s: statistics.median(v) for s, v in sorted(stage_totals.items())
-        },
+        "stage_ms_p50": {s: statistics.median(v) for s, v in sorted(stage_totals.items())},
         "failures": failures,
     }
 
 
 def print_report(report: dict, k: int, show_failures: int) -> None:
     lat = report["latency_ms"]
-    print(f"\n╭─ {report['backend']} ─ {report['questions']} questions "
-          f"({report['positives']} positive, {report['negatives']} negative)")
+    print(
+        f"\n╭─ {report['backend']} ─ {report['questions']} questions "
+        f"({report['positives']} positive, {report['negatives']} negative)"
+    )
     print(f"│  hit@1         {report['hit@1']:6.1%}")
     print(f"│  hit@3         {report['hit@3']:6.1%}")
     print(f"│  hit@{k:<2}        {report[f'hit@{k}']:6.1%}")
@@ -241,7 +239,7 @@ def print_report(report: dict, k: int, show_failures: int) -> None:
 
 # Per-metric tolerance against a recorded baseline. hit@1 gets the widest band because
 # near-tied chunks swap places between runs for reasons that have nothing to do with a
-# change (README-RAG.md puts that noise at about +-2 points); the rest are steadier.
+# change (docs/retrieval.md puts that noise at about +-2 points); the rest are steadier.
 TOLERANCE = {
     "hit@1": 0.02,
     "hit@3": 0.01,
@@ -280,20 +278,30 @@ def compare_to_baseline(report: dict, baseline: dict) -> list[str]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--backend", action="append", choices=list(BACKENDS),
-                    help="repeatable; defaults to hybrid")
+    ap.add_argument(
+        "--backend", action="append", choices=list(BACKENDS), help="repeatable; defaults to hybrid"
+    )
     ap.add_argument("--k", type=int, default=5, help="top_k passed to the retriever")
     ap.add_argument("--json", type=Path, help="write the full report (incl. failures) here")
     ap.add_argument("--show-failures", type=int, default=15)
-    ap.add_argument("--baseline", type=Path, metavar="FILE",
-                    help="a report written earlier by --json. Metrics are compared "
-                         "against it and a fall beyond tolerance exits non-zero, so "
-                         "this can gate a refactor or CI.")
+    ap.add_argument(
+        "--baseline",
+        type=Path,
+        metavar="FILE",
+        help="a report written earlier by --json. Metrics are compared "
+        "against it and a fall beyond tolerance exits non-zero, so "
+        "this can gate a refactor or CI.",
+    )
     ap.add_argument("--lang", choices=["en", "ur"], help="score only this language")
-    ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
-                    help="override a RagSettings field for this run, e.g. "
-                         "--set rerank_enabled=false --set score_threshold=0.0. This is "
-                         "how parameters get tuned: change one, re-run, compare.")
+    ap.add_argument(
+        "--set",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="override a RagSettings field for this run, e.g. "
+        "--set rerank_enabled=false --set score_threshold=0.0. This is "
+        "how parameters get tuned: change one, re-run, compare.",
+    )
     args = ap.parse_args()
 
     if args.set:
@@ -328,7 +336,9 @@ def main() -> int:
     if args.baseline:
         recorded = json.loads(args.baseline.read_text())
         # --json writes a list, one report per backend; compare like with like.
-        by_backend = {r["backend"]: r for r in (recorded if isinstance(recorded, list) else [recorded])}
+        by_backend = {
+            r["backend"]: r for r in (recorded if isinstance(recorded, list) else [recorded])
+        }
         failed = False
         for report in reports:
             base = by_backend.get(report["backend"])

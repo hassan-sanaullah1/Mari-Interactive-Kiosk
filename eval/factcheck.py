@@ -92,7 +92,7 @@ class Entry:
 
     variants: list[str]
     hit: bool
-    in_context: bool | None = None   # None when no retrieved context was supplied
+    in_context: bool | None = None  # None when no retrieved context was supplied
 
     @property
     def cause(self) -> str | None:
@@ -104,8 +104,12 @@ class Entry:
         return "generation" if self.in_context else "retrieval"
 
     def as_dict(self) -> dict:
-        return {"variants": self.variants, "hit": self.hit,
-                "in_context": self.in_context, "cause": self.cause}
+        return {
+            "variants": self.variants,
+            "hit": self.hit,
+            "in_context": self.in_context,
+            "cause": self.cause,
+        }
 
 
 @dataclass
@@ -135,15 +139,20 @@ class FactScore:
         return out
 
     def as_dict(self) -> dict:
-        return {"grade": self.grade, "hit": self.hits, "total": self.total,
-                "entries": [e.as_dict() for e in self.entries],
-                "optional_hits": self.optional_hits,
-                "optional_total": self.optional_total,
-                "causes": self.causes()}
+        return {
+            "grade": self.grade,
+            "hit": self.hits,
+            "total": self.total,
+            "entries": [e.as_dict() for e in self.entries],
+            "optional_hits": self.optional_hits,
+            "optional_total": self.optional_total,
+            "causes": self.causes(),
+        }
 
 
-def score(require, optional, reply: str, context: str | None = None,
-          cap_hit: bool = False) -> FactScore:
+def score(
+    require, optional, reply: str, context: str | None = None, cap_hit: bool = False
+) -> FactScore:
     """Grade ``reply`` against the required facts.
 
     All required facts present is "Matched", some is "Partial", none is "Not Matched" —
@@ -165,8 +174,7 @@ def score(require, optional, reply: str, context: str | None = None,
     for variants in require:
         got = hit(variants, reply, spoken_reply)
         in_ctx = None if context is None else hit(variants, context, spoken_ctx)
-        entries.append(Entry(variants if isinstance(variants, list) else [variants],
-                             got, in_ctx))
+        entries.append(Entry(variants if isinstance(variants, list) else [variants], got, in_ctx))
 
     if cap_hit:
         for e in entries:
@@ -176,5 +184,6 @@ def score(require, optional, reply: str, context: str | None = None,
     grade = "Matched" if hits == len(entries) else ("Not Matched" if hits == 0 else "Partial")
 
     opt_hits = sum(1 for v in optional if hit(v, reply, spoken_reply))
-    return FactScore(grade=grade, entries=entries,
-                     optional_hits=opt_hits, optional_total=len(optional))
+    return FactScore(
+        grade=grade, entries=entries, optional_hits=opt_hits, optional_total=len(optional)
+    )

@@ -33,8 +33,13 @@ async def main() -> int:
     import argparse
 
     ap = argparse.ArgumentParser()
-    ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
-                    help="override a RagSettings field, e.g. --set rerank_skip_for_urdu=false")
+    ap.add_argument(
+        "--set",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="override a RagSettings field, e.g. --set rerank_skip_for_urdu=false",
+    )
     ap.add_argument("--lang", choices=["en", "ur"])
     args = ap.parse_args()
 
@@ -42,8 +47,11 @@ async def main() -> int:
     for pair in args.set:
         key, _, raw = pair.partition("=")
         current = getattr(settings, key)
-        value = (raw.strip().lower() in {"1", "true", "yes", "on"}) if isinstance(current, bool) \
+        value = (
+            (raw.strip().lower() in {"1", "true", "yes", "on"})
+            if isinstance(current, bool)
             else type(current)(raw)
+        )
         setattr(settings, key, value)
         print(f"override {key} = {value!r}")
     # Collect scores with the gates wide open — a gated-away chunk has no score to
@@ -61,22 +69,29 @@ async def main() -> int:
     for case in cases:
         result = await retriever.retrieve(case.question, lang=case.lang, use_cache=False)
         top = result.chunks[0] if result.chunks else None
-        rows.append({
-            "lang": case.lang,
-            "negative": case.negative,
-            "score": top.score if top else 0.0,
-            "reranked": top.reranked if top else False,
-            "correct": bool(
-                top and not case.negative
-                and heading_matches(top.heading_path, case.expect_heading)
-            ),
-        })
+        rows.append(
+            {
+                "lang": case.lang,
+                "negative": case.negative,
+                "score": top.score if top else 0.0,
+                "reranked": top.reranked if top else False,
+                "correct": bool(
+                    top
+                    and not case.negative
+                    and heading_matches(top.heading_path, case.expect_heading)
+                ),
+            }
+        )
 
     for reranked in (True, False):
         subset = [r for r in rows if r["reranked"] == reranked]
         if not subset:
             continue
-        name = "rerank probability (score_threshold)" if reranked else "dense cosine similarity (dense_score_threshold)"
+        name = (
+            "rerank probability (score_threshold)"
+            if reranked
+            else "dense cosine similarity (dense_score_threshold)"
+        )
         positives = [r for r in subset if not r["negative"]]
         negatives = [r for r in subset if r["negative"]]
         print(f"\n╭─ {name} — {len(positives)} answerable, {len(negatives)} unanswerable")
@@ -89,14 +104,20 @@ async def main() -> int:
             blocked = sum(1 for r in negatives if r["score"] < t) / max(len(negatives), 1)
             print(f"│  {t:8.4f}  {kept:15.1%}  {blocked:20.1%}")
         if positives:
-            lo = min(r["score"] for r in positives if r["correct"]) if any(
-                r["correct"] for r in positives) else 0.0
+            lo = (
+                min(r["score"] for r in positives if r["correct"])
+                if any(r["correct"] for r in positives)
+                else 0.0
+            )
             print(f"│  lowest score among CORRECT top-1 hits: {lo:.4f}")
         if negatives:
             hi = max(r["score"] for r in negatives)
             print(f"│  highest score among unanswerable questions: {hi:.4f}")
-            print(f"│  -> any threshold in ({hi:.4f}, {lo:.4f}) separates them cleanly"
-                  if hi < lo else "│  -> the two overlap; no threshold separates them perfectly")
+            print(
+                f"│  -> any threshold in ({hi:.4f}, {lo:.4f}) separates them cleanly"
+                if hi < lo
+                else "│  -> the two overlap; no threshold separates them perfectly"
+            )
         print("╰─")
     return 0
 

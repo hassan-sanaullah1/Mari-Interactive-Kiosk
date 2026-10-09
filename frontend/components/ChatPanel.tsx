@@ -2,9 +2,9 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import styles from "./ChatPanel.module.css";
-import { ChatIcon, CloseIcon, SendIcon } from "./icons";
+import { ChatIcon, CloseIcon, SendIcon } from "./Icons";
 import { uiCopy, type Gender, type Lang } from "@/lib/i18n";
-import type { Message } from "@/hooks/useVoiceSession";
+import type { Message } from "@/hooks/use-voice-session";
 
 type Props = {
   lang: Lang;

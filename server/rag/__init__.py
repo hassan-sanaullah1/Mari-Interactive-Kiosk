@@ -36,7 +36,7 @@ from .generation import GenerationService
 from .retriever import RetrievalResult, Retriever, get_retriever
 from .settings import get_settings
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 _retriever: Retriever | None = None
 _generation: GenerationService | None = None
@@ -73,10 +73,10 @@ async def startup(ingest: bool = True) -> None:
 
         _retriever = retriever
         _status["state"] = "ready"
-        log.info("RAG layer ready")
+        logger.info("RAG layer ready")
     except Exception as exc:  # noqa: BLE001
         _status = {"enabled": False, "state": "failed", "error": f"{type(exc).__name__}: {exc}"}
-        log.exception("RAG startup failed; serving prompts with no retrieved context")
+        logger.exception("RAG startup failed; serving prompts with no retrieved context")
 
 
 async def shutdown() -> None:
@@ -90,15 +90,21 @@ def prestart(text: str) -> None:
         try:
             _retriever.prestart(text)
         except Exception:  # noqa: BLE001 - an optimisation must never break a turn
-            log.debug("prestart failed", exc_info=True)
+            logger.debug("prestart failed", exc_info=True)
 
 
-async def retrieve(text: str, lang: str = "en", history: list[dict] | None = None):
+async def retrieve(
+    text: str, lang: str = "en", history: list[dict] | None = None
+) -> RetrievalResult | None:
     if _retriever is None:
         return None
     return await _retriever.retrieve(
-        text, lang=lang, history=history,
-        llm_base=config.LLM_BASE, llm_key=config.LLM_KEY, llm_model=config.LLM_MODEL,
+        text,
+        lang=lang,
+        history=history,
+        llm_base=config.LLM_BASE,
+        llm_key=config.LLM_KEY,
+        llm_model=config.LLM_MODEL,
     )
 
 
@@ -112,26 +118,50 @@ def _generator() -> GenerationService:
 
 
 def _build(result: RetrievalResult, lang: str, text: str, avatar: str | None = None) -> str:
-    return _generator().build_prompt(
-        result, lang,
-        core_brief=get_prompts().core_brief,
-        greeting=is_greeting(text),
-        avatar=avatar,
-    ).system
+    return (
+        _generator()
+        .build_prompt(
+            result,
+            lang,
+            core_brief=get_prompts().core_brief,
+            greeting=is_greeting(text),
+            avatar=avatar,
+        )
+        .system
+    )
 
 
-async def system_prompt(lang: str, text: str = "", history: list[dict] | None = None,
-                        avatar: str | None = None) -> str:
+async def system_prompt(
+    lang: str, text: str = "", history: list[dict] | None = None, avatar: str | None = None
+) -> str:
     """The full system prompt for one turn, minus retrieved sections if retrieval fails."""
     if _retriever is None:
         return _build(
             RetrievalResult(degraded=_status.get("state", "unavailable")), lang, text, avatar
         )
     try:
-        return _build(await retrieve(text, lang, history), lang, text, avatar)
+        result = await retrieve(text, lang, history)
+        if result is None:  # shutdown cleared the retriever after the check above
+            result = RetrievalResult(degraded=_status.get("state", "unavailable"))
+        return _build(result, lang, text, avatar)
     except Exception as exc:  # noqa: BLE001
-        log.exception("prompt assembly failed; serving this turn with no retrieved context")
+        logger.exception("prompt assembly failed; serving this turn with no retrieved context")
         return _build(RetrievalResult(degraded=f"{type(exc).__name__}: {exc}"), lang, text, avatar)
+
+
+async def readiness(timeout_s: float = 0.8) -> str:
+    """Qdrant's state for /health/ready: "ok", "warming" or "fail". Never raises.
+
+    Warming counts as able to serve, because turns are answered from the core brief
+    until retrieval is up. The timeout keeps the whole health check under a second.
+    """
+    if _retriever is None:
+        return "warming" if _status.get("state") in ("not started", "warming") else "fail"
+    try:
+        store_health = await asyncio.wait_for(_retriever.store.health(), timeout=timeout_s)
+    except Exception:  # noqa: BLE001 - a timeout or a dropped connection is just "fail"
+        return "fail"
+    return "ok" if store_health.get("reachable") else "fail"
 
 
 async def health() -> dict:

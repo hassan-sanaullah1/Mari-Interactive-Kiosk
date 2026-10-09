@@ -64,9 +64,13 @@ def wav_to_pcm16(wav: bytes) -> tuple[bytes, int]:
 def pcm16_to_wav(pcm: bytes, sr: int = 16000) -> bytes:
     """Wrap raw PCM s16le mono in a WAV header (for batch STT like Whisper)."""
     return (
-        b"RIFF" + struct.pack("<I", 36 + len(pcm)) + b"WAVEfmt "
+        b"RIFF"
+        + struct.pack("<I", 36 + len(pcm))
+        + b"WAVEfmt "
         + struct.pack("<IHHIIHH", 16, 1, 1, sr, sr * 2, 2, 16)
-        + b"data" + struct.pack("<I", len(pcm)) + pcm
+        + b"data"
+        + struct.pack("<I", len(pcm))
+        + pcm
     )
 
 
@@ -127,7 +131,9 @@ class SonioxSTT(STTProvider):
                     continue
                 data = json.loads(message)
                 if data.get("error_code"):
-                    raise RuntimeError(f"soniox {data.get('error_code')}: {data.get('error_message')}")
+                    raise RuntimeError(
+                        f"soniox {data.get('error_code')}: {data.get('error_message')}"
+                    )
                 for tok in data.get("tokens", []):
                     text = tok.get("text", "")
                     # skip Soniox control tokens like <end>, <fin>
@@ -150,7 +156,9 @@ class SonioxStream:
     are pushed to ``on_partial`` for live captions — so STT overlaps with speaking and
     the transcript is ready almost as soon as the user stops."""
 
-    def __init__(self, lang: str = "ur", on_partial=None, api_key: str = "", url: str = "", model: str = ""):
+    def __init__(
+        self, lang: str = "ur", on_partial=None, api_key: str = "", url: str = "", model: str = ""
+    ):
         self.lang = lang
         self.on_partial = on_partial
         self.api_key = api_key or config.SONIOX_KEY
@@ -227,7 +235,7 @@ class SonioxStream:
                 await self.ws.send("")  # end-of-audio
         except Exception:
             pass
-        await asyncio.sleep(grace)      # let the reader catch the tail of the partial
+        await asyncio.sleep(grace)  # let the reader catch the tail of the partial
         text = ("".join(self.finals) + self.last_partial).strip()
         # Still empty: wait longer, polling. Only a turn that would otherwise be lost pays.
         if not text:
@@ -266,9 +274,13 @@ class WhisperLocalSTT(STTProvider):
 
             # "auto" picks CUDA when available; CPU if a GPU is visible but unusable.
             try:
-                WhisperLocalSTT._model = WhisperModel(self.model_size, device="auto", compute_type="int8")
+                WhisperLocalSTT._model = WhisperModel(
+                    self.model_size, device="auto", compute_type="int8"
+                )
             except Exception:
-                WhisperLocalSTT._model = WhisperModel(self.model_size, device="cpu", compute_type="int8")
+                WhisperLocalSTT._model = WhisperModel(
+                    self.model_size, device="cpu", compute_type="int8"
+                )
         return WhisperLocalSTT._model
 
     def warm(self) -> None:
@@ -292,7 +304,10 @@ class WhisperLocalSTT(STTProvider):
             # is what stops "Mari" (the company's own name, said constantly here) from
             # coming back as the far more common English name "Mary".
             segments, _ = model.transcribe(
-                audio, language="en", beam_size=1, vad_filter=False,
+                audio,
+                language="en",
+                beam_size=1,
+                vad_filter=False,
                 initial_prompt=_vocab_hint("en"),
             )
             return "".join(s.text for s in segments).strip()
@@ -316,7 +331,9 @@ class WhisperRemoteSTT(STTProvider):
         # "prompt" is the OpenAI-compatible name for the same initial_prompt bias used
         # by the local model below — see _VOCAB_HINT_EN for why "Mari" needs it.
         data = {
-            "model": self.model, "language": "en", "response_format": "json",
+            "model": self.model,
+            "language": "en",
+            "response_format": "json",
             "prompt": _vocab_hint("en"),
         }
         async with httpx.AsyncClient(timeout=60) as client:

@@ -84,5 +84,4 @@ async def a2f_status() -> dict:
         "client": AVAILABLE,
         "connected": connected,
         "ready": configured and AVAILABLE and connected,
-        "url": config.A2F_URL or None,
     }

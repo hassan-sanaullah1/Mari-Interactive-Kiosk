@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from fastapi import WebSocket
 
 from .. import avatar, config
+from ..logging_setup import request_id
 from ..personas import Persona, get_persona
 from . import speech
 from .replies import canned
@@ -121,9 +122,7 @@ class TurnRunner:
 
     async def _deliver(self, sentence: _Synthesis) -> bool:
         """Send one sentence, its audio and its lipsync clip. True if audio was sent."""
-        await self.send_json(
-            {"type": "reply", "text": sentence.text, "demo": sentence.is_demo}
-        )
+        await self.send_json({"type": "reply", "text": sentence.text, "demo": sentence.is_demo})
         if sentence.task is None:
             return False
 
@@ -176,12 +175,12 @@ class TurnRunner:
         spoke: bool = True,
     ) -> None:
         """Speak the reply to ``transcript``, then close out the turn."""
+        # Synthesis tasks are created below, so they inherit this connection/turn ID.
+        id_token = request_id.set(f"{request_id.get()}/{self._turn_id}")
         producer: asyncio.Task | None = None
         try:
             if echo_transcript:
-                await self.send_json(
-                    {"type": "stt", "text": transcript, "lang": self._lang}
-                )
+                await self.send_json({"type": "stt", "text": transcript, "lang": self._lang})
 
             if not transcript:
                 spoken = await self._answer_silence(spoke)
@@ -205,6 +204,7 @@ class TurnRunner:
                 producer.cancel()
             for task in self._in_flight:
                 task.cancel()
+            request_id.reset(id_token)
 
     async def _answer_silence(self, spoke: bool) -> bool | None:
         """Nothing was transcribed. Returns None when the turn is already finished."""
@@ -276,6 +276,4 @@ async def run_reply(
     visitor spoke and STT lost it, which gets an apology; False means nobody spoke.
     """
     runner = TurnRunner(sock, lang, get_persona(avatar_id))
-    await runner.run(
-        transcript, echo_transcript=echo_transcript, history=history, spoke=spoke
-    )
+    await runner.run(transcript, echo_transcript=echo_transcript, history=history, spoke=spoke)

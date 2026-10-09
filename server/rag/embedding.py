@@ -22,7 +22,7 @@ import numpy as np
 
 from .settings import RagSettings, get_settings
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class EmbeddingService:
@@ -53,7 +53,7 @@ class EmbeddingService:
 
                     t0 = time.perf_counter()
                     self._dense = TextEmbedding(model_name=self.settings.dense_model)
-                    log.info(
+                    logger.info(
                         "loaded dense model %s in %.1fs",
                         self.settings.dense_model,
                         time.perf_counter() - t0,
@@ -68,7 +68,7 @@ class EmbeddingService:
                     from fastembed import SparseTextEmbedding
 
                     self._sparse = SparseTextEmbedding(model_name=self.settings.sparse_model)
-                    log.info("loaded sparse model %s", self.settings.sparse_model)
+                    logger.info("loaded sparse model %s", self.settings.sparse_model)
         return self._sparse
 
     @property
@@ -83,7 +83,7 @@ class EmbeddingService:
                     if self.settings.rerank_providers:
                         kwargs["providers"] = list(self.settings.rerank_providers)
                     self._reranker = TextCrossEncoder(**kwargs)
-                    log.info(
+                    logger.info(
                         "loaded reranker %s in %.1fs",
                         self.settings.reranker_model,
                         time.perf_counter() - t0,
@@ -106,7 +106,7 @@ class EmbeddingService:
 
                         self._tokenizer = Tokenizer.from_pretrained(self.settings.dense_model)
                     except Exception as exc:  # noqa: BLE001 - any failure means fall back
-                        log.warning(
+                        logger.warning(
                             "no tokenizer for %s (%s); chunk sizing falls back to an "
                             "estimate, so chunks will be approximate",
                             self.settings.dense_model,
@@ -146,8 +146,8 @@ class EmbeddingService:
                 try:
                     future.result()
                 except Exception:  # noqa: BLE001
-                    log.exception("warmup failed for %s", name)
-        log.info("embedding warmup finished in %.1fs", time.perf_counter() - t0)
+                    logger.exception("warmup failed for %s", name)
+        logger.info("embedding warmup finished in %.1fs", time.perf_counter() - t0)
 
     async def warmup_async(self) -> None:
         await asyncio.to_thread(self.warmup)
@@ -283,7 +283,9 @@ class EmbeddingService:
             "dense_loaded": self._dense is not None,
             "sparse_model": self.settings.sparse_model,
             "sparse_loaded": self._sparse is not None,
-            "reranker_model": self.settings.reranker_model if self.settings.rerank_enabled else None,
+            "reranker_model": self.settings.reranker_model
+            if self.settings.rerank_enabled
+            else None,
             "reranker_loaded": self._reranker is not None,
             "query_cache": len(self._query_cache),
         }
