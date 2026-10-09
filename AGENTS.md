@@ -11,7 +11,8 @@ Read [docs/architecture.md](docs/architecture.md) before any structural change.
 
 ## Commands
 - `make setup` once per clone: installs the commit hooks, creates `.env` from `.env.example`, installs frontend packages
-- `make dev`   start everything locally (frontend :3000, backend :8010), plus lipsync when this machine has `deploy/a2f/.env`
+- `make dev`   start everything locally with live reload (frontend :3000, backend :8010), plus lipsync when this machine has `deploy/a2f/.env`
+- `make prod`  the same from the production images, as Coolify builds them
 - `make down`  stop it (keeps `.env`)
 - `make lint`  run every check on every file; the same checks run on each commit and on every PR
 - `make check` the deeper checks before a PR: tests and snapshots, import layers, types
@@ -67,6 +68,7 @@ Read [docs/architecture.md](docs/architecture.md) before any structural change.
 ## Git
 - Branch: `<type>/<short-description>`, cut from `develop`, for example `fix/urdu-status-gender`.
   Types: `feature`, `fix`, `hotfix`, `chore`, `docs`, `refactor`.
+  A pre-push hook (`scripts/check_branch_name.sh`, installed by `make setup`) refuses other names.
 - PR title: `<type>(<scope>): <summary>`, for example `fix(voice): agree Urdu status strings with the presenter`.
   Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `perf`, `ci`, `build`, `revert`.
 - Scopes in this repo: `repo`, `deploy`, `server`, `voice`, `rag`, `prompts`, `avatar`,

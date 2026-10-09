@@ -21,6 +21,13 @@ repos:
       - id: end-of-file-fixer
         exclude: *untouchable
       - id: check-yaml
+        exclude: ^docker-compose.*\.yml$
+      # Compose's own tags (`!reset` in docker-compose.dev.yml) are not plain YAML, so the
+      # compose files get a syntax-only check; the PR build job validates them in full.
+      - id: check-yaml
+        name: check yaml (compose files, syntax only)
+        args: [--unsafe]
+        files: ^docker-compose.*\.yml$
       - id: check-merge-conflict
       - id: check-added-large-files
         # The avatar rigs are 30-65 MB by design (see .gitignore's allowlist).

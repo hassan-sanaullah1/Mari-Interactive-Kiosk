@@ -38,6 +38,8 @@ services:
       # These win over .env, so a .env written for running on the host works in here.
       MARI_HOST: 0.0.0.0
       MARI_PORT: 8010
+      # Named here so Coolify lists them: dev, staging or prod, and $SOURCE_COMMIT.
+      APP_ENV: ${APP_ENV:-local}
       APP_COMMIT: ${APP_COMMIT:-local}
       MARI_RAG_QDRANT_HOST: qdrant
       MARI_RAG_QDRANT_PORT: "6333"

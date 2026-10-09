@@ -1,0 +1,56 @@
+# Local live reload: `make dev` layers this over docker-compose.yml and the override.
+# Coolify reads docker-compose.yml alone, so nothing here reaches a server. No networks
+# block, for the same reason as docker-compose.yml (docs/deployment.md).
+#
+# Source is mounted read-only, so code changes apply without a rebuild. Run `make dev`
+# again after changing requirements.txt, package.json, next.config.ts or a Dockerfile.
+
+services:
+  backend:
+    # Prompts, personas.toml and the knowledge base are read once and cached, so a change
+    # to them needs a restart just like a .py change.
+    command:
+      - python
+      - -m
+      - uvicorn
+      - server.app:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8010"
+      - --no-access-log
+      - --reload
+      - --reload-dir
+      - server
+      - --reload-include
+      - "*.md"
+      - --reload-include
+      - "*.toml"
+    environment:
+      # The mount is read-only; without this every import would try to write __pycache__.
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - ./server:/app/server:ro
+
+  frontend:
+    build:
+      target: dev
+    environment:
+      # Read when `next dev` starts, unlike the production build that bakes them in.
+      MARI_API_ORIGIN: http://backend:8010
+      NEXT_PUBLIC_MARI_WS: ${NEXT_PUBLIC_MARI_WS:-}
+    # Source folders only: node_modules and .next stay in the image, so the container
+    # never writes into the repo.
+    volumes:
+      - ./frontend/app:/app/app:ro
+      - ./frontend/components:/app/components:ro
+      - ./frontend/hooks:/app/hooks:ro
+      - ./frontend/lib:/app/lib:ro
+      - ./frontend/public:/app/public:ro
+    # `next dev` writes its compile cache under .next and needs more memory than the
+    # production server's 1 GB cap.
+    read_only: false
+    tmpfs: !reset []
+    mem_limit: !reset null
+    cpus: !reset null
+    pids_limit: !reset null

@@ -28,8 +28,9 @@ Prerequisites: Docker with Compose, Make, Node 24, pipx (for pre-commit), and fo
 ```bash
 make setup     # once per clone: commit hooks, .env from .env.example (fill in at least
                # the LLM keys and MARI_RAG_QDRANT_API_KEY), frontend packages
-make dev       # builds and starts everything
-make down      # stops it (your .env is kept)
+make dev       # builds and starts everything, with live reload
+make prod      # the same, from the production images Coolify deploys
+make down      # stops either (your .env is kept)
 ```
 
 - Frontend: http://localhost:3000
@@ -38,14 +39,19 @@ make down      # stops it (your .env is kept)
   retrieval has finished warming up.
 - API docs: http://localhost:8010/docs
 
-Nothing is mounted into the containers, so after a change run `make dev` again; only what
-changed rebuilds. `make lint` runs the checks every commit and every pull request must
+`make dev` mounts the source into the containers, so changes apply as you save: the
+backend restarts on any change in `server/` (code, prompts, `personas.toml`, knowledge
+base) and the frontend hot-reloads `app/`, `components/`, `hooks/`, `lib/` and `public/`.
+Run `make dev` again only after changing `requirements.txt`, `package.json`,
+`next.config.ts` or a Dockerfile. Before a release, `make prod` runs the production build
+locally. `make lint` runs the checks every commit and every pull request must
 pass (`.pre-commit-config.yaml`, enforced by `.github/workflows/pr-checks.yml`); `make check`
 runs the tests, snapshots, types and import layers.
 
 Health: `/health/live` (the process is up) and `/health/ready` (environment, commit, and
 whether the LLM and Qdrant are usable; 503 if not). The frontend serves `/version.json`
-with its commit. Local-only Compose settings live in `docker-compose.override.yml`; see
+with its commit. Local-only Compose settings live in `docker-compose.override.yml` and
+`docker-compose.dev.yml`; see
 [docs/deployment.md](docs/deployment.md).
 
 A cold start takes minutes: the backend downloads embedding models on first boot and
@@ -108,21 +114,30 @@ different domains. Both are read when the image is **built**, not when it starts
 
 | Environment | Branch | URL |
 |---|---|---|
-| Current deployment | `develop` | set in Coolify |
+| Dev | `develop` | set in Coolify |
 | Staging | not created yet | |
 | Production | not created yet | |
 
-Coolify deploys when its branch changes:
+Each environment is one Coolify application that deploys when its branch changes. Dev:
 
-1. A Coolify **Docker Compose** resource points at this repository, file `/docker-compose.yml`.
+1. A Coolify **Docker Compose** resource points at `Stixor-Technologies/interactive-kiosk`,
+   branch `develop`, file `/docker-compose.yml`.
 2. `backend` and `frontend` each get their own domain. `docker-compose.yml` publishes no
    ports; Coolify routes through its proxy.
-3. `NEXT_PUBLIC_MARI_WS` is set as a **build-time** variable on the frontend.
-4. Provider keys are set in Coolify's environment variables. `.env` is never committed.
-5. `deploy/a2f/` is deployed separately on a GPU host, and `APP_A2F_URL` points at it
+3. Environment variables, all **Runtime only** (Buildtime off):
+   - `APP_ENV=dev` and `APP_COMMIT=$SOURCE_COMMIT`; `/health/ready` reports both.
+   - The provider keys from `.env.example`. `.env` is never committed.
+
+   The one exception is `NEXT_PUBLIC_MARI_WS`, which stays **Buildtime** on the frontend
+   (see Configuration).
+4. Advanced: **Auto Deploy** on; **Include Source Commit in Build** off (on, it breaks
+   the layer cache on every commit).
+5. After a deploy, open the backend's `/health/ready` and check `"environment": "dev"`
+   and the commit.
+6. `deploy/a2f/` is deployed separately on a GPU host, and `APP_A2F_URL` points at it
    through a TLS proxy that checks `APP_A2F_API_KEY`.
-6. `APP_ENV` names the environment and `APP_COMMIT=$SOURCE_COMMIT` gives the deployed
-   commit; both show up in `/health/ready`.
+
+Adding Staging and Production later: [docs/deployment.md](docs/deployment.md#adding-staging-and-production).
 
 ## Feature flags
 

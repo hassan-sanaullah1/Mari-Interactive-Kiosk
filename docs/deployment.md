@@ -9,10 +9,11 @@ are. The compose file keeps one-line comments and points here for the reasoning.
 |---|---|---|
 | `docker-compose.yml` | Coolify and every local run | The services, what they are built from, their volumes and fixed settings |
 | `docker-compose.override.yml` | Local runs only; Compose merges it automatically | Published ports (`8010`, `3000`) |
-| `docker-compose.a2f.yml` | Local runs through `make dev`, which first starts `deploy/a2f/` when the machine has its `.env` | Joins the backend to the Audio2Face stack's network |
+| `docker-compose.dev.yml` | `make dev` only | Live reload: read-only source mounts, `uvicorn --reload`, `next dev` (the frontend Dockerfile's `dev` stage), and the frontend's production limits lifted |
+| `docker-compose.a2f.yml` | Local runs through `make dev` or `make prod`, which first start `deploy/a2f/` when the machine has its `.env` | Joins the backend to the Audio2Face stack's network |
 
-Coolify is pointed at `docker-compose.yml` alone, so nothing in the other two reaches a
-server. Ports stay out of the deployed file because Coolify routes through its own
+Coolify is pointed at `docker-compose.yml` alone, so nothing in the other three reaches a
+server. `make prod` leaves out `docker-compose.dev.yml`, so it runs what Coolify builds. Ports stay out of the deployed file because Coolify routes through its own
 proxy, and a published port collides as soon as two environments share a host.
 
 The A2F join is a separate opt-in file, not part of the override, because it names an
@@ -91,3 +92,21 @@ inside the network. Leave `APP_A2F_URL` unset and the kiosk runs without lipsync
   until the backend answers, which the UI already handles.
 - **Healthcheck.** In `frontend/Dockerfile`, against `/version.json`, with node because
   the image has neither curl nor wget.
+
+## Adding Staging and Production
+
+Only Dev (`develop`) exists today. When Staging and Production are needed, following
+project-setup §2, §6 and §9:
+
+1. Cut `staging` from `develop`, and `main` from `staging`. `develop` stays the default
+   branch.
+2. Add the branch rulesets: `staging` needs 1 approval, `main` 2, both merge-only, with the
+   `pr-checks` jobs as required status checks.
+3. In Coolify, add one application per branch, set up like Dev (README, Environments)
+   except `APP_ENV=staging` or `APP_ENV=prod`. Each needs its own domains and its own
+   `NEXT_PUBLIC_MARI_WS`.
+4. After the first deploy of each, open its `/health/ready` and check that `environment`
+   matches. It is the only thing that shows an application started with another
+   environment's values.
+5. When the first `release/vX.Y` branch is cut, add `release/**` to the branch list in
+   `.github/workflows/pr-checks.yml`, or a required check that never runs blocks its merges.

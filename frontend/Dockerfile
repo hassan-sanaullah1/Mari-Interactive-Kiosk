@@ -19,6 +19,13 @@ RUN npm ci
 # If it fails: `npm audit --omit=dev` in frontend/, upgrade what it names, redeploy.
 RUN npm audit --omit=dev --audit-level=critical
 
+# Local live reload only (docker-compose.dev.yml mounts the source over this copy). It is
+# not the last stage, so Coolify and CI, which build the default target, never build it.
+FROM deps AS dev
+COPY . .
+EXPOSE 3000
+CMD ["npm", "run", "dev"]
+
 FROM node:24.21.0-slim AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
