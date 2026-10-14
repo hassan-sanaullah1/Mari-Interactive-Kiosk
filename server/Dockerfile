@@ -3,7 +3,7 @@
 # providers (vLLM, Soniox, Uplift) plus gRPC to the Audio2Face-3D NIM. No GPU needed
 # here even though faster-whisper *can* use one — see mari_s2s' own Dockerfile
 # (repo root) for the GPU-oriented local speech-to-speech pipeline instead.
-FROM python:3.11-slim-bookworm
+FROM python:3.14-slim-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
