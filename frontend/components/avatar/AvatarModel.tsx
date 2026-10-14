@@ -13,7 +13,7 @@
  *
  * The mouth is driven by Audio2Face ONLY — no visemes, no mapping layer. This
  * rig makes that possible: its 51 morph targets carry the ARKit blendshape
- * names verbatim, which is exactly what A2F-3D emits, so a2fMorphs matches them
+ * names verbatim, which is exactly what A2F-3D emits, so a2f-morphs.ts matches them
  * 1:1 by name and A2F's authored weights reach the mesh untouched. When A2F
  * sends nothing the mouth returns to rest; there is no fallback mouth animation
  * by design.
@@ -208,7 +208,7 @@ const bodyStateFor = (state: AvatarState): BodyState => {
  *   - jawOpen trimmed to 0.375 of that (0.3375 effective), putting its p95 at
  *     ~0.50 and its peak at ~0.85 — an open vowel that reads as speech and a
  *     loudest-syllable peak that stops short of a gape, with no clipping
- *     against the [0,1] clamp in a2fMorphs.
+ *     against the [0,1] clamp in lib/a2f-morphs.ts.
  *
  * Still empirical, and still worth re-checking against a different NIM build or
  * a different rig. Tune live with ?a2fGain= / ?a2fShapes=jawopen: — the query
@@ -282,16 +282,6 @@ publishProbe("tints", tintReadings);
  */
 // Per-rig, as `faceMaterial` in ./tuning.ts — null for a rig with no makeup,
 // which skips the read-back below entirely.
-
-/**
- * How much chroma to remove from the makeup. 0 = texture as authored,
- * 1 = the made-up pixels go fully grey. This is the dial.
- *
- * 0.20 takes most of the heat out of the lipstick and softens the cheek flush
- * while leaving skin tone where it was. Raise for a barer face, lower to keep
- * more of the original makeup.
- */
-const MAKEUP_DESATURATION = 0.20;
 
 /**
  * The makeup separates from skin by HUE, not by saturation.
@@ -1051,6 +1041,12 @@ export default function AvatarModel({
       const mesh = child as THREE.Mesh;
       if (!mesh.isMesh) return;
 
+      // Both, on every mesh: with no ground plane and her feet below the
+      // frame, the only shadows anyone sees are the ones she casts onto
+      // herself, and a mesh that does not RECEIVE cannot show them.
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+
       const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       for (const material of materials) {
         const std = material as THREE.MeshStandardMaterial;
@@ -1065,7 +1061,7 @@ export default function AvatarModel({
           std.map &&
           !MAKEUP_TONED.has(std.map)
         ) {
-          const toned = desaturateMakeup(std.map, MAKEUP_DESATURATION);
+          const toned = desaturateMakeup(std.map, config.makeupDesaturation);
           if (toned) {
             MAKEUP_TONED.add(toned);
             std.map.dispose();
@@ -1126,6 +1122,24 @@ export default function AvatarModel({
           (std as THREE.MeshPhysicalMaterial).specularColor.setScalar(specular);
         }
 
+        // How much of the <Environment> this surface reflects. The export
+        // carries no metallicRoughness map, so one roughness number and this
+        // one multiplier are the whole specular vocabulary a material has —
+        // see materialEnvIntensity in ./tuning.ts.
+        const envIntensity = config.materialEnvIntensity?.[std.name];
+        if (envIntensity !== undefined) std.envMapIntensity = envIntensity;
+
+        // dress2 exports every material doubleSided (a Maya default, not a
+        // decision). THREE reads a doubleSided material as casting from BOTH
+        // faces, so a closed surface shadows itself — the classic acne case,
+        // and one that only a bias big enough to detach the nose shadow would
+        // hide. Casting from the back face is the standard fix for a closed
+        // body mesh. Flipping `side` itself is NOT the fix: the garment edges,
+        // inner mouth and teeth backs are thin geometry relying on
+        // doubleSided, and the hair, brow and eyelash cards are single quads
+        // that would half-vanish. Transparent cards keep three's default.
+        if (!std.transparent) std.shadowSide = THREE.BackSide;
+
         if (std.transparent) {
           // Two different cuts, because these cards fail two different ways.
           //
@@ -1144,6 +1158,10 @@ export default function AvatarModel({
           // grey), so the test above reclassified it as a mask and took the hard
           // cut — 21% of the texture's visible texels against 4.2%, which ate
           // the soft strands along the front hairline.
+          // lambert5 and lambert8 look like they would cast solid shadow
+          // quads and do not: glTF MASK leaves `transparent` false, so they
+          // never reach here, and their alpha is 0, so every fragment is
+          // discarded in the depth pass too.
           const color = std.color;
           const isMaskOnly = color.r + color.g + color.b < 0.01;
           std.alphaTest = config.alphaTest?.[std.name] ?? (isMaskOnly ? 0.35 : 0.08);

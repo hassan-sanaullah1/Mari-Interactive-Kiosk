@@ -8,7 +8,7 @@
  * be module constants keyed to girl15.glb; they are per-model here so a second rig
  * does not have to pretend to be the first.
  *
- * Both rigs carry the 51 ARKit blendshapes, so both drive the real a2fMorphs
+ * Both rigs carry the 51 ARKit blendshapes, so both drive the real lib/a2f-morphs.ts
  * lipsync path.
  *
  * Adding a third rig means measuring its clip the same way (see SEGMENTS on each
@@ -100,8 +100,10 @@ const f = (frame: number) => frame / FPS;
  */
 const FEMALE: AvatarConfig = {
   id: "female",
-  url: "/models/girl15.glb.gz",
-  bytes: { decoded: 29813520, encoded: 20165542 },
+  // Same clip as the girl15 export it replaced (rotations within 0.04 deg), so
+  // the loop windows below carried over unchanged.
+  url: "/models/dress2.glb.gz",
+  bytes: { decoded: 70442516, encoded: 52101323 },
   segments: {
     breathing: { loop: [f(119), f(241)] },
     listening: { loop: [f(300), f(393)] },

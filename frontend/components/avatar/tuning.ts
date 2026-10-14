@@ -1,156 +1,107 @@
 /**
  * Every number that decides how the presenters LOOK, in one place.
  *
- * This file holds values only — no logic, no three.js objects, nothing that
- * runs. AvatarScene reads the scene half (camera, light colours, placement,
- * per-state brightness) and models.ts folds the per-rig half into each
- * AvatarConfig, so the rest of the app keeps reading `config.skinEmissive` and
- * friends exactly as before.
+ * Values only — no logic, no three.js objects, nothing that runs. AvatarScene
+ * reads the shared half (camera, lighting studio); models.ts folds the per-rig
+ * half into each AvatarConfig, so the rest of the app reads `config.skinEmissive`
+ * and friends exactly as before.
  *
- * The split to keep in mind when adding a value:
- *
- *   - SHARED  — one studio, both presenters stand in it. Changing one of these
- *               changes both rigs.
+ *   - SHARED  — one studio, both presenters stand in it.
  *   - PER RIG — a property of that export's own geometry, textures or albedo.
- *               The two rigs were authored to different levels (see
- *               `materialTint`), so most of the look values differ.
  *
- * What is NOT here, on purpose:
+ * Not here, on purpose:
+ *   - Asset facts (file path, byte counts, clip windows) — those stay in
+ *     models.ts next to the asset they describe.
+ *   - Animation timing (crossfades, blink, the talk-exit debounce) — that
+ *     stays in AvatarModel.tsx.
  *
- *   - Asset facts — file path, byte counts, clip windows, whether the rig has
- *     morph targets. Those describe the .glb, not the look, and stay in
- *     models.ts next to the measurements that justify them.
- *   - Animation mechanism — crossfade lengths, the talk-exit debounce, blink
- *     timing, the face-refresh delay. Those are timing, not appearance, and
- *     stay in AvatarModel.tsx.
+ * Measurements and reasoning behind the light-theme numbers: docs/avatar-lighting.md.
  */
 
-// Type-only imports on purpose: this file is a leaf at runtime (models.ts
-// imports IT), and a value import of either module would close a cycle.
+// Type-only imports: this file is a leaf at runtime (models.ts imports IT), so
+// a value import of either module would close a cycle.
 import type { AvatarId } from "./models";
 import type { AvatarState } from "./state";
+import type { Theme } from "@/lib/theme";
 
 /** An x/y/z triple, in the mutable shape three.js's JSX props expect. */
 type Vec3 = [number, number, number];
 
 // ---------------------------------------------------------------------------
-// SHARED — THE CAMERA
+// SHARED — CAMERA
 // ---------------------------------------------------------------------------
 
-/**
- * Framing, expressed the way the reference composition actually behaves:
- *
- *  - the top of the frame sits just above the head, on every screen size
- *  - a fixed slice of HER, not of the world, fills the container's height, so
- *    she reads at the same size whatever shape the stage is
- *
- * Anchoring on height rather than width is what lets the stage be wider than
- * her silhouette: the extra width is pure gesture room (her arms swing well
- * outside her standing outline in the talking segment, and anything past the
- * canvas edge is clipped), and widening it costs nothing because it no longer
- * changes her scale.
- *
- * The fallback height each rig is framed against until it reports its real one
- * is per-rig — see `fallbackHeight` in RIG_TUNING below.
- */
 export const CAMERA = {
   /** Metres of the rig that fill the container's height. */
   frameHeightM: 1.15,
   /** Clear air above the head, as a fraction of the rig's height. */
   headRoom: 0.045,
   /**
-   * The baseline lens focal length in mm, with the same meaning as Blender's
-   * camera "Focal Length" (36mm sensor, Sensor Fit: Auto), so a value from the
-   * artist's .blend can be dropped in as-is. The frame size stays fixed; the lens
-   * only decides how far back the camera stands to get it.
-   *
-   * Every rig declares its own `lensMm` in RIG_TUNING below, which is what the
-   * scene actually uses; this is the fallback and the value the framing was tuned
-   * at. It barely moves proportions WITHIN one depth — measured, 28mm to 200mm
-   * moves the shoulder-to-head width ratio by under 2% — but it does decide how
-   * much nearer geometry is exaggerated, which is the per-rig reason to change it.
+   * Baseline lens focal length in mm (36mm sensor, matches Blender's "Focal
+   * Length" field). Every rig overrides this in RIG_TUNING; this is the
+   * fallback. A longer lens stands the camera further back for the same
+   * frame and exaggerates near geometry less.
    */
   lensMm: 85,
-  /** Blender's default sensor width, which its focal lengths are quoted against. */
+  /** Sensor width in mm that `lensMm` is quoted against. */
   sensorMm: 36,
-  /**
-   * The very slow sway that keeps the shot from reading as a still image.
-   * Amplitude is scaled to this framing (the source scene used 0.05 across a
-   * much wider frame); at 0.015 it is a couple of pixels of parallax.
-   */
+  /** Slow idle sway so the shot doesn't read as a still image. */
   sway: { amplitude: 0.015, speed: 0.08 },
 };
 
 // ---------------------------------------------------------------------------
-// SHARED — THE LIGHT RIG
+// SHARED — THE LIGHTING STUDIO
 //
-// A studio rig: warm key, cool fill, a rim from behind and a tight spot on the
-// face. The colours are FIXED — every light holds the same hue in every
-// conversation state, so the room never changes temperature. Only intensity
-// varies, per state and with her voice, which reads as her being lit more or
-// less brightly rather than as the light changing colour.
+// One complete room per theme: light colours, placement, per-state brightness,
+// reflection panels, and the key's shadow strength. AvatarScene cross-fades
+// every field between STUDIO.dark and STUDIO.light on a theme switch.
 // ---------------------------------------------------------------------------
 
-/**
- * The one palette, used in every state and by both rigs. Set as JSX props in
- * AvatarScene and never touched afterwards, so no per-frame colour work
- * happens at all.
- *
- * `rim` and `kick` are the two backdrop halves thrown back onto the silhouette
- * edges: cyan down the camera-left shoulder and sleeve, a weaker green on the
- * camera-right edge. These are the only colours changed from the original rig
- * — key, fill, top and face keep their authored values, so the garment and
- * hair are lit exactly as before and only the outline picks these up.
- */
-export const LIGHT_COLORS = {
-  key: "#ffe4c9",
-  fill: "#c9d6ff",
-  rim: "#4fd8e8",
-  kick: "#3fd39a",
-  top: "#e8daf5",
-  face: "#fff2e0",
-};
+/** The six lights. Ambient is separate — see Studio.ambientColor below. */
+type LightName = "key" | "fill" | "top" | "rim" | "kick" | "face";
 
 /**
- * Where each light stands and how wide it throws. `intensity` here is only the
- * value the light mounts with — the frame loop immediately eases it toward the
- * per-state number in LIGHT_STATES, so moving one of these changes nothing you
- * can see. Move the per-state values instead.
- *
- * `castShadow` on the key is inert until <Canvas> is given `shadows`; it is
- * kept as the source scene had it.
+ * Where a light stands and how it's shaped. `intensity` here is only the
+ * MOUNT value — the frame loop immediately overwrites it from `states`
+ * below, so changing it here alone changes nothing visible.
  */
-export const LIGHT_PLACEMENT = {
-  /** Warm key, front-right and high. */
-  key: { position: [2, 3, 2] as Vec3, intensity: 1.4 },
-  /** Cool fill, opposite the key and behind. */
-  fill: { position: [-2, 2, -1] as Vec3, intensity: 0.4 },
-  /** Top wash from just in front of her. */
-  top: { position: [0, 3, 1.5] as Vec3, angle: 0.4, penumbra: 1, intensity: 0.9 },
-  /**
-   * CYAN RIM, behind and camera-left — the bright blue edge running down the
-   * shoulder and sleeve. Behind her, so it catches the silhouette only and
-   * never reaches the front of the garment.
-   */
-  rim: { position: [-2.2, 2.2, -1.8] as Vec3, angle: 0.7, penumbra: 0.9, intensity: 1.4 },
-  /**
-   * GREEN KICK, behind and camera-right — the weaker counterpart from the
-   * green half of the backdrop, on the dupatta side.
-   */
-  kick: { position: [2.4, 2.0, -1.6] as Vec3, angle: 0.7, penumbra: 0.9, intensity: 0.8 },
-  /**
-   * Tight face spot. Where it AIMS is per-rig (`headTargetY` below), because
-   * the two faces sit at different heights.
-   */
-  face: {
-    position: [0, 2.2, 1] as Vec3,
-    angle: 0.18,
-    penumbra: 0.6,
-    intensity: 1.6,
-    distance: 1.6,
-    decay: 2,
-  },
-};
+interface LightPlacement {
+  position: Vec3;
+  intensity: number;
+  /** Spotlight-only; absent on the two directionals (key, fill). */
+  angle?: number;
+  penumbra?: number;
+  distance?: number;
+  /** Inverse-square falloff. 2 on every spot in both studios. */
+  decay?: number;
+}
+
+/** One invisible reflection panel — shows up only in glossy surfaces. */
+interface LightformerSpec {
+  intensity: number;
+  position: Vec3;
+  scale: Vec3;
+  color: string;
+  /** Radians, written as a literal — this file holds no expressions. */
+  rotation?: Vec3;
+}
+
+/** The key light's shadow. Only the key casts. */
+interface ShadowSettings {
+  /** 0..1 — how dark the cast shadow lands. The per-theme dial: `shadows`
+   *  itself is a <Canvas> prop and can't be toggled per theme. */
+  intensity: number;
+  /** Shadow map resolution in texels. */
+  mapSize: number;
+  /** Depth-bias; prevents shadow acne. */
+  bias: number;
+  /** Normal-offset bias; same purpose as `bias`, better on curved surfaces. */
+  normalBias: number;
+  /** Half-width (metres) of the ortho shadow box, around `targetY`. */
+  extent: number;
+  /** World Y the shadow box and the key light aim at. */
+  targetY: number;
+}
 
 export interface LightState {
   key: number;
@@ -160,76 +111,164 @@ export interface LightState {
   top: number;
 }
 
+export interface Studio {
+  colors: Record<LightName, string>;
+  /** Ambient has no direction, so this tints every surface equally. */
+  ambientColor: string;
+  placement: Record<LightName, LightPlacement>;
+  /** Brightness per conversation state — the real intensity control. */
+  states: Record<AvatarState, LightState>;
+  environment: { resolution: number; lightformers: LightformerSpec[] };
+  shadow: ShadowSettings;
+}
+
 /**
- * How bright each light is in each conversation state. Colours are
- * deliberately absent: the rig keeps one palette throughout, so a state change
- * only moves brightness.
+ * DARK — the rig as originally authored, against a dark studio backdrop.
+ * `rim` (cyan) and `kick` (green) are that backdrop thrown back onto her
+ * silhouette; the light studio below replaces rather than retints them.
  *
- * This repo's AvatarState happens to use the same four names as the source
- * scene's conversationState, so the presets map across 1:1.
+ * Pinned byte-for-byte by test/avatar-studio.test.ts.
  */
-export const LIGHT_STATES: Record<AvatarState, LightState> = {
-  idle: { key: 1.4, fill: 0.4, rim: 2, kick: 5, top: 0.9 },
-  listening: { key: 1.8, fill: 0.5, rim: 2, kick: 5, top: 1.1 },
-  thinking: { key: 1.2, fill: 0.5, rim: 2, kick: 5, top: 0.8 },
-  speaking: { key: 1.8, fill: 0.5, rim: 2, kick: 5, top: 1.2 },
+const DARK_STUDIO: Studio = {
+  ambientColor: "#ffffff",
+  colors: {
+    key: "#ffe4c9",
+    fill: "#c9d6ff",
+    rim: "#4fd8e8",
+    kick: "#3fd39a",
+    top: "#e8daf5",
+    face: "#fff2e0",
+  },
+  placement: {
+    /** Warm key, front-right and high. */
+    key: { position: [2, 3, 2], intensity: 1.4 },
+    /** Cool fill, opposite the key and behind. */
+    fill: { position: [-2, 2, -1], intensity: 0.4 },
+    /** Top wash from just in front of her. */
+    top: { position: [0, 3, 1.5], angle: 0.4, penumbra: 1, intensity: 0.9, decay: 2 },
+    /** Cyan rim, behind and camera-left — catches the silhouette only. */
+    rim: { position: [-2.2, 2.2, -1.8], angle: 0.7, penumbra: 0.9, intensity: 1.4, decay: 2 },
+    /** Green kick, behind and camera-right. */
+    kick: { position: [2.4, 2.0, -1.6], angle: 0.7, penumbra: 0.9, intensity: 0.8, decay: 2 },
+    /** Tight face spot. Aim point is per-rig — see headTargetY. */
+    face: { position: [0, 2.2, 1], angle: 0.18, penumbra: 0.6, intensity: 1.6, distance: 1.6, decay: 2 },
+  },
+  states: {
+    idle: { key: 1.4, fill: 0.4, rim: 2, kick: 5, top: 0.9 },
+    listening: { key: 1.8, fill: 0.5, rim: 2, kick: 5, top: 1.1 },
+    thinking: { key: 1.2, fill: 0.5, rim: 2, kick: 5, top: 0.8 },
+    speaking: { key: 1.8, fill: 0.5, rim: 2, kick: 5, top: 1.2 },
+  },
+  environment: {
+    resolution: 256,
+    lightformers: [
+      { intensity: 2, position: [0, 2, 3], scale: [4, 1, 1], color: "#ffe0cc" },
+      { intensity: 1, position: [-3, 1, -1], scale: [3, 2, 1], color: "#c9d6ff" },
+      { intensity: 0.5, position: [3, 0, -2], scale: [2, 3, 1], color: "#ffd6e0" },
+    ],
+  },
+  /** Softer than the light theme's: this rig was balanced with no shadow at all. */
+  shadow: {
+    intensity: 0.55,
+    mapSize: 2048,
+    bias: -0.0002,
+    normalBias: 0.01,
+    extent: 1,
+    targetY: 1.1,
+  },
 };
 
 /**
- * How much the smoothed 0..1 voice amplitude adds on top of the state's
- * brightness, per light — the rig breathes with her voice. The fill and top
- * lights take none, so the lift reads on the key and on her outline rather
- * than as the whole image pulsing.
+ * LIGHT — matched to frontend/public/bg-mobile-light.png, the marble lobby.
+ * Key from camera-left (the window wall), a near-white rim separating her
+ * shoulder from the dark side of the room, and `kick` as a low floor bounce
+ * instead of a backdrop colour. No cyan, no green. Full reasoning and the
+ * measurements behind each value: docs/avatar-lighting.md.
  */
+const LIGHT_STUDIO: Studio = {
+  ambientColor: "#fffefd",
+  colors: {
+    key: "#fffcfa",
+    fill: "#fffcfa",
+    /** The gold ceiling cove. */
+    top: "#fffbf3",
+    /** The one cool light in the rig — separates her shoulder from the dark side. */
+    rim: "#d8e6ff",
+    /** Floor bounce. Off (black) — see placement.kick. */
+    kick: "#000000",
+    face: "#fffdfc",
+  },
+  placement: {
+    /** Camera-left, where the window wall is. */
+    key: { position: [-2.4, 2.9, 2.2], intensity: 2.6 },
+    fill: { position: [2.6, 1.6, 1.4], intensity: 0.8 },
+    top: { position: [0, 3.2, 0.8], angle: 0.5, penumbra: 1, intensity: 1.4, decay: 2 },
+    /** Camera-right and behind, against the dark side of the room. */
+    rim: { position: [2, 2.4, -2.2], angle: 0.8, penumbra: 1, intensity: 3, decay: 2 },
+    /** Low floor bounce — below the head but not a footlight. */
+    kick: { position: [0.3, 0.35, 2.2], angle: 1, penumbra: 1, intensity: 3.2, decay: 2 },
+    face: { position: [0, 2, 1.2], angle: 0.22, penumbra: 0.8, intensity: 0.9, distance: 2, decay: 2 },
+  },
+  /** `fill` is the FINAL value — AvatarScene multiplies it by the rig's
+   *  `lightThemeLighting.fill`, which stays ~1 on both rigs for that reason. */
+  states: {
+    idle: { key: 2.2, fill: 0.7, rim: 2.5, kick: 1.7, top: 1.1 },
+    listening: { key: 2.4, fill: 0.75, rim: 2.7, kick: 1.7, top: 1.15 },
+    thinking: { key: 2.05, fill: 0.75, rim: 2.3, kick: 1.6, top: 1 },
+    speaking: { key: 2.4, fill: 0.75, rim: 2.9, kick: 1.8, top: 1.25 },
+  },
+  environment: {
+    /** 512, not the dark studio's 256: these panels have a hard bright/dark
+     *  split that bands at low resolution in the eye highlight. */
+    resolution: 512,
+    lightformers: [
+      /** The window wall, camera-left and tall. */
+      { intensity: 2.6, position: [-3.2, 1.6, 1.2], scale: [2, 4, 1], color: "#fffcfb" },
+      /** The gold ceiling cove, lying flat overhead. 1.5708 = pi/2. */
+      { intensity: 2, position: [0, 3.2, 0.4], scale: [6, 0.5, 1], color: "#fff6e6", rotation: [1.5708, 0, 0] },
+      /** The polished marble floor, lying flat below. -1.5708 = -pi/2. */
+      { intensity: 1.5, position: [0, -1, 0.8], scale: [6, 3, 1], color: "#fffcf9", rotation: [-1.5708, 0, 0] },
+      /** The dark side of the room. Kept dim on purpose: an environment built
+       *  only from bright panels flattens every reflective surface. */
+      { intensity: 0.3, position: [3, 1.2, -0.6], scale: [2, 3, 1], color: "#5a6478" },
+    ],
+  },
+  shadow: {
+    intensity: 0.2,
+    mapSize: 2048,
+    bias: -0.0002,
+    normalBias: 0.01,
+    extent: 1,
+    targetY: 1.1,
+  },
+};
+
+export const STUDIO: Record<Theme, Studio> = { dark: DARK_STUDIO, light: LIGHT_STUDIO };
+
+/** Voice-amplitude boost added on top of the state's brightness, per light —
+ *  the rig breathes with her voice. `fill` and `top` take none. */
 export const VOICE_BOOST = { key: 0.4, rim: 0.5, kick: 0.3 };
 
-/**
- * Per-frame approach rate toward whatever the lights are heading for — the
- * active state, the voice lift, and the theme's lighting below. Slow enough
- * that a change takes about a second to land. Bigger is faster.
- */
+/** Per-frame approach rate toward wherever the lights are heading. Bigger is faster. */
 export const LERP_SPEED = 0.04;
 
-/**
- * The reflection panels. An <Environment> with no `background` prop draws
- * nothing, so these only ever show up as reflections in skin and cloth — the
- * kiosk artwork behind the canvas stays visible.
- */
-export const ENVIRONMENT = {
-  resolution: 256,
-  lightformers: [
-    { intensity: 2, position: [0, 2, 3] as Vec3, scale: [4, 1, 1] as Vec3, color: "#ffe0cc" },
-    { intensity: 1, position: [-3, 1, -1] as Vec3, scale: [3, 2, 1] as Vec3, color: "#c9d6ff" },
-    { intensity: 0.5, position: [3, 0, -2] as Vec3, scale: [2, 3, 1] as Vec3, color: "#ffd6e0" },
-  ],
-};
-
 // ---------------------------------------------------------------------------
-// SHARED — THE THEME'S PART OF THE RIG
+// SHARED — THEME-LEVEL LIGHT KNOBS
 // ---------------------------------------------------------------------------
 
-/**
- * The theme-dependent part of the light rig, applied on top of the per-state
- * brightness above and eased toward on a theme switch. Every rig carries one
- * of these per theme (see RIG_TUNING).
- */
+/** Applied on top of the per-state brightness above, eased on a theme switch. */
 export interface ThemeLighting {
-  /** Renderer tone-mapping exposure — lifts everything, highlights included. */
+  /** Renderer tone-mapping exposure — scales everything, highlights included. */
   exposure: number;
-  /** Ambient light intensity — lifts the shadows, flattening the contrast. */
+  /** Ambient light intensity — lifts the shadows, flattening contrast. */
   ambient: number;
-  /** Multiplier on the cool fill light's per-state intensity. */
+  /** Multiplier on the fill light's per-state intensity. */
   fill: number;
   /** Strength of the environment reflections (scene.environmentIntensity). */
   environment: number;
 }
 
-/**
- * The rig exactly as it was authored, before the light theme existed. The
- * female presenter still uses it unchanged on the dark theme; it is also what
- * the ambient light mounts with, and the baseline any new rig should start
- * from.
- */
+/** The baseline every rig's dark theme starts from. */
 export const DARK_LIGHTING: ThemeLighting = { exposure: 1, ambient: 0.3, fill: 1, environment: 1 };
 
 // ---------------------------------------------------------------------------
@@ -237,331 +276,179 @@ export const DARK_LIGHTING: ThemeLighting = { exposure: 1, ambient: 0.3, fill: 1
 // ---------------------------------------------------------------------------
 
 /**
- * Everything about one presenter's look: how the shot is framed on her or him,
- * what the materials need correcting to, and how the studio is lit for that rig
- * on each theme.
- *
- * models.ts merges this into AvatarConfig, so every field here is reachable as
- * `config.<field>` wherever a rig is in hand.
+ * Everything about one presenter's look: framing, material corrections, and
+ * how the studio lights that rig on each theme. models.ts merges this into
+ * AvatarConfig, so every field is reachable as `config.<field>`.
  */
 export interface RigTuning {
   /** Height in metres, used to frame the shot until the rig reports its real one. */
   fallbackHeight: number;
-  /**
-   * Horizontal squeeze applied to the render, as a width multiplier: omitted
-   * (or 1) is true proportions, 0.93 draws everything 7% narrower. An
-   * anamorphic "slimming" trick — a real lens cannot do this (see CAMERA.lensMm
-   * above). It narrows the face as much as the body, so keep it close to 1.
-   */
+  /** Horizontal squeeze on the render, as a width multiplier (1 = true proportions). */
   widthSqueeze: number;
-  /**
-   * Lens focal length in mm for this rig, overriding the shared `CAMERA.lensMm`
-   * baseline. The frame height is shared, so a longer lens only decides how far
-   * back the camera stands for the same shot — the presenter's size on screen
-   * does not change.
-   *
-   * What it does change is depth exaggeration, which is why it is per-rig. A rig
-   * whose hands sit in front of its face draws them larger than its face in
-   * proportion to how much nearer the camera they are: at 85mm the camera stands
-   * 2.7m out, so hands 0.3m forward are drawn ~12% large; at 135mm it stands
-   * 4.3m out and the same hands are ~7.5%. Reach for this before `handScale` —
-   * this is a camera artefact, that would be editing the rig.
-   */
+  /** Lens focal length in mm for this rig — overrides CAMERA.lensMm. */
   lensMm: number;
-  /**
-   * How far back the camera stands, in metres, or null to derive it from the lens.
-   *
-   * null is the adaptive behaviour: the camera backs off until `CAMERA.frameHeightM`
-   * of the rig fills the frame height, recomputed on every resize, so the presenter
-   * is the same size on any screen shape and only the perspective changes with the
-   * lens.
-   *
-   * A number overrides that and stands the camera exactly there. Use it when you
-   * want to set the zoom and the distance independently — the cost is that the
-   * framing is no longer held constant: how much of the rig fills the frame then
-   * depends on the lens AND the stage's aspect ratio, so the same numbers crop
-   * differently on the portrait kiosk than on a desktop. Tune it on the screen the
-   * kiosk actually runs on.
-   */
+  /** Camera distance in metres, or null to derive it from the lens so the
+   *  presenter fills the frame the same on any screen. */
   cameraDistanceM: number | null;
-  /** World Y the face spot aims at — the centre of this rig's face. */
+  /** World Y the face spot aims at — this rig's face centre. */
   headTargetY: number;
-  /**
-   * Materials textured with skin, which get the emissive lift. Read off each
-   * glTF's baseColorTexture rather than guessed from the names.
-   */
+  /** Materials textured with skin — these get the emissive lift below. */
   skinMaterials: Set<string>;
-  /**
-   * How much to lift the skin materials above, as an emissive term driven by
-   * their own base colour texture (see AvatarModel's material pass).
-   *
-   * Per-rig because it is a function of the rig's albedo, not of the scene: the
-   * lift is proportional to the texture it samples, so the same number does
-   * visibly different amounts of work on two different skin tones.
-   */
+  /** Emissive lift on skinMaterials, driven from their own base-colour texture. */
   skinEmissive: number;
-  /**
-   * Roughness to force on the skin materials, or null to keep what the export
-   * authored.
-   *
-   * Only set this where the export omitted `roughnessFactor`, which glTF
-   * defaults to 1.0 — fully rough, so the surface takes a broad even sample of
-   * the environment with no specular highlight.
-   */
+  /** Roughness forced on skinMaterials, or null to keep the export's value. */
   skinRoughness: number | null;
-  /**
-   * Per-material albedo scale, by material name — `color.multiplyScalar` on
-   * load. Empty for a rig that needs none.
-   *
-   * This is what actually matches one rig's exposure to another's under the one
-   * shared light rig, and it is needed because the two exports were authored to
-   * different albedo levels rather than because the scene lights them
-   * differently. Measured off the base colour textures: male1's kurta is
-   * 240/255 mean luminance against girl15's kameez at 185, and his skin is 175
-   * against her 130.
-   *
-   * Roughness is the obvious suspect and is NOT the cause. male1 does omit
-   * `roughnessFactor` on eight of its seventeen materials, so they load at
-   * glTF's 1.0 default — but sweeping the garment from 0.2 to 1.0 and
-   * re-rendering moves its mean luminance by two points out of the seventy that
-   * separated the rigs. The albedo is the whole difference.
-   */
+  /** Per-material albedo scale (`color.multiplyScalar`), by material name. */
   materialTint: Record<string, number>;
-  /**
-   * The material carrying painted-on makeup, or null for a rig with none. Only
-   * set this where there is actually makeup to tone down: the pass reads the
-   * texture back through a 2D canvas, which is not free.
-   */
+  /** The material with painted-on makeup, or null if this rig has none. */
   faceMaterial: string | null;
-  /**
-   * Alpha cut for a transparent card, by material name, overriding the default
-   * AvatarModel picks from the card's base colour. Only needed where that guess
-   * is wrong — see the alphaTest block there.
-   */
+  /** How strongly the makeup pass desaturates it: 0 = untouched, 1 = fully
+   *  grey. Unused when `faceMaterial` is null. */
+  makeupDesaturation: number;
+  /** Alpha cutoff for a transparent card, by material name — overrides
+   *  AvatarModel's default guess from the card's base colour. */
   alphaTest: Record<string, number>;
-  /**
-   * Roughness to force on a NON-skin material, by name — skinRoughness already
-   * covers the skin. Set it only where the export omitted `roughnessFactor` and
-   * so loads at glTF's fully matte 1.0.
-   */
+  /** Roughness forced on a non-skin material, by name. */
   materialRoughness: Record<string, number>;
-  /**
-   * Specular reflection strength to force on a material, by name — 1 is the
-   * physical default, and anything above it reflects more light than arrives.
-   *
-   * The male rig's hair needs this: the export authors
-   * `KHR_materials_specular.specularColorFactor [2, 2, 2]`, double strength, on
-   * a near-black base colour (0.047) with a clearcoat over it. Black hair has
-   * almost no diffuse of its own, so that doubled highlight IS what you see —
-   * every lamp in the rig reads as a bright sheen down the sides of his head.
-   * Nothing about the light rig causes it, and turning the back lights down
-   * does not touch it (measured: the cyan rim at 0 changes his hair by under
-   * half a level out of 255).
-   */
+  /** Specular reflection strength forced on a material, by name — 1 is physical. */
   materialSpecular: Record<string, number>;
+  /** Multiplier on how much of the <Environment> a material reflects, by name. */
+  materialEnvIntensity: Record<string, number>;
   /** A2F weight calibration, or null for a rig with no morphs to calibrate. */
   a2f: { gain: number; shapeGains: Record<string, number> } | null;
-  /**
-   * Uniform scale on both wrist bones — hands and fingers together, with the
-   * wrist itself staying put. 1 leaves the rig as authored. See AvatarModel's
-   * HAND SCALE block for how it survives the animation.
-   */
+  /** Uniform scale on both wrist bones (hands + fingers). 1 = as authored. */
   handScale: number;
-  /**
-   * Multipliers on the two back lights (cyan rim, green kick) for this rig, in
-   * both themes. 1 leaves them at the per-state intensity in LIGHT_STATES.
-   *
-   * Per-rig because what the edge light lands ON differs: the back lights are
-   * meant to catch the silhouette of cloth, and how hot they read depends
-   * entirely on the material at the edge. The male rig's hair is the case that
-   * needs this — it authors metalness 0.755 with clearcoat (see alphaTest
-   * below), so a spot aimed at his outline mirrors straight back off it and the
-   * black hair lights up at the sides, which never happens on her matte hair.
-   *
-   * The female rig keeps both at 1; the male rig has both at 0, because his hair
-   * catches the rim (which sits higher and further forward) and his kurta caught
-   * the kick.
-   */
+  /** Multipliers on the two back lights (rim, kick) for this rig, both themes. */
   backLight: { rim: number; kick: number };
-  /**
-   * The light rig under the light theme. The light backdrop is near-white, so a
-   * rig lit for the dark one reads as a dark cut-out against it. Per-rig
-   * because the two albedos differ (see materialTint) and so need different
-   * amounts of lift.
-   */
+  /** The light rig under the light theme. */
   lightThemeLighting: ThemeLighting;
-  /**
-   * The light rig under the dark theme. The female rig keeps DARK_LIGHTING
-   * unchanged — she is what it was tuned against.
-   */
+  /** The light rig under the dark theme. */
   darkThemeLighting: ThemeLighting;
 }
 
 export const RIG_TUNING: Record<AvatarId, RigTuning> = {
-  // -------------------------------------------------------------------------
-  // girl15.glb — the original MARI presenter, and the rig every shared value
-  // above was tuned against. Where a number here looks like it is doing
-  // nothing, that is why: she is the baseline, and the male rig is matched to
-  // her rather than the other way round.
-  // -------------------------------------------------------------------------
   female: {
     fallbackHeight: 1.68,
     headTargetY: 1.45,
-    skinMaterials: new Set(["lambert11", "lambert13", "lambert12"]),
-    // The original value, from when this was a module constant — she is the rig
-    // it was tuned against, so it stays exactly as it was.
+    widthSqueeze: 1,
+    lensMm: 85,
+    cameraDistanceM: null,
+
+    /** Head, arms, legs — every material whose texture is a skin diffuse. */
+    skinMaterials: new Set(["lambert14", "lambert17", "lambert12"]),
     skinEmissive: 0.25,
-    // Her skin declares roughnessFactor 0.5 in the glTF; nothing to correct.
     skinRoughness: null,
-    // She is the rig the other is matched TO, so nothing is scaled here and her
-    // appearance is exactly what it was before male1 existed.
     materialTint: {},
-    faceMaterial: "lambert12",
+
+    /** Head_Diffuse — the only map with makeup painted into it. */
+    faceMaterial: "lambert14",
+    /** Keeps the lipstick/cheek flush close to the source texture. */
+    makeupDesaturation: 0.01,
+
+    alphaTest: {
+      /** Scalp: base colour sits just over the mask-only threshold, so it was
+       *  taking the soft cut and hazing the hairline. */
+      lambert19: 0.35,
+      /** Hair cards: the default cut leaves a translucent grey haze at the fringe. */
+      lambert20: 0.22,
+      lambert21: 0.22,
+      lambert22: 0.22,
+      lambert23: 0.22,
+    },
+
+    materialRoughness: {
+      /** Export omits roughnessFactor on both — glTF would default to fully matte. */
+      "Kameez:lambert2": 0.5,
+      /** Dupatta: kept dull on purpose — 0.5 made it look like shiny satin. */
+      "pasted__lambert10": 0.9,
+      /** Eyes — a cornea is wet; this is what gives them a catchlight. */
+      lambert11: 0.08,
+      lambert16: 0.25, // nails, lacquered
+      lambert9: 0.35, // upper teeth, enamel
+      lambert10: 0.35, // lower teeth
+      lambert15: 0.35, // tongue, wet
+      /** Hair: a tighter specular lobe lets the top light lay a sheen on the crown. */
+      lambert20: 0.32,
+      lambert21: 0.32,
+      lambert22: 0.32,
+      lambert23: 0.32,
+    },
+    materialSpecular: {},
+    materialEnvIntensity: {
+      lambert11: 2.2, // eyes — the catchlight
+      lambert16: 1.8, // nails
+      lambert9: 0.8, // upper teeth
+      lambert10: 0.8, // lower teeth
+      /** Skin: 1.0 (the default) reads as plastic. */
+      lambert14: 0.55,
+      lambert17: 0.55,
+      lambert12: 0.55,
+      /** Hair: near-black cards handed a bright room back read as grey sheen. */
+      lambert20: 0.15,
+      lambert21: 0.15,
+      lambert22: 0.15,
+      lambert23: 0.15,
+      lambert19: 0.1, // scalp
+      /** Dupatta, dulled again — shine comes from reflection as well as roughness. */
+      "pasted__lambert10": 0.2,
+    },
+
     a2f: { gain: 0.9, shapeGains: { jawopen: 0.375 } },
     handScale: 1,
-    // 1 = the camera's own aspect, unsqueezed.
-    widthSqueeze: 1,
-    // The shared baseline, unchanged: her hands rest at her sides, so there is no
-    // depth exaggeration to correct and she is the rig the framing was tuned on.
-    lensMm: 85,
-    // null: her distance follows the lens, so she fills the frame on any screen.
-    cameraDistanceM: null,
-    // No per-material overrides: AvatarModel's own cut (0.35 for a mask-only
-    // texture, 0.08 otherwise) is already right for every material on this rig.
-    // These were implicit before — the renderer read `undefined` and fell back to
-    // values buried in the component, so her appearance depended on code rather
-    // than on this file. Stated here so the two presenters declare the same
-    // fields, which is what stops them drifting.
-    alphaTest: {},
-    // Her kameez declares roughnessFactor, and nothing needs its specular capped.
-    materialRoughness: {},
-    materialSpecular: {},
-    // Her hair is matte, so the back lights do on her exactly what they were
-    // tuned to do. Nothing to scale.
+
+    /** Her hair is matte, so the back lights do exactly what they're tuned to do. */
     backLight: { rim: 1, kick: 1 },
-    // Lifted over the first light-theme pass (exposure 1.2, ambient 0.6, fill
-    // 1.8): ambient carries most of it, so the gain lands on the shaded side of
-    // her face and the folds of the kameez rather than on the whole image.
-    lightThemeLighting: { exposure: 1.35, ambient: 0.9, fill: 2.3, environment: 1.3 },
-    // The authored rig, unchanged.
+    lightThemeLighting: { exposure: 0.8, ambient: 0.2, fill: 1, environment: 0.75 },
     darkThemeLighting: DARK_LIGHTING,
   },
 
-  // -------------------------------------------------------------------------
-  // male_initial13.glb — the facial-bone rig (302 nodes) with the dark head repaint
-  // back. What changed against the earlier exports, and which of the numbers below
-  // answer to it, is in the MALE comment in models.ts, next to the clip windows the
-  // same export decides. Every value here carried over from 12 unchanged except the
-  // two hair keys, which are keyed by material name and so had to follow the rename.
-  // -------------------------------------------------------------------------
   male: {
-    // Measured off the rig: HeadEnd sits at 1.784 against girl15's 1.616 (and
-    // male1's 1.783 — same skeleton, same proportions).
     fallbackHeight: 1.85,
-    // Reads slimmer, closer to the artist's Blender render: the clasped-hands
-    // idle pushes his elbows and sleeves out, which no lens choice changes.
-    widthSqueeze: 0.93,
-    // Longer than her 85mm, which stands the camera 4.3m out instead of 2.7m for
-    // the same shot. His clasped-hands idle holds his hands in front of his chest
-    // and face, and at the nearer distance they drew noticeably large; the longer
-    // lens roughly halves that (~12% -> ~7.5%). `handScale` is left at 1 — the
-    // hands are the size they were authored, this corrects the camera.
-    lensMm: 135,
-    // Fixed, so the lens and the distance are two independent knobs. 4.92 is what
-    // the adaptive formula gave at 135mm on the desktop stage, i.e. the starting
-    // point this replaced. Raise it to push him further away and smaller.
-    cameraDistanceM: 4.92,
-    // Girl15's 1.45 sits 0.029 below her Head_M joint (1.479); this is the same
-    // offset below this rig's, at 1.632.
     headTargetY: 1.6,
-    // The head skin is `lambert5` here, NOT the `Std_Skin_Head` male1 named it:
-    // this export renames the head material while keeping Std_Skin_Arm/Leg. On
-    // male2 its texture was the one male1's head used; male3 repaints it — see
-    // the lambert5 note in materialTint below.
+    /** Narrower than true proportions — his clasped-hands idle pushes the
+     *  elbows and sleeves out past how he reads in the artist's reference. */
+    widthSqueeze: 0.93,
+    /** Longer than the shared 85mm: stands the camera further back so his
+     *  clasped hands (held in front of his face) aren't drawn oversized. */
+    lensMm: 135,
+    cameraDistanceM: 4.92,
+
+    /** This export names the head material lambert5, not Std_Skin_Head. */
     skinMaterials: new Set(["lambert5", "Std_Skin_Arm", "Std_Skin_Leg"]),
-    // Was 0: the lift used to erase his shading rather than reveal it (a hard
-    // bright band across the forehead and nose at 0.10, measured p95 169
-    // against her 150). Nudged back up now that the light theme needs him
-    // brighter without pushing the kurta's highlight any further — watch that
-    // same forehead band if this goes higher than 0.08.
     skinEmissive: 0.08,
-    // null, unlike male1's 0.5. That override existed because male1 omitted
-    // roughnessFactor on its skin and so loaded at glTF's 1.0 default; this
-    // export authors 0.553 on all three skin materials (and a real value on
-    // every other material too), so there is nothing left to correct and forcing
-    // 0.5 would just overwrite what the artist set.
-    //
-    // male_initial04 and 05 drop roughnessFactor on lambert5 (the head), so it
-    // would load at glTF's fully rough 1.0 default. 0.5 is what 03 authored on
-    // the head; it also moves the arms and legs from 0.553 to 0.5, which is not
-    // visible.
-    // null again: 09 authors 0.5 on lambert5 and 0.553 on the arm and leg skin.
-    // The 0.5 here existed only because 05-08 omitted roughnessFactor on the head.
+    /** This export authors real roughness on every material — nothing to correct. */
     skinRoughness: null,
-    // Scaled to bring this export's albedo onto the female rig's level under the
-    // shared lights — see materialTint. This rig's textures are authored much
-    // brighter than the female rig's: skin 175-180 mean luminance against her 130,
-    // and the garment (one material, `pasted__pasted__lambert6`) 240 against her
-    // kameez's 185. The tints below pull both back to her levels under the same
-    // lights: garment mean 138 against her 134, face p95 147 against her 150.
+    /** Pulls this export's brighter albedo down onto the female rig's level
+     *  under the shared lights. */
     materialTint: {
       "pasted__pasted__lambert6": 0.62,
-      "lambert5": 0.95,
-      "Std_Skin_Arm": 0.95,
-      "Std_Skin_Leg": 0.95,
+      lambert5: 0.95,
+      Std_Skin_Arm: 0.95,
+      Std_Skin_Leg: 0.95,
     },
-    // No makeup on this rig — the pass would read back a texture to change nothing.
+
     faceMaterial: null,
-    // Keyed to 13's hair material name — the exports keep flipping between
-    // `standardSurface2` and `standardSurface2.001`, and a key that misses is
-    // silent. Load-bearing again here: 13 authors the hair at 0.0068, back in the
-    // near-black range where AvatarModel's colour test reads it as a mask card and
-    // cuts at 0.35 — which drops 21% of the opacity texture's visible texels
-    // against 4.2% at this cut, and takes the soft strands along the front
-    // hairline with them. (On 12, authored at 0.047, the same 0.08 came out of the
-    // colour test on its own and the key only pinned it.)
-    alphaTest: { "standardSurface2": 0.08 },
-    // The kurta and shalwar (one material, two meshes). male_initial05 and 06 ship
-    // it with no roughnessFactor at all, so it loads at glTF's fully matte 1.0 and
-    // returns no specular — which is most of how the cyan rim and green kick show
-    // up as coloured edges on cloth, so on those exports he lost the back lighting
-    // the female rig has. 0.5 is what male_initial03 authored on this same material
-    // and what girl15's kameez carries. Diffuse shading, and so his skin and the
-    // garment's overall brightness, are untouched by this.
-    // No override: 09 authors roughness 0.5 on the kurta, where 05-08 omitted it
-    // and so loaded fully matte at glTF's 1.0 default. That default is what cost
-    // him the cyan rim and green kick as coloured edges on cloth, and 0.5 is both
-    // what this export now sets and what girl15's kameez carries — so there is
-    // nothing left to correct and forcing a value would overwrite the artist's.
-    // The export's own 0.2 is kept: it is what makes his hair read as hair
-    // rather than felt. The sheen it was catching is handled by the specular
-    // override below instead.
+    /** Unused — faceMaterial is null, so the makeup pass never runs on him. */
+    makeupDesaturation: 0.2,
+
+    /** Keyed to this export's hair material name, which has changed before. */
+    alphaTest: { standardSurface2: 0.08 },
+    /** The export authors real roughness on the kurta/shalwar — nothing to correct. */
     materialRoughness: {},
-    // The hair's sheen, keyed to the same renamed material as alphaTest above.
-    materialSpecular: { "standardSurface2": 0.6 },
-    // The female rig's calibration, unchanged. It is a property of what the NIM
-    // emits (JawOpen peaking past 2.5 while the lip shapes sit under 1) far more
-    // than of the rig, and these two rigs carry the same authored blendshapes at
-    // the same amplitudes — the jawOpen delta here is 0.027 against her 0.025.
-    // Worth a look on screen even so; ?a2fGain= and ?a2fShapes= retune it live.
+    /** His hair's sheen. */
+    materialSpecular: { standardSurface2: 0.6 },
+    /** Not yet measured against the lobby plate the way the female rig has been. */
+    materialEnvIntensity: {},
+
     a2f: { gain: 0.9, shapeGains: { jawopen: 0.375 } },
-    // 1 = the hands as authored. Measured off male_initial05, they are 11.3% of his
-    // height long and 7.6% wide, against the female rig's 10.4% and 6.4%, and the
-    // camera enlarges them further because they are held in front of his face.
-    // Lower this (0.9 or so) to shrink them; much below 0.85 the wrist starts to
-    // show a step at the cuff.
+    /** 1 = hands as authored. Lower (~0.9) to shrink them; below ~0.85 the
+     *  wrist shows a visible step at the cuff. */
     handScale: 1,
-    // Both edge lights off: the rim mirrors off his clearcoated hair and the kick
-    // off the kurta's bright albedo.
+
+    /** Both off: the rim mirrors off his clearcoated hair and the kick off
+     *  the kurta's bright albedo. */
     backLight: { rim: 0, kick: 0 },
-    // Brighter in the shadows than the shared rig on both themes: the lift sits
-    // mostly in ambient and fill, so what opens up is the shaded side of his
-    // face, his beard and the folds of the kurta rather than the whole image.
-    // Lifted here from exposure 1.35 / ambient 0.65 / fill 2.1, the same way her
-    // light-theme entry was. Exposure is the one to back off first if the cloth
-    // flattens: the lit side of the kurta is 240/255 albedo before the tint
-    // above, and it is the brightest thing in the shot.
-    lightThemeLighting: { exposure: 1.3, ambient: 0.95, fill: 2.6, environment: 1.3 },
+    lightThemeLighting: { exposure: 0.98, ambient: 0.5, fill: 1.15, environment: 1.2 },
     darkThemeLighting: { exposure: 1, ambient: 0.45, fill: 1.35, environment: 1 },
   },
 };

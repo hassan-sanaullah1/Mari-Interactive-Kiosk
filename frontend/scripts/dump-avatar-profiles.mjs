@@ -106,8 +106,9 @@ function constantsInComponents() {
     "a2f-morphs.ts": "lib/a2f-morphs.ts",
   };
   const wanted = [
-    // The female-only makeup pass.
-    "MAKEUP_DESATURATION", "MAKEUP_MAX_HUE", "MAKEUP_MIN_SAT", "FACE_UV_BOX",
+    // The makeup pass's detection gate. The strength itself is now a per-rig
+    // value — RigTuning.makeupDesaturation — and so is resolved automatically.
+    "MAKEUP_MAX_HUE", "MAKEUP_MIN_SAT", "FACE_UV_BOX",
     // Shared defaults that the female rig currently falls back to.
     "AVATAR_POSITION_X", "BOB_", "READY_FRAME_DELAY",
     "DEFAULT_GAIN", "DEFAULT_SHAPE_GAINS",

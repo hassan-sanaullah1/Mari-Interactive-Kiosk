@@ -7,14 +7,20 @@
      "jawopen": 0.375
     }
    },
-   "alphaTest": {},
+   "alphaTest": {
+    "lambert19": 0.35,
+    "lambert20": 0.22,
+    "lambert21": 0.22,
+    "lambert22": 0.22,
+    "lambert23": 0.22
+   },
    "backLight": {
     "kick": 1,
     "rim": 1
    },
    "bytes": {
-    "decoded": 29813520,
-    "encoded": 20165542
+    "decoded": 70442516,
+    "encoded": 52101323
    },
    "cameraDistanceM": null,
    "darkThemeLighting": {
@@ -23,7 +29,7 @@
     "exposure": 1,
     "fill": 1
    },
-   "faceMaterial": "lambert12",
+   "faceMaterial": "lambert14",
    "fallbackHeight": 1.68,
    "grammaticalGender": "f",
    "handScale": 1,
@@ -37,12 +43,40 @@
    },
    "lensMm": 85,
    "lightThemeLighting": {
-    "ambient": 0.9,
-    "environment": 1.3,
-    "exposure": 1.35,
-    "fill": 2.3
+    "ambient": 0.2,
+    "environment": 0.75,
+    "exposure": 0.8,
+    "fill": 1
    },
-   "materialRoughness": {},
+   "makeupDesaturation": 0.01,
+   "materialEnvIntensity": {
+    "lambert10": 0.8,
+    "lambert11": 2.2,
+    "lambert12": 0.55,
+    "lambert14": 0.55,
+    "lambert16": 1.8,
+    "lambert17": 0.55,
+    "lambert19": 0.1,
+    "lambert20": 0.15,
+    "lambert21": 0.15,
+    "lambert22": 0.15,
+    "lambert23": 0.15,
+    "lambert9": 0.8,
+    "pasted__lambert10": 0.2
+   },
+   "materialRoughness": {
+    "Kameez:lambert2": 0.5,
+    "lambert10": 0.35,
+    "lambert11": 0.08,
+    "lambert15": 0.35,
+    "lambert16": 0.25,
+    "lambert20": 0.32,
+    "lambert21": 0.32,
+    "lambert22": 0.32,
+    "lambert23": 0.32,
+    "lambert9": 0.35,
+    "pasted__lambert10": 0.9
+   },
    "materialSpecular": {},
    "materialTint": {},
    "segments": {
@@ -68,13 +102,13 @@
    "skinEmissive": 0.25,
    "skinMaterials": {
     "__set": [
-     "lambert11",
      "lambert12",
-     "lambert13"
+     "lambert14",
+     "lambert17"
     ]
    },
    "skinRoughness": null,
-   "url": "/models/girl15.glb.gz",
+   "url": "/models/dress2.glb.gz",
    "widthSqueeze": 1
   },
   "male": {
@@ -116,11 +150,13 @@
    },
    "lensMm": 135,
    "lightThemeLighting": {
-    "ambient": 0.95,
-    "environment": 1.3,
-    "exposure": 1.3,
-    "fill": 2.6
+    "ambient": 0.5,
+    "environment": 1.2,
+    "exposure": 0.98,
+    "fill": 1.15
    },
+   "makeupDesaturation": 0.2,
+   "materialEnvIntensity": {},
    "materialRoughness": {},
    "materialSpecular": {
     "standardSurface2": 0.6
@@ -167,7 +203,6 @@
  "componentConstants": {
   "AvatarModel.tsx:AVATAR_POSITION_X": "0",
   "AvatarModel.tsx:FACE_UV_BOX": "{ x0: 0.12, x1: 0.88, y0: 0.05, y1: 0.72 }",
-  "AvatarModel.tsx:MAKEUP_DESATURATION": "0.20",
   "AvatarModel.tsx:MAKEUP_MAX_HUE_DEG": "20",
   "AvatarModel.tsx:MAKEUP_MIN_SATURATION": "0.22",
   "AvatarModel.tsx:READY_FRAME_DELAY": "2",

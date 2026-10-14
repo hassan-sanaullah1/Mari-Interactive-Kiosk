@@ -32,7 +32,7 @@
  * still lerps.
  */
 
-import { Component, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Environment, Lightformer } from "@react-three/drei";
 import * as THREE from "three";
@@ -45,12 +45,10 @@ import { avatarConfig, DEFAULT_AVATAR, type AvatarId } from "./models";
 import {
   CAMERA,
   DARK_LIGHTING,
-  ENVIRONMENT,
   LERP_SPEED,
-  LIGHT_COLORS,
-  LIGHT_PLACEMENT,
-  LIGHT_STATES,
+  STUDIO,
   VOICE_BOOST,
+  type Studio,
   type ThemeLighting,
 } from "./tuning";
 import type { Theme } from "@/lib/theme";
@@ -157,12 +155,54 @@ function Framing({
 // still varies per state (and with her voice), which reads as her being lit
 // more or less brightly rather than as the light changing colour.
 //
-// The numbers themselves are all in ./tuning.ts: LIGHT_COLORS (the palette),
-// LIGHT_PLACEMENT (where each light stands), LIGHT_STATES (how bright it is in
-// each conversation state), VOICE_BOOST and LERP_SPEED. Where the face spot
+// The numbers themselves are all in ./tuning.ts: STUDIO holds one complete
+// room per theme (palette, placement, per-state brightness, reflection panels
+// and the key's shadow), plus VOICE_BOOST and LERP_SPEED. Where the face spot
 // AIMS is per-rig (`headTargetY`), because the two faces sit at different
 // heights.
+//
+// Colour and position belong to the THEME, so the frame loop below owns them
+// imperatively and they are NOT passed as JSX props: writing the same field
+// both declaratively and imperatively is how a value snaps back on an
+// unrelated rerender. The lights mount from the dark studio and the loop eases
+// them from there.
 // ---------------------------------------------------------------------------
+
+/** Prebuilt three.js colours and positions for one studio — see `studios` below. */
+interface StudioObjects {
+  colors: Record<LightName, THREE.Color>;
+  positions: Record<LightName, THREE.Vector3>;
+}
+
+/**
+ * Eases every light between the two studios. Colour, position and cone shape
+ * belong to the THEME rather than to the conversation state, so they move only
+ * as `mix` does — 0 is the dark room, 1 the light one.
+ */
+function crossfadeStudios(
+  lights: Record<LightName, THREE.Light | null>,
+  studios: { dark: StudioObjects; light: StudioObjects },
+  mix: number,
+): void {
+  for (const name of LIGHT_NAMES) {
+    const light = lights[name];
+    if (!light) continue;
+    light.color.lerpColors(studios.dark.colors[name], studios.light.colors[name], mix);
+    light.position.lerpVectors(studios.dark.positions[name], studios.light.positions[name], mix);
+    const from = STUDIO.dark.placement[name];
+    const to = STUDIO.light.placement[name];
+    const spot = light as THREE.SpotLight;
+    if (from.angle !== undefined && to.angle !== undefined) {
+      spot.angle = THREE.MathUtils.lerp(from.angle, to.angle, mix);
+    }
+    if (from.penumbra !== undefined && to.penumbra !== undefined) {
+      spot.penumbra = THREE.MathUtils.lerp(from.penumbra, to.penumbra, mix);
+    }
+    if (from.distance !== undefined && to.distance !== undefined) {
+      spot.distance = THREE.MathUtils.lerp(from.distance, to.distance, mix);
+    }
+  }
+}
 
 /**
  * `levelRef` carries this app's smoothed 0..1 amplitude (useVoiceSession's
@@ -180,7 +220,23 @@ interface DynamicLightingProps {
   lighting: ThemeLighting;
   /** This rig's scale on the two back lights — see `backLight` in ./tuning.ts. */
   backLight: { rim: number; kick: number };
+  /** Which studio to light her in — see STUDIO in ./tuning.ts. */
+  theme: Theme;
 }
+
+/** The six light names, in the order the refs below are read. */
+const LIGHT_NAMES = ["key", "fill", "top", "rim", "kick", "face"] as const;
+const DARK_STUDIO_PLACEMENT = STUDIO.dark.placement;
+/**
+ * The shadow box. Only `intensity` differs between the studios (and is lerped
+ * in the frame loop); the geometry is shared, because it frames HER and she
+ * does not move when the theme does.
+ *
+ * 2048 texels across a 2 * extent = 2m box is ~1mm per texel, which is what it
+ * takes to resolve a nose shadow at this crop. See docs/avatar-lighting.md.
+ */
+const SHADOW = STUDIO.dark.shadow;
+type LightName = (typeof LIGHT_NAMES)[number];
 
 function DynamicLighting({
   state = "idle",
@@ -188,6 +244,7 @@ function DynamicLighting({
   headTargetY,
   lighting,
   backLight,
+  theme,
 }: DynamicLightingProps) {
   const { gl, scene } = useThree();
   const ambientLightRef = useRef<THREE.AmbientLight>(null);
@@ -199,11 +256,49 @@ function DynamicLighting({
   const faceLightRef = useRef<THREE.SpotLight>(null);
   const smoothedVolume = useRef(0);
 
+  // 0 = fully dark studio, 1 = fully light. Eased like everything else, so a
+  // theme switch reads as the room's light sweeping across her.
+  const themeMix = useRef(theme === "light" ? 1 : 0);
+
+  // Built once per studio pair rather than per frame: six lights' worth of
+  // Color and Vector3 allocated 60 times a second would be a garbage-collector
+  // pause every few seconds. tuning.ts may hold no three.js objects (it is a
+  // runtime leaf), so this is where they are made.
+  const studios = useMemo(() => {
+    const build = (studio: Studio) => ({
+      colors: Object.fromEntries(
+        LIGHT_NAMES.map((n) => [n, new THREE.Color(studio.colors[n])]),
+      ) as Record<LightName, THREE.Color>,
+      positions: Object.fromEntries(
+        LIGHT_NAMES.map((n) => [n, new THREE.Vector3(...studio.placement[n].position)]),
+      ) as Record<LightName, THREE.Vector3>,
+      ambient: new THREE.Color(studio.ambientColor),
+    });
+    return { dark: build(STUDIO.dark), light: build(STUDIO.light) };
+  }, []);
+
   useFrame(() => {
     const vol = levelRef?.current ?? 0;
     smoothedVolume.current += (vol - smoothedVolume.current) * 0.1;
     const sv = smoothedVolume.current;
-    const config = LIGHT_STATES[state];
+
+    themeMix.current = THREE.MathUtils.lerp(themeMix.current, theme === "light" ? 1 : 0, LERP_SPEED);
+    const mix = themeMix.current;
+    const studio = STUDIO[theme];
+    const config = studio.states[state];
+
+    crossfadeStudios(
+      {
+        key: keyLightRef.current,
+        fill: fillLightRef.current,
+        top: topLightRef.current,
+        rim: rimLightRef.current,
+        kick: kickLightRef.current,
+        face: faceLightRef.current,
+      },
+      studios,
+      mix,
+    );
 
     if (keyLightRef.current) {
       keyLightRef.current.intensity = THREE.MathUtils.lerp(
@@ -241,6 +336,7 @@ function DynamicLighting({
       );
     }
     if (ambientLightRef.current) {
+      ambientLightRef.current.color.lerpColors(studios.dark.ambient, studios.light.ambient, mix);
       ambientLightRef.current.intensity = THREE.MathUtils.lerp(
         ambientLightRef.current.intensity,
         lighting.ambient,
@@ -260,32 +356,48 @@ function DynamicLighting({
       faceLightRef.current.target.position.set(0, headTargetY, 0);
       faceLightRef.current.target.updateMatrixWorld();
     }
+    if (keyLightRef.current) {
+      // Same bare-target case as the face spot. Aimed at her torso rather than
+      // the origin, which would spend half the shadow box on floor that is far
+      // below the bottom of the frame.
+      keyLightRef.current.target.position.set(0, SHADOW.targetY, 0);
+      keyLightRef.current.target.updateMatrixWorld();
+      keyLightRef.current.shadow.intensity = THREE.MathUtils.lerp(
+        keyLightRef.current.shadow.intensity,
+        studio.shadow.intensity,
+        LERP_SPEED,
+      );
+    }
   });
 
   return (
     <>
       <ambientLight ref={ambientLightRef} intensity={DARK_LIGHTING.ambient} />
-      {/* Warm key, front-right and high. `castShadow` is inert until <Canvas>
-          is given `shadows` — kept as the source scene had it. */}
-      <directionalLight ref={keyLightRef} {...LIGHT_PLACEMENT.key} castShadow color={LIGHT_COLORS.key} />
-      {/* Cool fill, opposite the key and behind. */}
-      <directionalLight ref={fillLightRef} {...LIGHT_PLACEMENT.fill} color={LIGHT_COLORS.fill} />
-      {/* Top wash from just in front of her. */}
-      <spotLight ref={topLightRef} {...LIGHT_PLACEMENT.top} color={LIGHT_COLORS.top} castShadow={false} />
-      {/* CYAN RIM, behind and camera-left — the bright blue edge running down
-          the shoulder and sleeve. Behind her, so it catches the silhouette
-          only and never reaches the front of the kameez. */}
-      <spotLight ref={rimLightRef} {...LIGHT_PLACEMENT.rim} color={LIGHT_COLORS.rim} castShadow={false} />
-      {/* GREEN KICK, behind and camera-right — the weaker counterpart from the
-          green half of the backdrop, on the dupatta side. */}
-      <spotLight ref={kickLightRef} {...LIGHT_PLACEMENT.kick} color={LIGHT_COLORS.kick} castShadow={false} />
-      {/* Tight face spot, aimed at the rig's headTargetY by the frame loop above. */}
-      <spotLight
-        ref={faceLightRef}
-        {...LIGHT_PLACEMENT.face}
-        color={LIGHT_COLORS.face}
-        castShadow={false}
+      {/* Mounted from the dark studio and then owned by the frame loop above:
+          colour and position are per-theme, and are deliberately not props.
+          Only the key casts — a second shadow map would double the cost for an
+          effect nobody can point at. */}
+      <directionalLight
+        ref={keyLightRef}
+        intensity={DARK_STUDIO_PLACEMENT.key.intensity}
+        castShadow
+        shadow-mapSize-width={SHADOW.mapSize}
+        shadow-mapSize-height={SHADOW.mapSize}
+        shadow-bias={SHADOW.bias}
+        shadow-normalBias={SHADOW.normalBias}
+        shadow-camera-left={-SHADOW.extent}
+        shadow-camera-right={SHADOW.extent}
+        shadow-camera-top={SHADOW.extent}
+        shadow-camera-bottom={-SHADOW.extent}
+        shadow-camera-near={0.5}
+        shadow-camera-far={8}
       />
+      <directionalLight ref={fillLightRef} intensity={DARK_STUDIO_PLACEMENT.fill.intensity} />
+      <spotLight ref={topLightRef} intensity={DARK_STUDIO_PLACEMENT.top.intensity} decay={2} castShadow={false} />
+      <spotLight ref={rimLightRef} intensity={DARK_STUDIO_PLACEMENT.rim.intensity} decay={2} castShadow={false} />
+      <spotLight ref={kickLightRef} intensity={DARK_STUDIO_PLACEMENT.kick.intensity} decay={2} castShadow={false} />
+      {/* Tight face spot, aimed at the rig's headTargetY by the frame loop. */}
+      <spotLight ref={faceLightRef} intensity={DARK_STUDIO_PLACEMENT.face.intensity} decay={2} castShadow={false} />
     </>
   );
 }
@@ -408,6 +520,13 @@ export default function AvatarScene({
   return (
     <Canvas
       dpr={[1, 2]}
+      // Her feet are far below the bottom of the frame and there is no ground
+      // plane, so every shadow here is SELF-shadow: hair on forehead, nose on
+      // cheek, chin on neck, arm on torso. That is the modelling the rig was
+      // missing. `shadows` cannot be toggled per theme without recreating the
+      // renderer, so both themes get shadow maps and the per-theme dial is
+      // STUDIO[theme].shadow.intensity.
+      shadows={{ type: THREE.PCFSoftShadowMap }}
       gl={{ antialias: true, alpha: true, toneMapping: THREE.ACESFilmicToneMapping }}
       camera={{ position: [0, 1.26, 4], fov: 20, near: 0.1, far: 100, manual: true }}
       // Transparent clear, so the kiosk artwork shows through the whole canvas.
@@ -427,12 +546,13 @@ export default function AvatarScene({
         headTargetY={config.headTargetY}
         lighting={lighting}
         backLight={config.backLight}
+        theme={theme}
       />
 
       {/* Reflections only — an <Environment> with no `background` prop does not
           draw anything, so the artwork behind the canvas stays visible. */}
-      <Environment resolution={ENVIRONMENT.resolution}>
-        {ENVIRONMENT.lightformers.map((panel, i) => (
+      <Environment key={theme} resolution={STUDIO[theme].environment.resolution}>
+        {STUDIO[theme].environment.lightformers.map((panel, i) => (
           <Lightformer key={i} {...panel} />
         ))}
       </Environment>
