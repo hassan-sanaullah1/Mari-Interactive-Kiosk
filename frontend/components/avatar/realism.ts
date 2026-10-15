@@ -24,6 +24,19 @@
  *                  original texture, so keep that low when smoothing.
  *   skinSheen      one roughness and reflection strength for all the skin: the
  *                  soft, even sheen on forehead, nose and cheekbones.
+ *   skinTone       a colour correction on the skin only: saturation, warmth,
+ *                  brightness, and calming the cheek blotches. The blotches are
+ *                  picked out by how far red leads green in the face texture
+ *                  (measured on dress2's Head_Diffuse, linear green/red: plain
+ *                  skin 0.48-0.60, flush and blotches 0.33-0.47, lips 0.25-0.31),
+ *                  so the lips are never touched.
+ *   browDefinition darker, denser brow cards. Density strengthens the brow
+ *                  texture's own alpha in the shader, so the faint hairs at the
+ *                  edges turn solid; the cut-off is lowered so they are not
+ *                  trimmed away. Measured before: the darkest fifth of the brow
+ *                  was mostly skin showing through (143 101 83 vs 43 29 22).
+ *   hairTame       the hair reflects less of a bright room (the grey haze),
+ *                  drops its faintest wisps, and can be darkened.
  *   wetEyes        eyes get a clear-coat layer: a sharp, glossy reflection over
  *                  a softer iris, which is what puts a catchlight in them.
  *   hairCoverage   alpha-to-coverage on the hair cards instead of a hard alpha
@@ -45,6 +58,9 @@ export interface RealismOptions {
   surfaceDetail: boolean;
   skinSmooth: boolean;
   skinSheen: boolean;
+  skinTone: boolean;
+  browDefinition: boolean;
+  hairTame: boolean;
   wetEyes: boolean;
   hairCoverage: boolean;
 }
@@ -57,6 +73,9 @@ export const KIOSK_REALISM: RealismOptions = {
   surfaceDetail: false,
   skinSmooth: false,
   skinSheen: false,
+  skinTone: false,
+  browDefinition: false,
+  hairTame: false,
   wetEyes: false,
   hairCoverage: false,
 };
@@ -68,6 +87,9 @@ export const ALL_REALISM: RealismOptions = {
   surfaceDetail: true,
   skinSmooth: true,
   skinSheen: true,
+  skinTone: true,
+  browDefinition: true,
+  hairTame: true,
   wetEyes: true,
   // Off even in "all": it looked heavier than the hard cut in testing; judge it
   // on the kiosk's own GPU, where the MSAA it depends on is real.
@@ -94,6 +116,28 @@ export interface RealismParams {
   skinRoughness: number;
   /** How much of the environment the skin reflects with sheen on. */
   skinSheen: number;
+  /** Skin saturation: 1 unchanged. */
+  skinSaturation: number;
+  /** Skin warmth: 0 unchanged, negative cooler (more blue, less red), positive warmer. */
+  skinWarmth: number;
+  /** Skin brightness: 1 unchanged. */
+  skinBrightness: number;
+  /** How far the cheek blotches are pulled back to plain skin: 0 none, 1 fully. */
+  calmRedness: number;
+  /** Brightness of the eyes with wet eyes on: 1 unchanged. Lifts the whites. */
+  eyeBrightness: number;
+  /** How much darker the brows get with definition on: 0 none, 1 much. */
+  browDarken: number;
+  /** Brow density with definition on: 1 as authored, higher fills the faint hairs in. */
+  browDensity: number;
+  /** How much of the environment the hair reflects with taming on. */
+  hairReflection: number;
+  /** Alpha cut-off on the hair cards with taming on: higher drops more wisps. */
+  hairCutoff: number;
+  /** Hair colour multiplier with taming on: 1 unchanged, lower darker. */
+  hairShade: number;
+  /** Hair roughness with taming on: higher turns bright strand streaks into a soft sheen. */
+  hairRoughness: number;
 }
 
 /** Starting values, chosen in the lab; every one sits on a slider there. */
@@ -108,6 +152,17 @@ export const DEFAULT_REALISM_PARAMS: RealismParams = {
   smoothRadius: 0.0025,
   skinRoughness: 0.45,
   skinSheen: 0.8,
+  skinSaturation: 1,
+  skinWarmth: 0,
+  skinBrightness: 1,
+  calmRedness: 0.5,
+  eyeBrightness: 1.1,
+  browDarken: 0.3,
+  browDensity: 1,
+  hairReflection: 0.1,
+  hairCutoff: 0.25,
+  hairShade: 0.9,
+  hairRoughness: 0.32,
 };
 
 /** What a rig must tell this module: which of its materials are skin. */
@@ -128,7 +183,25 @@ const skinUniforms = {
   skinGloss: { value: DEFAULT_REALISM_PARAMS.lipGloss },
   skinSmooth: { value: DEFAULT_REALISM_PARAMS.smoothAmount },
   skinSmoothRadius: { value: DEFAULT_REALISM_PARAMS.smoothRadius },
+  skinSaturation: { value: 1 },
+  skinToneTint: { value: new THREE.Color(1, 1, 1) },
+  skinCalm: { value: DEFAULT_REALISM_PARAMS.calmRedness },
+  browDensity: { value: DEFAULT_REALISM_PARAMS.browDensity },
 };
+
+/** Original values of everything the live parameters overwrite, so undo can restore them. */
+interface Originals {
+  color: THREE.Color;
+  envMapIntensity: number;
+  alphaTest: number;
+  roughness: number;
+}
+const wetEyeMaterials = new Map<THREE.MeshPhysicalMaterial, THREE.Color>();
+const browMaterials = new Map<THREE.MeshStandardMaterial, Originals>();
+const hairMaterials = new Map<THREE.MeshStandardMaterial, Originals>();
+
+/** Brow cut-off with definition on: low, so the edges density fills in survive. */
+const BROW_CUTOFF = 0.03;
 
 /** Skin materials with sheen on, so the sliders reach them live. */
 const sheenMaterials = new Set<THREE.MeshStandardMaterial>();
@@ -160,6 +233,25 @@ export function setRealismParams(params: RealismParams): void {
   for (const material of sheenMaterials) {
     material.roughness = params.skinRoughness;
     material.envMapIntensity = params.skinSheen;
+  }
+  skinUniforms.skinSaturation.value = params.skinSaturation;
+  skinUniforms.skinCalm.value = params.calmRedness;
+  // Warmth trades red against blue around neutral; brightness scales all three.
+  skinUniforms.skinToneTint.value
+    .setRGB(1 + params.skinWarmth * 0.08, 1, 1 - params.skinWarmth * 0.12)
+    .multiplyScalar(params.skinBrightness);
+  for (const [material, base] of wetEyeMaterials) material.color.copy(base).multiplyScalar(params.eyeBrightness);
+  skinUniforms.browDensity.value = params.browDensity;
+  for (const [material, original] of browMaterials) {
+    material.color.copy(original.color).multiplyScalar(1 - 0.6 * params.browDarken);
+    // Lower, never higher: a higher cut-off would trim the faint hairs density fills in.
+    material.alphaTest = Math.min(original.alphaTest, BROW_CUTOFF);
+  }
+  for (const [material, original] of hairMaterials) {
+    material.color.copy(original.color).multiplyScalar(params.hairShade);
+    material.envMapIntensity = params.hairReflection;
+    material.alphaTest = Math.max(original.alphaTest, params.hairCutoff);
+    material.roughness = params.hairRoughness;
   }
 }
 
@@ -203,10 +295,29 @@ const SMOOTH_MAP_FRAGMENT = `#ifdef USE_MAP
 	diffuseColor *= sampledDiffuseColor;
 #endif`;
 
+/**
+ * Skin tone, after the colour texture is sampled. The flush/blotch band of the
+ * green:red ratio (0.33-0.47) is lifted back towards plain skin (0.52) by
+ * scaling green and blue together, which keeps the hue family; the lips sit
+ * below 0.31 and are outside the mask. Then saturation and the warmth tint.
+ */
+const SKIN_TONE_TERM = `#include <color_fragment>
+	{
+		vec3 tone = diffuseColor.rgb;
+		float greenOverRed = tone.g / max( tone.r, 1e-4 );
+		float blotch = smoothstep( 0.31, 0.36, greenOverRed ) * ( 1.0 - smoothstep( 0.44, 0.50, greenOverRed ) );
+		float lift = mix( 1.0, 0.52 / max( greenOverRed, 1e-4 ), blotch * skinCalm );
+		tone.gb *= lift;
+		float toneLuma = dot( tone, vec3( 0.2126, 0.7152, 0.0722 ) );
+		tone = mix( vec3( toneLuma ), tone, skinSaturation ) * skinToneTint;
+		diffuseColor.rgb = tone;
+	}`;
+
 interface SkinPatch {
   scatter: boolean;
   gloss: boolean;
   smooth: boolean;
+  tone: boolean;
 }
 
 /** Null if a three.js upgrade moved a line this relies on: skip, don't break the shader. */
@@ -218,14 +329,17 @@ function patchedLightingChunk(): string | null {
 function patchSkin(material: THREE.MeshStandardMaterial, patch: SkinPatch, undo: (() => void)[]): void {
   const lighting = patch.scatter ? patchedLightingChunk() : null;
   if (patch.scatter && !lighting) console.warn("[realism] three.js lighting chunk changed; skin scatter skipped");
-  if (!lighting && !patch.gloss && !patch.smooth) return;
+  if (!lighting && !patch.gloss && !patch.smooth && !patch.tone) return;
 
   const previousCompile = material.onBeforeCompile;
   const previousKey = material.customProgramCacheKey;
   material.onBeforeCompile = (shader, renderer) => {
     previousCompile.call(material, shader, renderer);
     Object.assign(shader.uniforms, skinUniforms);
-    shader.fragmentShader = `uniform float skinWrap;\nuniform vec3 skinScatterColor;\nuniform float skinGloss;\nuniform float skinSmooth;\nuniform float skinSmoothRadius;\n${shader.fragmentShader}`;
+    shader.fragmentShader = `uniform float skinWrap;\nuniform vec3 skinScatterColor;\nuniform float skinGloss;\nuniform float skinSmooth;\nuniform float skinSmoothRadius;\nuniform float skinSaturation;\nuniform vec3 skinToneTint;\nuniform float skinCalm;\n${shader.fragmentShader}`;
+    if (patch.tone) {
+      shader.fragmentShader = shader.fragmentShader.replace("#include <color_fragment>", SKIN_TONE_TERM);
+    }
     if (patch.smooth) {
       shader.fragmentShader = shader.fragmentShader.replace("#include <map_fragment>", SMOOTH_MAP_FRAGMENT);
     }
@@ -239,7 +353,7 @@ function patchSkin(material: THREE.MeshStandardMaterial, patch: SkinPatch, undo:
   // A distinct key per patch combination, so three compiles a separate program
   // instead of reusing the unpatched one it already has for this material type.
   material.customProgramCacheKey = () =>
-    `${previousKey.call(material)}|skin${lighting ? "-scatter" : ""}${patch.gloss ? "-gloss" : ""}${patch.smooth ? "-smooth" : ""}`;
+    `${previousKey.call(material)}|skin${lighting ? "-scatter" : ""}${patch.gloss ? "-gloss" : ""}${patch.smooth ? "-smooth" : ""}${patch.tone ? "-tone" : ""}`;
   material.needsUpdate = true;
   undo.push(() => {
     material.onBeforeCompile = previousCompile;
@@ -306,7 +420,7 @@ function isEyeMaterial(material: THREE.MeshStandardMaterial): boolean {
 }
 
 function wetEyeMaterial(source: THREE.MeshStandardMaterial): THREE.MeshPhysicalMaterial {
-  return new THREE.MeshPhysicalMaterial({
+  const wet = new THREE.MeshPhysicalMaterial({
     name: source.name,
     map: source.map,
     color: source.color.clone(),
@@ -319,6 +433,64 @@ function wetEyeMaterial(source: THREE.MeshStandardMaterial): THREE.MeshPhysicalM
     ior: 1.376, // the cornea
     envMapIntensity: Math.max(source.envMapIntensity, 1.5),
     side: source.side,
+  });
+  wetEyeMaterials.set(wet, source.color.clone());
+  wet.color.copy(source.color).multiplyScalar(currentParams.eyeBrightness);
+  return wet;
+}
+
+// ── brows and hair ──────────────────────────────────────────────────────
+
+/**
+ * Alpha raised towards 1 before the alpha test: 1 - (1 - a)^density. A faint
+ * hair at a = 0.2 reaches 0.49 at density 3; a solid one stays solid.
+ */
+const BROW_DENSITY_TERM = `diffuseColor.a = 1.0 - pow( 1.0 - clamp( diffuseColor.a, 0.0, 1.0 ), browDensity );
+#include <alphatest_fragment>`;
+
+function densifyBrow(material: THREE.MeshStandardMaterial, undo: (() => void)[]): void {
+  const previousCompile = material.onBeforeCompile;
+  const previousKey = material.customProgramCacheKey;
+  material.onBeforeCompile = (shader, renderer) => {
+    previousCompile.call(material, shader, renderer);
+    shader.uniforms.browDensity = skinUniforms.browDensity;
+    shader.fragmentShader = `uniform float browDensity;\n${shader.fragmentShader}`.replace(
+      "#include <alphatest_fragment>",
+      BROW_DENSITY_TERM,
+    );
+  };
+  material.customProgramCacheKey = () => `${previousKey.call(material)}|brow-density`;
+  material.needsUpdate = true;
+  undo.push(() => {
+    material.onBeforeCompile = previousCompile;
+    material.customProgramCacheKey = previousKey;
+    material.needsUpdate = true;
+  });
+}
+
+const isBrowCard = (material: THREE.MeshStandardMaterial): boolean =>
+  material.transparent && /brow/i.test(`${material.name} ${material.map?.name ?? ""}`);
+
+function track(
+  registry: Map<THREE.MeshStandardMaterial, Originals>,
+  material: THREE.MeshStandardMaterial,
+  undo: (() => void)[],
+): void {
+  const original: Originals = {
+    color: material.color.clone(),
+    envMapIntensity: material.envMapIntensity,
+    alphaTest: material.alphaTest,
+    roughness: material.roughness,
+  };
+  registry.set(material, original);
+  // Applied now through the same path the sliders use.
+  setRealismParams(currentParams);
+  undo.push(() => {
+    registry.delete(material);
+    material.color.copy(original.color);
+    material.envMapIntensity = original.envMapIntensity;
+    material.alphaTest = original.alphaTest;
+    material.roughness = original.roughness;
   });
 }
 
@@ -363,26 +535,40 @@ function softenEdges(material: THREE.Material, undo: (() => void)[]): void {
 
 // ── the pass ────────────────────────────────────────────────────────────
 
-function applyToMaterial(
-  material: THREE.MeshStandardMaterial,
-  rig: RealismRig,
-  options: RealismOptions,
-  undo: (() => void)[],
-): void {
-  const isSkin = rig.skinMaterials.has(material.name);
-  if (isSkin && !options.skinGlow && material.emissiveIntensity !== 0) {
+/** Everything that applies to a skin material. */
+function applyToSkin(material: THREE.MeshStandardMaterial, options: RealismOptions, undo: (() => void)[]): void {
+  if (!options.skinGlow && material.emissiveIntensity !== 0) {
     const before = material.emissiveIntensity;
     material.emissiveIntensity = 0;
     undo.push(() => {
       material.emissiveIntensity = before;
     });
   }
-  if (isSkin) {
-    patchSkin(material, { scatter: options.skinScatter, gloss: options.lipGloss, smooth: options.skinSmooth }, undo);
+  patchSkin(
+    material,
+    { scatter: options.skinScatter, gloss: options.lipGloss, smooth: options.skinSmooth, tone: options.skinTone },
+    undo,
+  );
+  if (options.skinSheen) addSkinSheen(material, undo);
+  if (options.surfaceDetail) addSurfaceDetail(material, "skin", undo);
+}
+
+function applyToMaterial(
+  material: THREE.MeshStandardMaterial,
+  rig: RealismRig,
+  options: RealismOptions,
+  undo: (() => void)[],
+): void {
+  if (rig.skinMaterials.has(material.name)) {
+    applyToSkin(material, options, undo);
+    return;
   }
-  if (isSkin && options.skinSheen) addSkinSheen(material, undo);
-  if (options.surfaceDetail && isSkin) addSurfaceDetail(material, "skin", undo);
-  if (options.surfaceDetail && !isSkin && isCloth(material)) addSurfaceDetail(material, "cloth", undo);
+  if (options.browDefinition && isBrowCard(material)) {
+    track(browMaterials, material, undo);
+    densifyBrow(material, undo);
+  }
+  if (options.hairTame && isHairCard(material)) track(hairMaterials, material, undo);
+  if (options.surfaceDetail && isCloth(material)) addSurfaceDetail(material, "cloth", undo);
   if (options.hairCoverage && isHairCard(material)) softenEdges(material, undo);
 }
 
@@ -418,6 +604,9 @@ export function applyRealism(root: THREE.Object3D, rig: RealismRig, options: Rea
 
   return () => {
     for (const step of undo.reverse()) step();
-    for (const wet of eyeReplacements.values()) wet.dispose();
+    for (const wet of eyeReplacements.values()) {
+      wetEyeMaterials.delete(wet);
+      wet.dispose();
+    }
   };
 }

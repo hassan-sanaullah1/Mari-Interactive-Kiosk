@@ -24,6 +24,8 @@ interface DeviceFrameProps {
   backdrop?: string;
   isPanelOpen: boolean;
   children: ReactNode;
+  /** Drawn over the whole screen (the compare overlay). */
+  overlay?: ReactNode;
 }
 
 /** The controls' outlines as percentages of the screen, scaled the way --s scales them. */
@@ -45,7 +47,7 @@ function guideBoxes(width: number, height: number) {
   };
 }
 
-export function DeviceFrame({ settings, backdrop, isPanelOpen, children }: DeviceFrameProps) {
+export function DeviceFrame({ settings, backdrop, isPanelOpen, children, overlay }: DeviceFrameProps) {
   const device = DEVICES[settings.device];
   const areaRef = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState({ width: 0, height: 0 });
@@ -89,6 +91,7 @@ export function DeviceFrame({ settings, backdrop, isPanelOpen, children }: Devic
         <div className={styles.deviceStage} style={{ height: `${PORTRAIT_STAGE_HEIGHT * 100}%` }}>
           {children}
         </div>
+        {overlay}
         {settings.showGuides && (
           <div className={styles.guides} aria-hidden>
             <div style={guides.mic} />

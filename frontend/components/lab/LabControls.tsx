@@ -17,7 +17,7 @@ import {
   type RealismParams,
 } from "@/components/avatar/realism";
 import type { LabSettings } from "./LabScene";
-import { REFERENCE_BACKDROP_BLUR, REFERENCE_GRADE } from "./reference-look";
+import { REFERENCE_BACKDROP_BLUR, REFERENCE_GRADE, REFERENCE_V3_GRADE } from "./reference-look";
 
 interface ChoiceProps<T extends string> {
   label: string;
@@ -88,17 +88,20 @@ export function Slider({
   onChange: (value: number) => void;
   disabled?: boolean;
 }) {
+  // A setting added since the page loaded is undefined until the next reload
+  // (hot reload keeps the old state); show its minimum rather than crash.
+  const shown = Number.isFinite(value) ? value : min;
   return (
     <label className={styles.slider} data-disabled={disabled}>
       <span>
-        {label} <output>{value.toFixed(2)}</output>
+        {label} <output>{shown.toFixed(2)}</output>
       </span>
       <input
         type="range"
         min={min}
         max={max}
         step={step}
-        value={value}
+        value={shown}
         disabled={disabled}
         onChange={(event) => onChange(Number(event.target.value))}
       />
@@ -106,7 +109,10 @@ export function Slider({
   );
 }
 
-type PhaseA = Pick<LabSettings, "realism" | "realismParams" | "life" | "ao" | "grade" | "shadowSoftness">;
+type PhaseA = Pick<
+  LabSettings,
+  "realism" | "realismParams" | "life" | "ao" | "grade" | "shadowSoftness" | "shadowStrength"
+>;
 
 /** What the kiosk renders today. */
 export const KIOSK_PHASE_A: PhaseA = {
@@ -116,6 +122,7 @@ export const KIOSK_PHASE_A: PhaseA = {
   ao: { enabled: false, intensity: 0.8, radius: 0.12 },
   grade: NO_GRADE,
   shadowSoftness: 0,
+  shadowStrength: 0,
 };
 
 const ALL_PHASE_A: PhaseA = {
@@ -125,6 +132,7 @@ const ALL_PHASE_A: PhaseA = {
   ao: { enabled: true, intensity: 0.8, radius: 0.12 },
   grade: NO_GRADE,
   shadowSoftness: 4,
+  shadowStrength: 0,
 };
 
 /**
@@ -143,6 +151,7 @@ export const REFERENCE_V1: Partial<LabSettings> = {
   backdropBlur: REFERENCE_BACKDROP_BLUR,
   realism: ALL_REALISM,
   realismParams: {
+    ...DEFAULT_REALISM_PARAMS,
     // A soft, warm terminator.
     scatterWrap: 0.5,
     scatterStrength: 0.9,
@@ -180,6 +189,7 @@ export const REFERENCE_V2: Partial<LabSettings> = {
   ...REFERENCE_V1,
   realism: { ...ALL_REALISM, lipGloss: false },
   realismParams: {
+    ...DEFAULT_REALISM_PARAMS,
     scatterWrap: 0.55,
     scatterStrength: 0.85,
     scatterWarmth: 0.8,
@@ -194,6 +204,86 @@ export const REFERENCE_V2: Partial<LabSettings> = {
   life: { smile: 0, gaze: true, headDrift: true },
   ao: { enabled: true, intensity: 0.45, radius: 0.08 },
   shadowSoftness: 6,
+};
+
+/**
+ * Reference v3: measured against the target (reference-look.ts has the
+ * numbers). Key camera-right at ~3:1, real jaw and nose shadows, highlights
+ * that trace the face, a catchlight, skin cooled and calmed rather than warmed,
+ * darker brows, tamer hair, and reflections of the room she stands in. Lips
+ * and expression untouched. Leaves layout, camera, presenter and theme as set.
+ *
+ *   smoothing 0.45 + detail 0.2   v2's 0.65 was turning waxy
+ *   roughness 0.35, sheen 0.9     tighter highlights, placed by the key's softbox
+ *   saturation 0.9, warmth -0.3   measured: v2 skin more orange than the target
+ *   calm redness 0.6              the cheek blotches, lips excluded by mask
+ *   AO 0.7 at 5.5 cm              nostrils, eye sockets, lip corners, jaw
+ */
+export const REFERENCE_V3: Partial<LabSettings> = {
+  look: "kiosk",
+  lights: "reference3",
+  environment: "reference3",
+  tone: "neutral",
+  view: "lit",
+  backdropBlur: 0,
+  realism: { ...ALL_REALISM, lipGloss: false },
+  realismParams: {
+    ...DEFAULT_REALISM_PARAMS,
+    // Pass 2: the warm scatter term was adding orange at every shadow edge.
+    scatterWrap: 0.5,
+    scatterStrength: 0.6,
+    // Pass 3: back up a little; the target's shadow cheek is warmer than its forehead.
+    scatterWarmth: 0.6,
+    lipGloss: 0,
+    skinDetail: 0.2,
+    clothDetail: 2,
+    smoothAmount: 0.45,
+    smoothRadius: 0.0025,
+    skinRoughness: 0.35,
+    skinSheen: 0.9,
+    // Pass 2 measured G/R 0.72, B/R 0.57 against the target's 0.80, 0.69, and
+    // the forehead ~12% dark: further from orange, and brighter.
+    skinSaturation: 0.8,
+    skinWarmth: -0.4,
+    skinBrightness: 1.1,
+    calmRedness: 0.6,
+    eyeBrightness: 1.15,
+    browDarken: 0.35,
+    hairReflection: 0.08,
+    hairCutoff: 0.28,
+    hairShade: 0.85,
+  },
+  life: { smile: 0, gaze: true, headDrift: true },
+  ao: { enabled: true, intensity: 0.8, radius: 0.055 },
+  grade: REFERENCE_V3_GRADE,
+  shadowSoftness: 5,
+};
+
+/**
+ * Reference v4: v3 plus the three gaps the second comparison measured.
+ *
+ *   brows 0.7, x3     darker and denser: the darkest fifth was skin showing
+ *                     through. Measured 73 52 39 -> 28 20 15 (target 43 29 22).
+ *   hair 0.6, 0.35    rougher strands (soft sheen, not streaks), fewer wisps:
+ *                     hair-band detail 37 -> 18 (target ~11).
+ *   AO 0.6 at 4.5 cm  tighter than v3's 0.8 at 5.5 cm. Tried 3 cm first: the
+ *   + shadow 1.0      cheeks were fine but the jaw shadow vanished (148 -> 177;
+ *                     target 106), because AO had been drawing it. The key's own
+ *                     shadow at full strength draws it now (144), and AO only has
+ *                     to do the creases. Measured with head and eye motion paused.
+ */
+export const REFERENCE_V4: Partial<LabSettings> = {
+  ...REFERENCE_V3,
+  realismParams: {
+    ...(REFERENCE_V3.realismParams as RealismParams),
+    browDarken: 0.7,
+    browDensity: 3,
+    hairCutoff: 0.35,
+    hairRoughness: 0.6,
+  },
+  ao: { enabled: true, intensity: 0.6, radius: 0.045 },
+  shadowSoftness: 5,
+  shadowStrength: 1,
 };
 
 /** What the kiosk renders today, including its lights, environment and tone mapping. */
@@ -240,6 +330,18 @@ function SurfaceSwitches({ realism, onChange }: { realism: RealismOptions; onCha
         onChange={set("skinSheen")}
         hint="One roughness and reflection strength for all skin, like the reference's forehead and cheekbones."
       />
+      <Toggle
+        label="Skin tone (skin only: saturation, warmth, cheek redness)"
+        value={realism.skinTone}
+        onChange={set("skinTone")}
+        hint="Calms the cheek blotches; the lips are outside its mask."
+      />
+      <Toggle label="Brow definition (darker, fuller)" value={realism.browDefinition} onChange={set("browDefinition")} />
+      <Toggle
+        label="Tame hair (less grey haze, fewer wisps)"
+        value={realism.hairTame}
+        onChange={set("hairTame")}
+      />
       <Toggle label="Wet eyes (clear-coat catchlight)" value={realism.wetEyes} onChange={set("wetEyes")} />
       <Toggle
         label="Soft hair edges (alpha to coverage)"
@@ -273,6 +375,17 @@ function SurfaceSliders({
       <Slider label="Smoothing radius" value={params.smoothRadius} min={0.0005} max={0.008} step={0.0005} onChange={set("smoothRadius")} disabled={!realism.skinSmooth} />
       <Slider label="Skin roughness" value={params.skinRoughness} min={0.2} max={0.9} step={0.01} onChange={set("skinRoughness")} disabled={!realism.skinSheen} />
       <Slider label="Skin sheen (reflection)" value={params.skinSheen} min={0} max={2} step={0.01} onChange={set("skinSheen")} disabled={!realism.skinSheen} />
+      <Slider label="Skin saturation" value={params.skinSaturation} min={0.5} max={1.5} step={0.01} onChange={set("skinSaturation")} disabled={!realism.skinTone} />
+      <Slider label="Skin warmth (- cooler, + warmer)" value={params.skinWarmth} min={-1} max={1} step={0.01} onChange={set("skinWarmth")} disabled={!realism.skinTone} />
+      <Slider label="Skin brightness" value={params.skinBrightness} min={0.7} max={1.3} step={0.01} onChange={set("skinBrightness")} disabled={!realism.skinTone} />
+      <Slider label="Calm cheek redness" value={params.calmRedness} min={0} max={1} step={0.01} onChange={set("calmRedness")} disabled={!realism.skinTone} />
+      <Slider label="Eye brightness (whites)" value={params.eyeBrightness} min={0.8} max={1.5} step={0.01} onChange={set("eyeBrightness")} disabled={!realism.wetEyes} />
+      <Slider label="Brow darkening" value={params.browDarken} min={0} max={1} step={0.01} onChange={set("browDarken")} disabled={!realism.browDefinition} />
+      <Slider label="Brow density" value={params.browDensity} min={1} max={6} step={0.1} onChange={set("browDensity")} disabled={!realism.browDefinition} />
+      <Slider label="Hair reflection" value={params.hairReflection} min={0} max={1} step={0.01} onChange={set("hairReflection")} disabled={!realism.hairTame} />
+      <Slider label="Hair wisp cut-off" value={params.hairCutoff} min={0} max={0.6} step={0.01} onChange={set("hairCutoff")} disabled={!realism.hairTame} />
+      <Slider label="Hair shade" value={params.hairShade} min={0.4} max={1.2} step={0.01} onChange={set("hairShade")} disabled={!realism.hairTame} />
+      <Slider label="Hair roughness" value={params.hairRoughness} min={0.1} max={1} step={0.01} onChange={set("hairRoughness")} disabled={!realism.hairTame} />
     </div>
   );
 }
@@ -306,7 +419,7 @@ function AoControls({ ao, onChange }: { ao: PhaseA["ao"]; onChange: (a: PhaseA["
       />
       <div className={styles.sliders}>
         <Slider label="AO intensity" value={ao.intensity} min={0} max={1} step={0.05} onChange={(intensity) => onChange({ ...ao, intensity })} disabled={!ao.enabled} />
-        <Slider label="AO radius (m)" value={ao.radius} min={0.02} max={0.5} step={0.01} onChange={(radius) => onChange({ ...ao, radius })} disabled={!ao.enabled} />
+        <Slider label="AO radius (m)" value={ao.radius} min={0.02} max={0.5} step={0.005} onChange={(radius) => onChange({ ...ao, radius })} disabled={!ao.enabled} />
       </div>
     </>
   );
@@ -368,6 +481,14 @@ export function PhaseAPanel({ value, onChange }: { value: PhaseA; onChange: (val
         max={12}
         step={0.5}
         onChange={(shadowSoftness) => patch({ shadowSoftness })}
+      />
+      <Slider
+        label="Shadow strength (0 = each light's own)"
+        value={value.shadowStrength}
+        min={0}
+        max={1}
+        step={0.01}
+        onChange={(shadowStrength) => patch({ shadowStrength })}
       />
 
       <h3>Ambient occlusion</h3>

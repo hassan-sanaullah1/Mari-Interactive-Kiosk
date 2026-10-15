@@ -25,13 +25,28 @@ import {
   PhaseAPanel,
   REFERENCE_V1,
   REFERENCE_V2,
+  REFERENCE_V3,
+  REFERENCE_V4,
   Slider,
 } from "@/components/lab/LabControls";
+import {
+  COMPARE_IMAGES,
+  ReferenceOverlay,
+  ReferenceSide,
+  SamplesPanel,
+  useEyedropper,
+  type ColorSample,
+} from "@/components/lab/CompareTools";
 import { DEVICES, MOBILE_BACKDROPS, type DeviceId } from "@/components/lab/devices";
 import { DeviceFrame } from "@/components/lab/DeviceFrame";
-import { kioskRig, type LightName } from "@/components/lab/lab-rig";
+import { diff, kioskRig, type LightName } from "@/components/lab/lab-rig";
 import type { LabSettings } from "@/components/lab/LabScene";
-import { clearLabSettings, loadLabSettings, saveLabSettings } from "@/components/lab/lab-storage";
+import {
+  clearLabSettings,
+  loadLabSettings,
+  saveLabSettings,
+  settingsFromImport,
+} from "@/components/lab/lab-storage";
 import { RigEditor } from "@/components/lab/RigEditor";
 
 // three.js needs WebGL, which exists only in the browser.
@@ -68,6 +83,7 @@ const INITIAL: LabSettings = {
   device: "phone",
   mobileBackdrop: "theme",
   showGuides: true,
+  compare: { mode: "off", opacity: 0.5, image: "/lab/reference.webp" },
 };
 
 function InventoryPanel({ data }: { data: AssetInventory | null }) {
@@ -117,6 +133,7 @@ const ENVIRONMENT_HINT: Record<LabSettings["environment"], string> = {
   panels: "The studio's reflection panels for the theme (STUDIO in tuning.ts).",
   backdrop: "The theme's background picture wrapped round her: she reflects the room she stands in.",
   reference: "The reference portrait's lobby as soft panels: window wall camera-left, ceiling, floor, teal glass.",
+  reference3: "The backdrop behind her (dimmed) plus the key's softbox and a catchlight card, camera-right.",
 };
 
 /** The backdrop picture's style: blurred (the reference's depth of field) when asked. */
@@ -158,6 +175,73 @@ function MobileControls({ settings, set }: { settings: LabSettings; set: Setter 
   );
 }
 
+/** Step 0: the target picture beside or over the render, and the eyedropper. */
+function CompareControls({
+  settings,
+  set,
+  isSampling,
+  onSampling,
+  samples,
+  onClearSamples,
+}: {
+  settings: LabSettings;
+  set: Setter;
+  isSampling: boolean;
+  onSampling: (on: boolean) => void;
+  samples: ColorSample[];
+  onClearSamples: () => void;
+}) {
+  const compare = settings.compare;
+  const setCompare = (part: Partial<LabSettings["compare"]>) => set("compare")({ ...compare, ...part });
+  const loadFile = (file: File | undefined) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setCompare({ image: String(reader.result), mode: compare.mode === "off" ? "side" : compare.mode });
+    reader.readAsDataURL(file);
+  };
+  const isPreset = COMPARE_IMAGES.some(([path]) => path === compare.image);
+  return (
+    <section className={styles.section}>
+      <h2>Compare with the target</h2>
+      <Choice
+        label="Target picture"
+        value={compare.mode}
+        options={[
+          ["off", "Hidden"],
+          ["side", "Beside"],
+          ["overlay", "Over the render"],
+        ]}
+        onChange={(mode) => setCompare({ mode })}
+      />
+      <Choice
+        label="Which picture"
+        value={isPreset ? compare.image : "file"}
+        options={[...COMPARE_IMAGES, ["file", "Loaded file"] as const]}
+        disabled={isPreset ? ["file"] : []}
+        onChange={(image) => image !== "file" && setCompare({ image })}
+      />
+      <label className={styles.file}>
+        Load a picture from disk
+        <input type="file" accept="image/*" onChange={(event) => loadFile(event.target.files?.[0])} />
+      </label>
+      {compare.mode === "overlay" && (
+        <Slider label="Overlay opacity" value={compare.opacity} min={0} max={1} step={0.01} onChange={(opacity) => setCompare({ opacity })} />
+      )}
+      <Choice
+        label="Eyedropper"
+        value={isSampling ? "on" : "off"}
+        options={[
+          ["off", "Off"],
+          ["on", "On: click render or target"],
+        ]}
+        onChange={(v) => onSampling(v === "on")}
+        hint="Samples a 9x9 px average. Compare the same spot on both: forehead, lit cheek, shadow cheek, under the jaw."
+      />
+      <SamplesPanel samples={samples} onClear={onClearSamples} />
+    </section>
+  );
+}
+
 /** The canvas, full window over the landscape artwork, or inside a portrait device frame. */
 function LabStage({
   settings,
@@ -171,17 +255,27 @@ function LabStage({
   children: ReactNode;
 }) {
   const flat = backdrop === "artwork" ? undefined : BACKDROP_COLOR[backdrop];
+  const { compare } = settings;
+  const overlay = compare.mode === "overlay" ? <ReferenceOverlay image={compare.image} opacity={compare.opacity} /> : null;
+  const side = compare.mode === "side" ? <ReferenceSide image={compare.image} /> : null;
   if (settings.layout === "mobile") {
     return (
-      <DeviceFrame settings={settings} backdrop={flat} isPanelOpen={isPanelOpen}>
-        {children}
-      </DeviceFrame>
+      <>
+        <DeviceFrame settings={settings} backdrop={flat} isPanelOpen={isPanelOpen} overlay={overlay}>
+          {children}
+        </DeviceFrame>
+        {side}
+      </>
     );
   }
   return (
     <>
       {!flat && <div className={bgStyles.bg} style={backdropStyle(settings.backdropBlur)} aria-hidden />}
-      <div className={styles.stage}>{children}</div>
+      <div className={styles.stage}>
+        {children}
+        {overlay}
+      </div>
+      {side}
     </>
   );
 }
@@ -230,6 +324,13 @@ export default function LabPage() {
   }, [settings.theme]);
 
   const onReady = useCallback(() => setIsLoading(false), []);
+  const [isSampling, setIsSampling] = useState(false);
+  const [samples, setSamples] = useState<ColorSample[]>([]);
+  const onSample = useCallback(
+    (sample: Omit<ColorSample, "id">) => setSamples((list) => [{ ...sample, id: Date.now() }, ...list].slice(0, 12)),
+    [],
+  );
+  useEyedropper(isSampling, onSample);
   const onMoveLight = useCallback((name: LightName, position: [number, number, number]) => {
     setSettings((s) => {
       const rig = structuredClone(s.rig);
@@ -241,6 +342,17 @@ export default function LabPage() {
   // Recorded in the export, so the values come with the scene they were judged in.
   const { rig: _rig, editLight: _editLight, showHandles: _showHandles, ...sceneSettings } = settings;
   const exportScene = { ...sceneSettings, backdrop };
+
+  const onImport = (text: string): string => {
+    const result = settingsFromImport(settings, text);
+    if (!result.ok) return `Import failed: ${result.error}`;
+    setSettings(result.settings);
+    if (result.backdrop === "artwork" || (typeof result.backdrop === "string" && result.backdrop in BACKDROP_COLOR)) {
+      setBackdrop(result.backdrop as Backdrop);
+    }
+    const changes = diff(kioskRig(), result.settings.rig).length;
+    return `Imported ${result.source === "export" ? "a lab export" : "lab settings"}: ${changes} value(s) differ from the kiosk. Keep editing; Export saves the new version.`;
+  };
 
   const scene = (
     <LabScene
@@ -288,6 +400,12 @@ export default function LabPage() {
               }}
             >
               Reference v2 (face)
+            </button>
+            <button type="button" onClick={() => setSettings((s) => ({ ...s, ...REFERENCE_V3 }))}>
+              Reference v3 (measured)
+            </button>
+            <button type="button" onClick={() => setSettings((s) => ({ ...s, ...REFERENCE_V4 }))}>
+              Reference v4
             </button>
             <button type="button" onClick={() => setSettings((s) => ({ ...s, ...KIOSK_PHASE_A, ...KIOSK_TODAY }))}>
               Kiosk today
@@ -343,6 +461,7 @@ export default function LabPage() {
               ["studio", "Kiosk studio"],
               ["editable", "Kiosk studio (editable)"],
               ["reference", "Reference v1"],
+              ["reference3", "Reference v3"],
             ]}
             onChange={set("lights")}
           />
@@ -354,6 +473,7 @@ export default function LabPage() {
               ["panels", "Studio panels"],
               ["backdrop", "Backdrop image"],
               ["reference", "Reference lobby"],
+              ["reference3", "Reference v3 (room + highlights)"],
             ]}
             onChange={set("environment")}
             hint={ENVIRONMENT_HINT[settings.environment]}
@@ -451,6 +571,15 @@ export default function LabPage() {
             hint={settings.camera === "kiosk" ? undefined : "Drag to orbit, scroll to zoom, right-drag to pan."}
           />
 
+          <CompareControls
+            settings={settings}
+            set={set}
+            isSampling={isSampling}
+            onSampling={setIsSampling}
+            samples={samples}
+            onClearSamples={() => setSamples([])}
+          />
+
           <RigEditor
             rig={settings.rig}
             onChange={set("rig")}
@@ -462,6 +591,7 @@ export default function LabPage() {
             showHandles={settings.showHandles}
             onShowHandles={set("showHandles")}
             scene={exportScene}
+            onImport={onImport}
             visible={{
               lights: settings.lights === "editable",
               camera: settings.camera === "editable",

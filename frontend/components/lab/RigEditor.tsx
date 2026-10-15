@@ -170,8 +170,27 @@ function CameraEditor({
   );
 }
 
-function ExportBar({ rig, scene }: { rig: LabRig; scene: Record<string, unknown> }) {
+function ExportBar({
+  rig,
+  scene,
+  onImport,
+}: {
+  rig: LabRig;
+  scene: Record<string, unknown>;
+  onImport: (text: string) => string;
+}) {
   const [copied, setCopied] = useState(false);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
+  const importFile = async (file: File | undefined) => {
+    if (file) setImportStatus(onImport(await file.text()));
+  };
+  const importClipboard = async () => {
+    try {
+      setImportStatus(onImport(await navigator.clipboard.readText()));
+    } catch {
+      setImportStatus("Could not read the clipboard (the browser may have blocked it). Load the file instead.");
+    }
+  };
   const changes = diff(kioskRig(), rig).length;
   const document_ = () => JSON.stringify(buildExport(rig, scene), null, 2);
   const download = () => {
@@ -201,6 +220,27 @@ function ExportBar({ rig, scene }: { rig: LabRig; scene: Record<string, unknown>
           {copied ? "Copied" : "Copy JSON"}
         </button>
       </div>
+      <p className={styles.hint}>
+        Import an export (yours or a teammate&apos;s) to render the avatar exactly as it was set, then keep editing.
+        Settings the file does not mention keep their current values.
+      </p>
+      <div className={styles.row}>
+        <label className={styles.fileButton}>
+          Import JSON
+          <input
+            type="file"
+            accept="application/json,.json"
+            onChange={(event) => {
+              void importFile(event.target.files?.[0]);
+              event.target.value = "";
+            }}
+          />
+        </label>
+        <button type="button" onClick={() => void importClipboard()}>
+          Paste JSON
+        </button>
+      </div>
+      {importStatus && <p className={styles.importStatus}>{importStatus}</p>}
     </>
   );
 }
@@ -221,6 +261,8 @@ interface RigEditorProps {
   visible: { lights: boolean; camera: boolean; panels: boolean };
   /** Switch the scene to show the editable lights, panels and framing. */
   onShowEdits: () => void;
+  /** Apply an imported export; returns a message for the panel. */
+  onImport: (text: string) => string;
 }
 
 /**
@@ -246,7 +288,7 @@ function HiddenEditsNotice({ visible, onShowEdits }: Pick<RigEditorProps, "visib
 
 export function RigEditor(props: RigEditorProps) {
   const { rig, onChange, theme, presenter, layout, editLight, onEditLight, showHandles, onShowHandles, scene } = props;
-  const { visible, onShowEdits } = props;
+  const { visible, onShowEdits, onImport } = props;
   const update: Update = (change) => {
     const next = structuredClone(rig);
     change(next);
@@ -304,8 +346,8 @@ export function RigEditor(props: RigEditorProps) {
         </button>
       </div>
 
-      <h3>Export</h3>
-      <ExportBar rig={rig} scene={scene} />
+      <h3>Export and import</h3>
+      <ExportBar rig={rig} scene={scene} onImport={onImport} />
     </section>
   );
 }

@@ -43,12 +43,19 @@ import { EditablePanels, EditableStudioLights, LabFraming, LightHandles } from "
 import type { DeviceId } from "./devices";
 import type { LabRig, Layout, LightName } from "./lab-rig";
 import RawModel, { type LabPose } from "./RawModel";
-import { REFERENCE_ENVIRONMENT, REFERENCE_LIGHTS } from "./reference-look";
+import { MOBILE_BACKDROP_DEFAULT } from "./devices";
+import {
+  REFERENCE_ENVIRONMENT,
+  REFERENCE_LIGHTS,
+  REFERENCE_V3_ENVIRONMENT,
+  REFERENCE_V3_LIGHTS,
+  type ReferencePanel,
+} from "./reference-look";
 import { applyMaterialView, inventory, type AssetInventory, type MaterialView } from "./lab-tools";
 
 export type LabLook = "raw" | "kiosk";
-export type LabLights = "off" | "studio" | "editable" | "reference";
-export type LabEnvironment = "room" | "panels" | "backdrop" | "reference";
+export type LabLights = "off" | "studio" | "editable" | "reference" | "reference3";
+export type LabEnvironment = "room" | "panels" | "backdrop" | "reference" | "reference3";
 export type LabCamera = "kiosk" | "editable" | "orbit-face" | "orbit-body" | "orbit-wide";
 export type LabTone = "aces" | "agx" | "neutral" | "linear" | "none";
 
@@ -79,6 +86,12 @@ export interface LabSettings {
    * renderer switches to VSM shadows blurred by this radius.
    */
   shadowSoftness: number;
+  /**
+   * Overrides every casting light's shadow darkness (0-1); 0 leaves each
+   * light's own value. The jaw's shadow on the neck comes from here: AO wide
+   * enough to draw it also darkened the open cheeks.
+   */
+  shadowStrength: number;
   theme: Theme;
   tone: LabTone;
   view: MaterialView;
@@ -97,6 +110,8 @@ export interface LabSettings {
   mobileBackdrop: string;
   /** Outline where the portrait controls sit. */
   showGuides: boolean;
+  /** Step 0: the target picture beside or over the render. The page draws it. */
+  compare: { mode: "off" | "side" | "overlay"; opacity: number; image: string };
 }
 
 interface LabSceneProps {
@@ -164,18 +179,38 @@ function RoomEnvironmentMap() {
  * nothing directly — the background itself is still the CSS image behind the
  * canvas, which this never draws (no `background` prop).
  */
-function BackdropEnvironment({ theme, strength }: { theme: Theme; strength: number }) {
-  const texture = useTexture(BACKDROP_IMAGE[theme]);
+function BackdropEnvironment({
+  image,
+  strength,
+  panels = [],
+  resolution = 256,
+}: {
+  image: string;
+  strength: number;
+  /** Extra highlight panels baked into the same environment. */
+  panels?: ReferencePanel[];
+  resolution?: number;
+}) {
+  const texture = useTexture(image);
   texture.colorSpace = THREE.SRGBColorSpace;
   const color = useMemo(() => new THREE.Color(strength, strength, strength), [strength]);
   return (
-    <Environment key={`${theme}-${strength}`} resolution={256}>
+    <Environment key={`${image}-${strength}-${panels.length}`} resolution={resolution}>
       <mesh rotation={[0, Math.PI / 2, 0]} scale={[-50, 50, 50]}>
         <sphereGeometry args={[1, 64, 32]} />
         <meshBasicMaterial map={texture} color={color} side={THREE.BackSide} toneMapped={false} />
       </mesh>
+      {panels.map((panel, i) => (
+        <Lightformer key={i} {...panel} />
+      ))}
     </Environment>
   );
+}
+
+/** The picture behind her right now: the portrait artwork in the mobile frame, else the landscape one. */
+function currentBackdrop(settings: LabSettings): string {
+  if (settings.layout === "desktop") return BACKDROP_IMAGE[settings.theme];
+  return settings.mobileBackdrop === "theme" ? MOBILE_BACKDROP_DEFAULT[settings.theme] : settings.mobileBackdrop;
 }
 
 /** The reference portrait's lobby as soft panels (reference-look.ts). */
@@ -196,7 +231,20 @@ function EnvironmentChoice({ settings }: { settings: LabSettings }) {
   if (settings.environment === "backdrop") {
     return (
       <Suspense fallback={null}>
-        <BackdropEnvironment theme={settings.theme} strength={settings.backdropStrength} />
+        <BackdropEnvironment image={currentBackdrop(settings)} strength={settings.backdropStrength} />
+      </Suspense>
+    );
+  }
+  if (settings.environment === "reference3") {
+    // Step 8: the room she stands in, plus the key's highlight and the catchlight.
+    return (
+      <Suspense fallback={null}>
+        <BackdropEnvironment
+          image={currentBackdrop(settings)}
+          strength={REFERENCE_V3_ENVIRONMENT.backdropStrength}
+          panels={REFERENCE_V3_ENVIRONMENT.panels}
+          resolution={REFERENCE_V3_ENVIRONMENT.resolution}
+        />
       </Suspense>
     );
   }
@@ -222,10 +270,11 @@ function StudioLights({ config, theme, state }: { config: AvatarConfig; theme: T
  * broad fill camera-right, cool rims from behind, sky-over-floor bounce. Fixed
  * rather than eased per conversation state: the reference is one moment.
  */
-function ReferenceLights() {
+function ReferenceLights({ rig = REFERENCE_LIGHTS }: { rig?: typeof REFERENCE_LIGHTS | typeof REFERENCE_V3_LIGHTS }) {
   const { gl, scene } = useThree();
   const keyRef = useRef<THREE.DirectionalLight>(null);
-  const { key, fill, rimLeft, rimRight, hemisphere, shadow } = REFERENCE_LIGHTS;
+  const { key, fill, rimLeft, rimRight, hemisphere, shadow } = rig;
+  const extent = "extent" in shadow ? shadow.extent : 1;
   useEffect(() => {
     // Whatever the studio eased these towards, the reference starts from neutral.
     gl.toneMappingExposure = 1;
@@ -250,10 +299,10 @@ function ReferenceLights() {
         shadow-mapSize-height={2048}
         shadow-bias={-0.0002}
         shadow-normalBias={0.01}
-        shadow-camera-left={-1}
-        shadow-camera-right={1}
-        shadow-camera-top={1}
-        shadow-camera-bottom={-1}
+        shadow-camera-left={-extent}
+        shadow-camera-right={extent}
+        shadow-camera-top={extent}
+        shadow-camera-bottom={-extent}
         shadow-camera-near={0.5}
         shadow-camera-far={8}
       />
@@ -326,7 +375,7 @@ function SurfaceController({
  * Blur radius for every shadow-casting light in the scene. Only VSM shadows
  * honour it; the canvas switches to VSM whenever softness is above 0.
  */
-function ShadowSoftness({ radius }: { radius: number }) {
+function ShadowSoftness({ radius, strength }: { radius: number; strength: number }) {
   const scene = useThree((s) => s.scene);
   useFrame(() => {
     scene.traverse((object) => {
@@ -336,6 +385,8 @@ function ShadowSoftness({ radius }: { radius: number }) {
         light.shadow.radius = radius;
         light.shadow.blurSamples = 16;
       }
+      // Each frame, after the lights' own effects have set theirs.
+      if (strength > 0) light.shadow.intensity = strength;
     });
   });
   return null;
@@ -455,7 +506,8 @@ export default function LabScene({ settings, onInventory, onReady, onSelectLight
       dpr={[1, 2]}
       shadows={settings.shadowSoftness > 0 ? "variance" : "soft"}
       // antialias is load-bearing: hair alpha-to-coverage needs the MSAA samples.
-      gl={{ antialias: true, alpha: true, toneMapping: THREE.ACESFilmicToneMapping }}
+      // preserveDrawingBuffer: the compare eyedropper reads pixels back after the frame.
+      gl={{ antialias: true, alpha: true, toneMapping: THREE.ACESFilmicToneMapping, preserveDrawingBuffer: true }}
       camera={{ position: [0, 1.26, 4], fov: 20, near: 0.05, far: 100, manual: true }}
       onCreated={({ gl }) => gl.setClearColor(0x000000, 0)}
       style={{ background: "transparent" }}
@@ -464,6 +516,7 @@ export default function LabScene({ settings, onInventory, onReady, onSelectLight
       <CameraRig settings={settings} config={config} modelHeight={modelHeight} />
       {settings.lights === "studio" && <StudioLights config={config} theme={settings.theme} state={state} />}
       {settings.lights === "reference" && <ReferenceLights />}
+      {settings.lights === "reference3" && <ReferenceLights key="v3" rig={REFERENCE_V3_LIGHTS} />}
       {settings.lights === "editable" && (
         <EditableLights
           settings={settings}
@@ -477,7 +530,7 @@ export default function LabScene({ settings, onInventory, onReady, onSelectLight
       <EnvironmentChoice settings={settings} />
       <SurfaceController config={config} realism={settings.realism} view={settings.view} version={version} />
       <RealismParamsSync params={settings.realismParams} />
-      <ShadowSoftness radius={Math.max(1, settings.shadowSoftness)} />
+      <ShadowSoftness radius={Math.max(1, settings.shadowSoftness)} strength={settings.shadowStrength} />
       {(settings.ao.enabled || settings.grade.enabled) && <PostEffects ao={settings.ao} grade={settings.grade} />}
 
       <Suspense fallback={null}>

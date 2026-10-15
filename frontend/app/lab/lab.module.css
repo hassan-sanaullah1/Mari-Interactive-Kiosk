@@ -370,3 +370,93 @@
   font: inherit;
   cursor: pointer;
 }
+
+/* ── Compare with the target ──────────────────────────────────────── */
+
+.referenceSide {
+  position: fixed;
+  left: 12px;
+  top: 50%;
+  z-index: 25;
+  max-width: 28vw;
+  max-height: 86vh;
+  transform: translateY(-50%);
+  border: 2px solid rgb(255 255 255 / 0.25);
+  border-radius: 10px;
+  box-shadow: 0 10px 40px rgb(0 0 0 / 0.5);
+}
+
+.referenceOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center bottom;
+  pointer-events: none;
+}
+
+.file {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 12px;
+  color: #9fb0c2;
+  font-size: 12px;
+}
+
+.samples {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.samples th,
+.samples td {
+  padding: 3px 4px;
+  border-bottom: 1px solid rgb(255 255 255 / 0.06);
+  text-align: left;
+}
+
+.samples th {
+  color: #9fb0c2;
+  font-weight: 500;
+}
+
+.swatch {
+  display: inline-block;
+  width: 18px;
+  height: 14px;
+  border: 1px solid rgb(255 255 255 / 0.3);
+  border-radius: 3px;
+}
+
+.fileButton {
+  position: relative;
+  padding: 5px 9px;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: 5px;
+  background: rgb(255 255 255 / 0.06);
+  cursor: pointer;
+}
+
+.fileButton:hover {
+  background: rgb(255 255 255 / 0.12);
+}
+
+/* The real input covers the label invisibly, so the whole button opens the picker. */
+.fileButton input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.importStatus {
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  border-radius: 5px;
+  background: rgb(255 255 255 / 0.06);
+  font-size: 12px;
+}

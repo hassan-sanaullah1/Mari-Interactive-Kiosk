@@ -53,3 +53,38 @@ export function clearLabSettings(): void {
     // Nothing to clear.
   }
 }
+
+export type ImportResult =
+  | { ok: true; settings: LabSettings; backdrop: unknown; source: "export" | "settings" }
+  | { ok: false; error: string };
+
+/**
+ * Turn an imported file back into lab settings.
+ *
+ * Accepts the lab's own export (buildExport: `rig` plus the `scene` it was
+ * judged in) or a bare settings object. Laid over `base` field by field, like a
+ * saved session: anything the file lacks (a setting added since it was
+ * exported, or the editor's own selection) keeps its current value, and
+ * anything of the wrong shape is ignored rather than trusted.
+ */
+export function settingsFromImport(base: LabSettings, text: string): ImportResult {
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return { ok: false, error: "Not valid JSON." };
+  }
+  if (!isObject(data)) return { ok: false, error: "The file does not hold an object." };
+
+  if (data.kind === "mari-avatar-lab-export") {
+    if (!isObject(data.rig) || !isObject(data.scene)) {
+      return { ok: false, error: "A lab export, but its rig or scene is missing." };
+    }
+    const { backdrop, ...scene } = data.scene;
+    return { ok: true, settings: merge(base, { ...scene, rig: data.rig }), backdrop, source: "export" };
+  }
+  if (isObject(data.rig) && "look" in data) {
+    return { ok: true, settings: merge(base, data), backdrop: undefined, source: "settings" };
+  }
+  return { ok: false, error: "Not a lab export: expected kind \"mari-avatar-lab-export\"." };
+}
