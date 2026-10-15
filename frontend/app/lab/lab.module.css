@@ -1,0 +1,372 @@
+/* The avatar lab: a full-screen canvas over the backdrop, controls on the right. */
+
+.root {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  color: #e8eef5;
+  font-family: var(--font-ui), system-ui, sans-serif;
+  font-size: 13px;
+}
+
+/* Full screen, and unlike the kiosk's stage it takes pointer input, so the
+   orbit camera can be dragged. */
+.stage {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+}
+
+.stage > div {
+  position: absolute;
+  inset: 0;
+}
+
+.stage canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.loading {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 20;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.6);
+}
+
+.toggle {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 40;
+  padding: 6px 10px;
+  border: 1px solid rgb(255 255 255 / 0.2);
+  border-radius: 6px;
+  background: rgb(10 16 24 / 0.85);
+  color: inherit;
+  cursor: pointer;
+}
+
+.panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  width: min(380px, 100vw);
+  padding: 48px 16px 24px;
+  overflow-y: auto;
+  background: rgb(10 16 24 / 0.86);
+  backdrop-filter: blur(8px);
+  border-left: 1px solid rgb(255 255 255 / 0.08);
+}
+
+.panel h1 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.group {
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+}
+
+.group legend {
+  margin-bottom: 4px;
+  color: #9fb0c2;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.segments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.segments button {
+  padding: 5px 9px;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: 5px;
+  background: rgb(255 255 255 / 0.04);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.segments button:hover:not(:disabled) {
+  background: rgb(255 255 255 / 0.1);
+}
+
+.segments button.on {
+  border-color: #0f88ee;
+  background: #0077dc;
+}
+
+.segments button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.hint {
+  margin: 4px 0 0;
+  color: #9fb0c2;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.inventory {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgb(255 255 255 / 0.1);
+}
+
+.inventory summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.coverage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.coverage span {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.have {
+  background: rgb(34 197 94 / 0.25);
+}
+
+.missing {
+  background: rgb(239 68 68 / 0.25);
+}
+
+.inventory table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.inventory th,
+.inventory td {
+  padding: 3px 4px;
+  border-bottom: 1px solid rgb(255 255 255 / 0.06);
+  text-align: left;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+.inventory th {
+  color: #9fb0c2;
+  font-weight: 500;
+}
+
+.section {
+  margin: 16px 0 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgb(255 255 255 / 0.1);
+}
+
+.section h2 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+.row {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.row button {
+  padding: 5px 9px;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: 5px;
+  background: rgb(255 255 255 / 0.06);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.row button:hover {
+  background: rgb(255 255 255 / 0.12);
+}
+
+.section h3 {
+  margin: 14px 0 6px;
+  color: #cfe0f2;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sliders {
+  display: grid;
+  gap: 6px;
+  margin: 4px 0 12px;
+}
+
+.slider {
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.slider span {
+  display: flex;
+  justify-content: space-between;
+  color: #9fb0c2;
+}
+
+.slider output {
+  color: #e8eef5;
+  font-variant-numeric: tabular-nums;
+}
+
+.slider input {
+  width: 100%;
+  accent-color: #0077dc;
+}
+
+.slider[data-disabled="true"] {
+  opacity: 0.4;
+}
+
+.color {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 6px;
+  color: #9fb0c2;
+  font-size: 12px;
+}
+
+.color input {
+  width: 32px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 0.2);
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+}
+
+.color code {
+  color: #e8eef5;
+  font-size: 11px;
+}
+
+.panelRow {
+  display: grid;
+  gap: 4px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgb(255 255 255 / 0.06);
+}
+
+/* ── Mobile device frame ───────────────────────────────────────────── */
+
+.deviceArea {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  background: #11161d;
+}
+
+.device {
+  position: relative;
+  max-width: 100%;
+  max-height: calc(100% - 28px);
+  overflow: hidden;
+  border: 3px solid #2a2f37;
+  border-radius: 28px;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 0.5);
+}
+
+.deviceBg {
+  position: absolute;
+  inset: 0;
+  background-position: center bottom;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+/* The kiosk's portrait stage: full width, bottom 79% (AvatarStage.module.css). */
+.deviceStage {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.deviceStage > div {
+  position: absolute;
+  inset: 0;
+}
+
+.deviceStage canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.guides {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.guides > div {
+  position: absolute;
+  border: 1.5px dashed rgb(255 196 0 / 0.9);
+  background: rgb(255 196 0 / 0.08);
+}
+
+.deviceLabel {
+  color: #9fb0c2;
+  font-size: 12px;
+}
+
+.notice {
+  margin: 8px 0 12px;
+  padding: 8px 10px;
+  border: 1px solid rgb(255 196 0 / 0.5);
+  border-radius: 6px;
+  background: rgb(255 196 0 / 0.1);
+  font-size: 12px;
+}
+
+.notice p {
+  margin: 0 0 6px;
+  color: #ffe08a;
+}
+
+.notice button {
+  padding: 4px 8px;
+  border: 1px solid rgb(255 196 0 / 0.6);
+  border-radius: 5px;
+  background: rgb(255 196 0 / 0.15);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}

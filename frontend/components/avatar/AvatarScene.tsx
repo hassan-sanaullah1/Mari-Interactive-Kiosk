@@ -88,7 +88,7 @@ fetchAvatar(avatarConfig(readAvatar()).url).catch(() => {
  * the stage resizes (breakpoint change, rotation, window drag) without any
  * resize listener of our own.
  */
-function Framing({
+export function Framing({
   modelHeight,
   widthSqueeze = 1,
   lensMm = CAMERA.lensMm,
@@ -238,7 +238,7 @@ const DARK_STUDIO_PLACEMENT = STUDIO.dark.placement;
 const SHADOW = STUDIO.dark.shadow;
 type LightName = (typeof LIGHT_NAMES)[number];
 
-function DynamicLighting({
+export function DynamicLighting({
   state = "idle",
   levelRef,
   headTargetY,

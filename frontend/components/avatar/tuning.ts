@@ -132,7 +132,7 @@ export interface Studio {
 const DARK_STUDIO: Studio = {
   ambientColor: "#ffffff",
   colors: {
-    key: "#ffe4c9",
+     key: "#ffe4c9",
     fill: "#c9d6ff",
     rim: "#4fd8e8",
     kick: "#3fd39a",
