@@ -24509,8 +24509,11 @@
      "demo": false
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "reply",
@@ -24518,8 +24521,11 @@
      "demo": false
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "reply",
@@ -24527,8 +24533,11 @@
      "demo": false
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "done",
@@ -24562,7 +24571,32 @@
      "kind": "tts",
      "payload": {
       "text": "وعلیکم السلام، میں مریم ہوں، Mari Energies کی نمائندہ۔",
-      "speed": 1.0
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "ہم نے 1954 میں ڈہرکی میں Mari Gas Field دریافت کیا تھا۔",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "Sky47 کے کلاؤڈ انفرا اسٹرکچر میں Huawei Ascend NPU کلسٹرز استعمال ہوتے ہیں؟",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "مزید معلومات کے لیے marienergies.com.pk دیکھیں۔",
+      "speed": 1.0,
+      "voice": "f"
      }
     }
    ]
@@ -24580,8 +24614,11 @@
      "demo": false
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "reply",
@@ -24589,8 +24626,11 @@
      "demo": false
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "reply",
@@ -24598,12 +24638,15 @@
      "demo": false
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "done",
-     "spoken": false
+     "spoken": true
     }
    ],
    "net": [
@@ -24640,6 +24683,30 @@
        "enable_thinking": false
       }
      }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "میں بتا سکتا ہوں کہ PKR 65.14bn منافع ہوا، اور کمپنی کی سبسڈیری Mari Minerals کاپر اور گولڈ پر کام کرتی ہے۔",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "MD/CEO Faheem Haider ہیں…",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "میتھین مٹیگیشن GEM Energy کا کام ہے۔",
+      "speed": 1.0,
+      "voice": "f"
+     }
     }
    ]
   },
@@ -24656,8 +24723,11 @@
      "demo": false
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "reply",
@@ -24665,8 +24735,11 @@
      "demo": false
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "reply",
@@ -24674,8 +24747,11 @@
      "demo": false
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "reply",
@@ -24683,12 +24759,15 @@
      "demo": false
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "done",
-     "spoken": false
+     "spoken": true
     }
    ],
    "net": [
@@ -24713,6 +24792,38 @@
        "enable_thinking": false
       }
      }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "السلام علیکم، میں مریم ہوں، Mari Energies کی نمائندہ۔",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "ہم نے 1954 میں ڈہرکی میں Mari Gas Field دریافت کیا تھا۔",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "Sky47 کے کلاؤڈ انفرا اسٹرکچر میں Huawei Ascend NPU کلسٹرز استعمال ہوتے ہیں؟",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "مزید معلومات کے لیے marienergies.com.pk دیکھیں۔",
+      "speed": 1.0,
+      "voice": "f"
+     }
     }
    ]
   },
@@ -24729,8 +24840,11 @@
      "demo": true
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "reply",
@@ -24738,8 +24852,11 @@
      "demo": true
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "reply",
@@ -24747,8 +24864,11 @@
      "demo": true
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "reply",
@@ -24756,12 +24876,15 @@
      "demo": true
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "done",
-     "spoken": false
+     "spoken": true
     }
    ],
    "net": [
@@ -24829,6 +24952,38 @@
       "chat_template_kwargs": {
        "enable_thinking": false
       }
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "میں نے آپ کی بات سن لی، لیکن لینگویج ماڈل تک رسائی نہیں، اس لیے ابھی Mari Energies کی معلومات سے جواب نہیں دے سکتی۔",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "یہی تفصیل marienergies.",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "com.",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "pk پر موجود ہے۔",
+      "speed": 1.0,
+      "voice": "f"
      }
     }
    ]
@@ -24846,8 +25001,11 @@
      "demo": false
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "reply",
@@ -24855,8 +25013,11 @@
      "demo": false
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "reply",
@@ -24864,12 +25025,15 @@
      "demo": false
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "done",
-     "spoken": false
+     "spoken": true
     }
    ],
    "net": [
@@ -24893,6 +25057,30 @@
       "chat_template_kwargs": {
        "enable_thinking": false
       }
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "وعلیکم السلام، میں مریم ہوں، Mari Energies کی نمائندہ۔",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "ہم نے 1954 میں ڈہرکی میں Mari Gas Field دریافت کیا تھا۔",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "Sky47",
+      "speed": 1.0,
+      "voice": "f"
      }
     }
    ]
@@ -24910,8 +25098,11 @@
      "demo": true
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "reply",
@@ -24919,8 +25110,11 @@
      "demo": true
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "reply",
@@ -24928,8 +25122,11 @@
      "demo": true
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "reply",
@@ -24937,12 +25134,15 @@
      "demo": true
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "done",
-     "spoken": false
+     "spoken": true
     }
    ],
    "net": [
@@ -25011,6 +25211,38 @@
        "enable_thinking": false
       }
      }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "میں نے آپ کی بات سن لی، لیکن لینگویج ماڈل تک رسائی نہیں، اس لیے ابھی Mari Energies کی معلومات سے جواب نہیں دے سکتی۔",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "یہی تفصیل marienergies.",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "com.",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "pk پر موجود ہے۔",
+      "speed": 1.0,
+      "voice": "f"
+     }
     }
    ]
   },
@@ -25027,15 +25259,27 @@
      "demo": true
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "done",
-     "spoken": false
+     "spoken": true
     }
    ],
-   "net": []
+   "net": [
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "معاف کیجیے، میں سن نہیں سکی۔ ذرا دوبارہ کہیے گا؟",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    }
+   ]
   },
   "ws/ur/female/empty_silent": {
    "socket": [
@@ -25059,8 +25303,11 @@
      "demo": false
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "reply",
@@ -25068,8 +25315,11 @@
      "demo": false
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "reply",
@@ -25077,8 +25327,11 @@
      "demo": false
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "reply",
@@ -25086,12 +25339,15 @@
      "demo": false
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "done",
-     "spoken": false
+     "spoken": true
     }
    ],
    "net": [
@@ -25115,6 +25371,38 @@
       "chat_template_kwargs": {
        "enable_thinking": false
       }
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "السلام علیکم، میں مریم ہوں، Mari Energies کی نمائندہ۔",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "ہم نے 1954 میں ڈہرکی میں Mari Gas Field دریافت کیا تھا۔",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "Sky47 کے کلاؤڈ انفرا اسٹرکچر میں Huawei Ascend NPU کلسٹرز استعمال ہوتے ہیں؟",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "مزید معلومات کے لیے marienergies.com.pk دیکھیں۔",
+      "speed": 1.0,
+      "voice": "f"
      }
     }
    ]
@@ -25235,7 +25523,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -25247,7 +25535,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -25259,7 +25547,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -25271,7 +25559,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -25307,37 +25595,33 @@
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "وعلیکم السلام، میں مریم ہوں، ماڑی Energies کا نمائندہ۔",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "وعلیکم السلام، میں مریم ہوں، Mari Energies کا نمائندہ۔",
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "ہم نے انیس سو چون میں ڈھرکی میں ماڑی Gas Field دریافت کیا تھا۔",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "ہم نے 1954 میں ڈہرکی میں Mari Gas Field دریافت کیا تھا۔",
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "Sky Forty Seven کے Cloud infrastructure میں ہواوے Ascend این پی یو klusturz استعمال ہوتے ہیں؟",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "Sky47 کے کلاؤڈ انفرا اسٹرکچر میں Huawei Ascend NPU کلسٹرز استعمال ہوتے ہیں؟",
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "مزید معلومات کے لیے ماڑی Energies ڈاٹ کام ڈاٹ پی کے دیکھیں۔",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "مزید معلومات کے لیے marienergies.com.pk دیکھیں۔",
+      "speed": 1.0,
+      "voice": "m"
      }
     }
    ]
@@ -25356,7 +25640,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -25368,7 +25652,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -25380,7 +25664,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -25428,28 +25712,25 @@
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "میں بتا سکتا ہوں کہ 65.14 بلین روپے منافع ہوا، اور کمپنی کی سب سِڈی ری ماڑی Minerals copper اور gold پر کام کرتی ہے۔",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "میں بتا سکتا ہوں کہ PKR 65.14bn منافع ہوا، اور کمپنی کی سبسڈیری Mari Minerals کاپر اور گولڈ پر کام کرتی ہے۔",
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "ایم ڈی اور سی ای او فہیم حیدر ہیں…",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "MD/CEO Faheem Haider ہیں…",
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "methayn mitigation جیم Energy کا کام ہے۔",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "میتھین مٹیگیشن GEM Energy کا کام ہے۔",
+      "speed": 1.0,
+      "voice": "m"
      }
     }
    ]
@@ -25468,7 +25749,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -25480,7 +25761,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -25492,7 +25773,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -25504,7 +25785,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -25540,37 +25821,33 @@
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "السلام علیکم، میں مریم ہوں، ماڑی Energies کا نمائندہ۔",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "السلام علیکم، میں مریم ہوں، Mari Energies کا نمائندہ۔",
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "ہم نے انیس سو چون میں ڈھرکی میں ماڑی Gas Field دریافت کیا تھا۔",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "ہم نے 1954 میں ڈہرکی میں Mari Gas Field دریافت کیا تھا۔",
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "Sky Forty Seven کے Cloud infrastructure میں ہواوے Ascend این پی یو klusturz استعمال ہوتے ہیں؟",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "Sky47 کے کلاؤڈ انفرا اسٹرکچر میں Huawei Ascend NPU کلسٹرز استعمال ہوتے ہیں؟",
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "مزید معلومات کے لیے ماڑی Energies ڈاٹ کام ڈاٹ پی کے دیکھیں۔",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "مزید معلومات کے لیے marienergies.com.pk دیکھیں۔",
+      "speed": 1.0,
+      "voice": "m"
      }
     }
    ]
@@ -25589,7 +25866,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -25601,7 +25878,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -25613,7 +25890,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -25625,7 +25902,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -25705,37 +25982,33 @@
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "میں نے آپ کی بات سن لی، لیکن لینگویج ماڈل تک رسائی نہیں، اس لیے ابھی ماڑی Energies کی معلومات سے جواب نہیں دے سکتا۔",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "میں نے آپ کی بات سن لی، لیکن لینگویج ماڈل تک رسائی نہیں، اس لیے ابھی Mari Energies کی معلومات سے جواب نہیں دے سکتا۔",
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
       "text": "یہی تفصیل marienergies.",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
       "text": "com.",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
       "text": "pk پر موجود ہے۔",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "speed": 1.0,
+      "voice": "m"
      }
     }
    ]
@@ -25754,7 +26027,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -25766,7 +26039,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -25778,7 +26051,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -25814,28 +26087,25 @@
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "وعلیکم السلام، میں مریم ہوں، ماڑی Energies کا نمائندہ۔",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "وعلیکم السلام، میں مریم ہوں، Mari Energies کا نمائندہ۔",
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "ہم نے انیس سو چون میں ڈھرکی میں ماڑی Gas Field دریافت کیا تھا۔",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "ہم نے 1954 میں ڈہرکی میں Mari Gas Field دریافت کیا تھا۔",
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "Sky Forty Seven",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "Sky47",
+      "speed": 1.0,
+      "voice": "m"
      }
     }
    ]
@@ -25854,7 +26124,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -25866,7 +26136,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -25878,7 +26148,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -25890,7 +26160,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -25970,37 +26240,33 @@
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "میں نے آپ کی بات سن لی، لیکن لینگویج ماڈل تک رسائی نہیں، اس لیے ابھی ماڑی Energies کی معلومات سے جواب نہیں دے سکتا۔",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "میں نے آپ کی بات سن لی، لیکن لینگویج ماڈل تک رسائی نہیں، اس لیے ابھی Mari Energies کی معلومات سے جواب نہیں دے سکتا۔",
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
       "text": "یہی تفصیل marienergies.",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
       "text": "com.",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
       "text": "pk پر موجود ہے۔",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "speed": 1.0,
+      "voice": "m"
      }
     }
    ]
@@ -26019,7 +26285,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -26033,10 +26299,9 @@
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
       "text": "معاف کیجیے، میں سن نہیں سکا۔ ذرا دوبارہ کہیے گا؟",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "speed": 1.0,
+      "voice": "m"
      }
     }
    ]
@@ -26064,7 +26329,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -26076,7 +26341,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -26088,7 +26353,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -26100,7 +26365,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -26136,37 +26401,33 @@
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "السلام علیکم، میں مریم ہوں، ماڑی Energies کا نمائندہ۔",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "السلام علیکم، میں مریم ہوں، Mari Energies کا نمائندہ۔",
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "ہم نے انیس سو چون میں ڈھرکی میں ماڑی Gas Field دریافت کیا تھا۔",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "ہم نے 1954 میں ڈہرکی میں Mari Gas Field دریافت کیا تھا۔",
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "Sky Forty Seven کے Cloud infrastructure میں ہواوے Ascend این پی یو klusturz استعمال ہوتے ہیں؟",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "Sky47 کے کلاؤڈ انفرا اسٹرکچر میں Huawei Ascend NPU کلسٹرز استعمال ہوتے ہیں؟",
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "مزید معلومات کے لیے ماڑی Energies ڈاٹ کام ڈاٹ پی کے دیکھیں۔",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "مزید معلومات کے لیے marienergies.com.pk دیکھیں۔",
+      "speed": 1.0,
+      "voice": "m"
      }
     }
    ]
@@ -26484,8 +26745,11 @@
      "demo": true
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "reply",
@@ -26493,8 +26757,11 @@
      "demo": true
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "reply",
@@ -26502,8 +26769,11 @@
      "demo": true
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "reply",
@@ -26511,15 +26781,51 @@
      "demo": true
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "done",
-     "spoken": false
+     "spoken": true
     }
    ],
-   "net": []
+   "net": [
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "میں نے آپ کی بات سن لی، لیکن لینگویج ماڈل تک رسائی نہیں، اس لیے ابھی Mari Energies کی معلومات سے جواب نہیں دے سکتی۔",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "یہی تفصیل marienergies.",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "com.",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "pk پر موجود ہے۔",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    }
+   ]
   },
   "ws/ur/male/demo": {
    "socket": [
@@ -26535,7 +26841,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -26547,7 +26853,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -26559,7 +26865,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -26571,7 +26877,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -26585,37 +26891,33 @@
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "میں نے آپ کی بات سن لی، لیکن لینگویج ماڈل تک رسائی نہیں، اس لیے ابھی ماڑی Energies کی معلومات سے جواب نہیں دے سکتا۔",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "میں نے آپ کی بات سن لی، لیکن لینگویج ماڈل تک رسائی نہیں، اس لیے ابھی Mari Energies کی معلومات سے جواب نہیں دے سکتا۔",
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
       "text": "یہی تفصیل marienergies.",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
       "text": "com.",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
       "text": "pk پر موجود ہے۔",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "speed": 1.0,
+      "voice": "m"
      }
     }
    ]
@@ -26747,8 +27049,11 @@
      "demo": true
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "reply",
@@ -26756,8 +27061,11 @@
      "demo": true
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "reply",
@@ -26765,8 +27073,11 @@
      "demo": true
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "reply",
@@ -26774,15 +27085,51 @@
      "demo": true
     },
     {
-     "type": "warn",
-     "message": "tts: '_Client' object has no attribute 'is_closed'"
+     "type": "tts",
+     "mime": "audio/wav"
+    },
+    {
+     "bytes": 7
     },
     {
      "type": "done",
-     "spoken": false
+     "spoken": true
     }
    ],
-   "net": []
+   "net": [
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "Assalamualaikum میں Maryam ہوں، اور میں Mari Energies کی ایک representative ہوں۔",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "Sky47، جو Mari Energies کا Data Center اور AI کلاؤڈ Infrastructure Vertical ہے، پاکستان کا سب سے بڑا کلاؤڈ AI Farm چلاتا ہے۔",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "یہ Huawei Ascend NPU clusters کی مدد سے GPU-as-a-Service فراہم کرتا ہے۔",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    },
+    {
+     "kind": "tts",
+     "payload": {
+      "text": "اس میں liquid-cooled racks استعمال ہوتے ہیں جو فی rack پچاس Kilo Watts تک handle کر سکتے ہیں۔",
+      "speed": 1.0,
+      "voice": "f"
+     }
+    }
+   ]
   },
   "ws/ur/male/pitch": {
    "socket": [
@@ -26798,7 +27145,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -26810,7 +27157,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -26822,7 +27169,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -26834,7 +27181,7 @@
     },
     {
      "type": "tts",
-     "mime": "audio/mpeg"
+     "mime": "audio/wav"
     },
     {
      "bytes": 7
@@ -26848,37 +27195,33 @@
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "السلام علیکم میں حمزہ ہوں، اور میں ماڑی Energies کا ایک representative ہوں۔",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "Assalamualaikum میں Hamza ہوں، اور میں Mari Energies کا ایک representative ہوں۔",
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "Sky Forty Seven، جو ماڑی Energies کا Data Center اور اے آئی Cloud Infrastructure vertical ہے، پاکستان کا سب سے بڑا Cloud اے آئی Farm چلاتا ہے۔",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "Sky47، جو Mari Energies کا Data Center اور AI کلاؤڈ Infrastructure Vertical ہے، پاکستان کا سب سے بڑا کلاؤڈ AI Farm چلاتا ہے۔",
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "یہ ہواوے Ascend این پی یو klusturz کی مدد سے جی پی یو-as-a-Service فراہم کرتا ہے۔",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "یہ Huawei Ascend NPU clusters کی مدد سے GPU-as-a-Service فراہم کرتا ہے۔",
+      "speed": 1.0,
+      "voice": "m"
      }
     },
     {
      "kind": "tts",
      "payload": {
-      "voiceId": "v_8eelc901v6",
-      "text": "اس میں likwid koold racks استعمال ہوتے ہیں جو فی rack پچاس کلو واٹ تک handle کر سکتے ہیں۔",
-      "speed": 0.9,
-      "outputFormat": "MP3_22050_32"
+      "text": "اس میں liquid-cooled racks استعمال ہوتے ہیں جو فی rack پچاس Kilo Watts تک handle کر سکتے ہیں۔",
+      "speed": 1.0,
+      "voice": "m"
      }
     }
    ]

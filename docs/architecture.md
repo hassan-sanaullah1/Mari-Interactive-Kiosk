@@ -117,8 +117,8 @@ A package may import from the ones **below** it in that diagram, never above, an
 in a cycle.
 
 This is not a convention — it is a contract in
-[`pyproject.toml`](../pyproject.toml) (`[tool.importlinter]`) and CI runs `lint-imports`
-on every change. Six wrong-way imports remain, each listed in that file by name with
+[`pyproject.toml`](../pyproject.toml) (`[tool.importlinter]`), and `make check` runs
+`lint-imports` on every change. Six wrong-way imports remain, each listed in that file by name with
 the step that removes it; the list can only shrink.
 
 A second contract says only `rag/` and `providers/` may import a vendor SDK (`httpx`,
@@ -316,7 +316,7 @@ Things that are true today and must stay true. Each one is enforced, not just as
 | Invariant | Enforced by |
 |---|---|
 | The browser never talks to a vendor | no keys in the frontend; the import contract |
-| No package imports upward or in a cycle | `lint-imports` in CI |
+| No package imports upward or in a cycle | `lint-imports` in `make check` |
 | Only `rag/` and `providers/` import a vendor SDK | the `forbidden` import contract |
 | No code branches on a presenter id | `tests/test_personas_are_data.py` |
 | The kiosk always speaks | the degradation tests; `agent/policy.py` |

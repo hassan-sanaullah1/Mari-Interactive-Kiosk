@@ -12,7 +12,7 @@ microphone → speech to text → retrieval → LLM → text to speech → audio
 
 | | |
 |---|---|
-| **Backend** | Python (3.12 locally and in CI, 3.11 in the image), FastAPI, one process (`server/`) |
+| **Backend** | Python (3.11 in the image and in CI; a 3.12 virtualenv also works), FastAPI, one process (`server/`) |
 | **Frontend** | Next.js 15 + three.js (`frontend/`) |
 | **Speech to text** | Soniox for Urdu, faster-whisper for English |
 | **LLM** | Qwen 3.5 on vLLM, or DeepSeek |
@@ -23,7 +23,7 @@ microphone → speech to text → retrieval → LLM → text to speech → audio
 
 ## Run locally
 
-Prerequisites: Docker with Compose, Make, Node 24, pipx (for pre-commit), and for work outside Docker, Python 3.12.
+Prerequisites: Docker with Compose, Make, Node 24, pipx (for pre-commit), and for work outside Docker, Python 3.11 (3.12 also works).
 
 ```bash
 make setup     # once per clone: commit hooks, .env from .env.example (fill in at least
@@ -168,8 +168,11 @@ New or unfinished features go behind a flag named `enable_<feature>`, default of
 | [docs/deployment.md](docs/deployment.md) | Why the compose files and Dockerfiles are set up the way they are |
 
 Before opening a pull request, run `make lint` and `make check`. Every pull request into
-`develop`, `staging` or `main` must pass `pr-checks`: branch name and PR title, the same
-hooks as `make lint`, and both image builds.
+`develop`, `staging` or `main` runs `pr-checks`: the same hooks as `make lint`, both image
+builds plus the compose files, types (mypy and `tsc`), and a security audit of the
+dependencies the app runs on. The tests, snapshots and import layers are not in that
+workflow; `make check` is where they run. Branch names are checked when you push, by the
+hook `make setup` installs.
 
 ## Contacts
 

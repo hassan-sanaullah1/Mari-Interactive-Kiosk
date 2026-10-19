@@ -1,10 +1,10 @@
-"""The local Matcha-TTS voice for the female presenter's Urdu, and synthesis ahead
-of playback.
+"""The local Matcha-TTS voices for Urdu, and synthesis ahead of playback.
 
-Matcha-TTS is a female voice, so APP_UR_TTS=matcha moves only the female presenter's Urdu
-off Uplift. Its server has its own normalizer, so the reply goes to it as the responder
-wrote it; Uplift's spoken forms would make it worse. When the server is down, the
-sentence is spoken by Uplift instead of being lost.
+Matcha-TTS serves a voice per presenter, so APP_UR_TTS=matcha moves both presenters'
+Urdu off Uplift, and APP_UR_TTS_<PRESENTER> moves just one. Its server has its own
+normalizer, so the reply goes to it as the responder wrote it; Uplift's spoken forms
+would make it worse. When the server is down, the sentence is spoken by Uplift instead
+of being lost, in that presenter's own Uplift voice.
 
 The turn renders each sentence's audio as soon as the responder yields it, but the
 browser must still get reply → tts → bytes for one sentence before the next begins.
@@ -64,24 +64,33 @@ def test_by_default_urdu_stays_on_uplift(avatar_id: str) -> None:
     assert C.tts_ready("ur", avatar_id)
 
 
-def test_matcha_speaks_the_female_presenters_urdu(monkeypatch) -> None:
+@pytest.mark.parametrize(
+    ("avatar_id", "voice", "uplift_voice_setting"),
+    [("female", "f", "UPLIFT_VOICE"), ("male", "m", "UPLIFT_VOICE_MALE")],
+)
+def test_matcha_speaks_each_presenters_urdu_in_its_own_voice(
+    monkeypatch, avatar_id: str, voice: str, uplift_voice_setting: str
+) -> None:
+    """Each presenter gets its own local voice, and its own Uplift voice to fall back to."""
     monkeypatch.setattr(C, "UR_TTS", "matcha")
-    provider = get_tts_provider("ur", "female")
+    provider = get_tts_provider("ur", avatar_id)
     assert isinstance(provider, MatchaTTS)
-    assert get_tts_provider("ur", "female") is provider
+    assert provider.voice == voice
+    assert provider._uplift_voice == getattr(C, uplift_voice_setting)
+    assert get_tts_provider("ur", avatar_id) is provider
     # Ready without an Uplift key: the server answers or the adapter falls back.
     monkeypatch.setattr(C, "UPLIFT_KEY", "")
-    assert C.tts_ready("ur", "female")
+    assert C.tts_ready("ur", avatar_id)
 
 
-def test_the_male_presenter_keeps_uplift(monkeypatch) -> None:
-    """Matcha-TTS is a female voice."""
+def test_one_presenter_can_stay_on_uplift(monkeypatch) -> None:
+    """APP_UR_TTS_<PRESENTER> overrides APP_UR_TTS for that presenter only."""
     monkeypatch.setattr(C, "UR_TTS", "matcha")
-    provider = get_tts_provider("ur", "male")
-    assert isinstance(provider, UpliftTTS)
-    assert provider.voice == C.UPLIFT_VOICE_MALE
-    monkeypatch.setattr(C, "UPLIFT_KEY", "")
-    assert not C.tts_ready("ur", "male")
+    monkeypatch.setitem(C.ENV, "APP_UR_TTS_MALE", "uplift")
+    male = get_tts_provider("ur", "male")
+    assert isinstance(male, UpliftTTS)
+    assert male.voice == C.UPLIFT_VOICE_MALE
+    assert isinstance(get_tts_provider("ur", "female"), MatchaTTS)
 
 
 @pytest.mark.parametrize("avatar_id", ["female", "male"])
@@ -121,7 +130,7 @@ def test_returns_the_servers_wav(monkeypatch) -> None:
 
     assert asyncio.run(_matcha(handler).synthesize(SENTENCE)) == (WAV, "audio/wav")
     assert str(seen[0].url) == "http://matcha.test/v1/tts"
-    assert json.loads(seen[0].content) == {"text": SENTENCE, "speed": 1.1}
+    assert json.loads(seen[0].content) == {"text": SENTENCE, "speed": 1.1, "voice": "f"}
 
 
 def test_empty_text_makes_no_request() -> None:

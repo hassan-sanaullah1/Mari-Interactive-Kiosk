@@ -100,9 +100,10 @@ try:
 except ValueError:
     UPLIFT_SPEED_EN = 0.98
 
-# ── Urdu TTS for the female presenter: "uplift" (default) or "matcha", a local
-#    server (kaani/kisok-integrated-tts) reached over HTTP only. Matcha-TTS is a female
-#    voice, so the male presenter's Urdu stays on Uplift either way. ──
+# ── Urdu TTS: "uplift" (default) or "matcha", a local server reached over HTTP only,
+#    which serves a voice per presenter. APP_UR_TTS is the default for every presenter
+#    and APP_UR_TTS_<PRESENTER> overrides it for one, so a deployment can run one
+#    presenter locally and the other on Uplift. ──
 UR_TTS = env("APP_UR_TTS", "uplift")
 MATCHA_URL = env("APP_MATCHA_TTS_URL", "http://127.0.0.1:8030").rstrip("/")
 # 1.0 is the model's own pace; the server clamps to 0.6–1.5 too.
@@ -112,6 +113,17 @@ except ValueError:
     MATCHA_SPEED = 1.0
 # A sentence the local server can't render goes to Uplift rather than being silent.
 MATCHA_FALLBACK = env("APP_MATCHA_FALLBACK", "1").lower() not in ("0", "false", "no", "off")
+
+
+def ur_tts_for(persona_id: str) -> str:
+    """Which Urdu engine this presenter prefers: APP_UR_TTS_<PRESENTER>, else APP_UR_TTS.
+
+    Read per call rather than at import, and keyed by the presenter id from
+    personas.toml, so no presenter is named in this file. personas.tts_engine() still
+    has the last word: a presenter that does not list the engine keeps its own.
+    """
+    return env(f"APP_UR_TTS_{persona_id.upper()}", UR_TTS)
+
 
 # ── English STT/TTS. Urdu uses Soniox, and Uplift or Matcha-TTS (UR_TTS). English TTS
 #    defaults to Uplift because no Kokoro instance is deployed; set
@@ -226,7 +238,7 @@ async def _ur_tts_status() -> dict:
         }
         for persona in all_personas().values()
     }
-    if UR_TTS != "matcha":
+    if not any(p["provider"] == "matcha" for p in per_persona.values()):
         return per_persona
     import httpx
 

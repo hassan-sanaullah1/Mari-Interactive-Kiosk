@@ -37,6 +37,17 @@ def _settings_config_reads() -> set[str]:
     )
 
 
+def _per_presenter_settings() -> set[str]:
+    """`APP_UR_TTS_<PRESENTER>`, built by config.ur_tts_for() from the presenter ids.
+
+    The key is assembled at call time, so the regex above cannot find it in config.py;
+    taking the ids from personas.toml keeps the pair in step with the presenters.
+    """
+    from server.personas import persona_ids
+
+    return {f"APP_UR_TTS_{persona_id.upper()}" for persona_id in persona_ids()}
+
+
 def _rag_setting_names() -> set[str]:
     """Every `MARI_RAG_*` key, from the RagSettings field names."""
     from server.rag.settings import RagSettings
@@ -80,7 +91,12 @@ def test_documented_retrieval_settings_are_real() -> None:
 
 def test_no_documented_setting_is_dead() -> None:
     """A key in the file that nothing reads sends people to configure the wrong thing."""
-    known = _settings_config_reads() | _rag_setting_names() | NOT_FOR_DEPLOYMENTS
+    known = (
+        _settings_config_reads()
+        | _per_presenter_settings()
+        | _rag_setting_names()
+        | NOT_FOR_DEPLOYMENTS
+    )
     dead = sorted(
         key for key in _declared_in_example() - known if key.startswith(("APP_", "MARI_"))
     )

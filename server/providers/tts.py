@@ -86,20 +86,32 @@ def _matcha_client() -> httpx.AsyncClient:
 
 
 class MatchaTTS(TTSProvider):
-    """A local Matcha-TTS server (kaani/kisok-integrated-tts): Urdu with English mixed
-    in, 16-bit mono 22050 Hz WAV. Reached over HTTP only; its env is separate from ours.
+    """A local Matcha-TTS server (APP_MATCHA_TTS_URL): Urdu with English mixed in,
+    16-bit mono 22050 Hz WAV. Reached over HTTP only; its env is separate from ours.
+
+    It serves one voice per presenter, named in each request by the server's own voice
+    aliases: f for the feminine presenter's voice, m for the other.
 
     It gets the reply sentence as the responder wrote it, English still in Latin script.
-    When the server is down or fails, the sentence goes to Uplift (APP_MATCHA_FALLBACK).
+    When the server is down or fails, the sentence goes to Uplift (APP_MATCHA_FALLBACK),
+    in this presenter's own Uplift voice.
     """
 
     wants_spoken_form = False
     engine = "matcha"
     lang = "ur"
 
-    def __init__(self, base: str = "", client: httpx.AsyncClient | None = None):
+    def __init__(
+        self,
+        base: str = "",
+        client: httpx.AsyncClient | None = None,
+        voice: str = "f",
+        uplift_voice: str = "",
+    ):
         self.base = (base or config.MATCHA_URL).rstrip("/")
         self._client = client
+        self.voice = voice
+        self._uplift_voice = uplift_voice
         self._uplift: UpliftTTS | None = None
 
     async def synthesize(self, text: str) -> tuple[bytes, str]:
@@ -109,7 +121,8 @@ class MatchaTTS(TTSProvider):
         client = self._client or _matcha_client()
         try:
             r = await client.post(
-                f"{self.base}/v1/tts", json={"text": text, "speed": config.MATCHA_SPEED}
+                f"{self.base}/v1/tts",
+                json={"text": text, "speed": config.MATCHA_SPEED, "voice": self.voice},
             )
         except httpx.TransportError as exc:
             if not config.MATCHA_FALLBACK:
@@ -133,10 +146,13 @@ class MatchaTTS(TTSProvider):
 
         logger.warning("Matcha-TTS failed (%s), speaking this sentence with Uplift", reason)
         if self._uplift is None:
-            # Only a persona that lists matcha reaches this adapter, so its own Uplift
-            # Urdu voice is the right stand-in.
-            persona = next(p for p in all_personas().values() if "matcha" in p.urdu_engines)
-            self._uplift = UpliftTTS(voice=persona.voice("ur", "uplift"))
+            # This presenter's own Uplift Urdu voice, passed in by get_tts_provider, so a
+            # presenter never falls back into another one's voice.
+            voice = self._uplift_voice
+            if not voice:
+                persona = next(p for p in all_personas().values() if "matcha" in p.urdu_engines)
+                voice = persona.voice("ur", "uplift")
+            self._uplift = UpliftTTS(voice=voice)
         # speech.speak skipped normalization for this adapter; Uplift needs it.
         return await self._uplift.synthesize(normalize_for_tts(text, "ur", "uplift"))
 
@@ -258,7 +274,11 @@ def get_tts_provider(lang: str, avatar: str | None = None) -> TTSProvider:
     key = f"{lang}:{engine}:{persona.id}"
     if key not in _tts_cache:
         if engine == "matcha":
-            _tts_cache[key] = MatchaTTS()
+            _tts_cache[key] = MatchaTTS(
+                # The server's voice aliases, read off the Persona rather than its id.
+                voice=("f" if persona.is_feminine else "m"),
+                uplift_voice=persona.voice(lang, "uplift"),
+            )
         elif engine == "uplift":
             _tts_cache[key] = UpliftTTS(voice=persona.voice(lang, "uplift"), lang=lang)
         else:

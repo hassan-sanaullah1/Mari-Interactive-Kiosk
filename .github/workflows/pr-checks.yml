@@ -1,6 +1,7 @@
-# The checks a pull request must pass before it merges (project-setup §10). Coolify
-# deploys; this only judges a PR. The job names are what the branch rulesets list as
-# required status checks.
+# The checks that run on every pull request (project-setup §10). Coolify deploys; this
+# only judges a PR. They report their result and do not block a merge on their own: a
+# branch ruleset listing these job names as required status checks is what makes them
+# binding (§6).
 #
 # lint and build are the guide's two required jobs. The compose check and the types job
 # are from its "ideas for later" list. security goes beyond the guide; see its comment.

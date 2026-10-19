@@ -62,9 +62,9 @@ class Persona:
     def urdu_engine(self, configured: str) -> str:
         """Which engine actually speaks this persona's Urdu.
 
-        ``configured`` is the deployment's preference (APP_UR_TTS). A persona that
-        cannot use it — Matcha-TTS is a female voice — falls back to its own first
-        supported engine rather than being silent.
+        ``configured`` is the deployment's preference for this presenter. A persona that
+        does not list it falls back to its own first supported engine rather than being
+        silent.
         """
         if configured in self.urdu_engines:
             return configured
@@ -112,14 +112,14 @@ def default_persona() -> Persona:
 def tts_engine(lang: str, persona: Persona) -> str:
     """Which engine speaks this language for this presenter.
 
-    Urdu is the interesting case: the deployment's preference (APP_UR_TTS) only applies
-    if the persona supports it, because Matcha-TTS is a female voice.
+    Urdu is the interesting case: the preference is per presenter (config.ur_tts_for),
+    and it only applies if the persona lists that engine.
 
     Here rather than in providers/tts.py so that config.tts_ready() can ask the same
     question without the bottom layer importing the adapter layer.
     """
     if lang == "ur":
-        return persona.urdu_engine(config.UR_TTS)
+        return persona.urdu_engine(config.ur_tts_for(persona.id))
     return config.EN_TTS
 
 

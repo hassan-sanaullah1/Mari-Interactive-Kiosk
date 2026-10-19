@@ -1,4 +1,4 @@
-# Development and CI only — never installed into the deployed image
+# Development and local checks only — never installed into the deployed image
 # (server/Dockerfile installs requirements.txt alone).
 #
 #   pip install -r requirements.txt -r requirements-dev.txt
@@ -13,7 +13,7 @@ ruff>=0.16,<0.17
 mypy>=1.14
 
 # Enforces the layer rule from pyproject.toml ([tool.importlinter]), so a wrong-way
-# import fails CI instead of waiting for a reviewer to spot it.
+# import fails `make check` instead of waiting for a reviewer to spot it.
 import-linter>=2.3
 
 # Known-vulnerability check for the runtime dependencies.

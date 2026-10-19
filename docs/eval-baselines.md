@@ -11,7 +11,7 @@ Recorded on `develop` at `02fb7c9`, 2026-10-08. The data files live in `eval/bas
 | `retrieval.json` | Hybrid retrieval over the 150 questions in `eval/questions.yaml` | `python eval/run_eval.py --k 5 --baseline eval/baselines/retrieval.json` — exits non-zero on a regression |
 | `answers.json` / `.jsonl` | What the kiosk actually says: 32 English cases, 2 repeats, graded fact by fact | `python eval/run_answers.py --repeat 2 --baseline eval/baselines/answers.jsonl` |
 
-Two more guards live with the tests, because they need no services and run in CI:
+Two more guards live with the tests, because they need no services and run in `make check`:
 
 | Guard | What it pins |
 |---|---|

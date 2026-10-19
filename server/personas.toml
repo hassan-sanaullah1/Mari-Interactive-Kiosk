@@ -18,9 +18,8 @@ display_name = "Maryam"
 # (server/agent/reply_fixes.py) and the gendered UI copy.
 grammatical_gender = "f"
 
-# Which engines may speak this persona's Urdu, best first. Matcha-TTS is a female
-# voice, so only she can use it; it falls back to Uplift by itself when the local
-# server is down.
+# Which engines may speak this persona's Urdu, best first. Matcha-TTS serves a voice
+# per presenter; it falls back to Uplift by itself when the local server is down.
 urdu_engines = ["matcha", "uplift"]
 
 # Voice id per engine and language, as the name of the setting that holds it.
@@ -40,8 +39,7 @@ blendshape_multipliers = {}
 [male]
 display_name = "Hamza"
 grammatical_gender = "m"
-# Uplift only: Matcha-TTS is a female voice.
-urdu_engines = ["uplift"]
+urdu_engines = ["matcha", "uplift"]
 
 [male.voices]
 # One Uplift voice covers both languages; there is no separate male English id.

@@ -176,6 +176,10 @@ class FakeNet:
                 return False
 
         class _Client:
+            # The Matcha-TTS adapter keeps one client and re-opens it only if it was
+            # closed, so every call after the first one reads this.
+            is_closed = False
+
             def __init__(self, *args, **kwargs):
                 pass
 

@@ -45,10 +45,12 @@ __all__ = [
 ]
 
 
-async def warm(lang: str = "en") -> None:
+async def warm(lang: str = "en", avatar: str | None = None) -> None:
     """Preload local-model adapters (Whisper/Kokoro) in the background so the first
     turn in that language isn't slowed by model load, and check the Matcha-TTS server is
-    up. No-op for remote adapters."""
+    up. No-op for remote adapters.
+
+    ``avatar`` picks whose TTS adapter to warm; the default presenter's when None."""
     import asyncio
 
     stt_provider = get_stt_provider(lang)
@@ -57,7 +59,7 @@ async def warm(lang: str = "en") -> None:
             await asyncio.to_thread(stt_provider.warm)
         except Exception:
             pass
-    tts_provider = get_tts_provider(lang)
+    tts_provider = get_tts_provider(lang, avatar)
     if hasattr(tts_provider, "warm"):
         try:
             await asyncio.to_thread(tts_provider.warm)

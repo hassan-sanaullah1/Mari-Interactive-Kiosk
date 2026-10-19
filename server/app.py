@@ -25,7 +25,7 @@ from .agent.policy import failure_reply, fallback_reply
 from .agent.responder import respond
 from .agent.session import VoiceSession
 from .logging_setup import configure_logging, is_quiet, new_request_id, request_id
-from .personas import get_persona
+from .personas import all_personas, get_persona, tts_engine
 from .prompts import get_prompts
 
 configure_logging()
@@ -67,9 +67,13 @@ async def log_request(
 async def _startup() -> None:
     get_prompts()  # a missing prompt file stops startup here
     asyncio.create_task(providers.warm("en"))
-    if config.UR_TTS == "matcha":
-        # Only checks the local TTS server; Soniox has nothing to preload.
-        asyncio.create_task(providers.warm("ur"))
+    # Only checks the local TTS server; Soniox has nothing to preload. Warmed as the
+    # first presenter routed to it, which is not always the default presenter.
+    local_ur = next(
+        (p.id for p in all_personas().values() if tts_engine("ur", p) == "matcha"), None
+    )
+    if local_ur is not None:
+        asyncio.create_task(providers.warm("ur", local_ur))
     asyncio.create_task(avatar.warm())
     # Minutes on a cold container; turns are answered from the core brief meanwhile.
     asyncio.create_task(rag.startup())

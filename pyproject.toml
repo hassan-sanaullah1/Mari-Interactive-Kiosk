@@ -6,7 +6,9 @@
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+# The deployed image runs 3.11 (server/Dockerfile), so both checkers target 3.11: a
+# 3.12-only syntax or stdlib call must fail here, not on the server.
+target-version = "py311"
 extend-exclude = [".venv", "frontend", "deploy", "new-machine-setup"]
 
 [tool.ruff.lint]
@@ -110,7 +112,7 @@ filterwarnings = [
 ]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.11"
 files = ["server"]
 # Every function carries type hints (AGENTS.md). The modules listed below are still
 # exempt from the other errors until each one is rebuilt.
@@ -163,7 +165,7 @@ include_external_packages = true
 # and nothing above it. `|` means those siblings must not import each other either.
 #
 # This is the contract docs/architecture.md describes, made executable: a reviewer does
-# not have to notice that agent/ started importing a route, CI does.
+# not have to notice that agent/ started importing a route, `lint-imports` does.
 [[tool.importlinter.contracts]]
 name = "Layers"
 type = "layers"

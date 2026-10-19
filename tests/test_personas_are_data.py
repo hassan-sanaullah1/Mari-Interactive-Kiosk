@@ -86,12 +86,15 @@ def test_default_presenter_is_the_first_in_the_file() -> None:
     assert default_persona().id == persona_ids()[0]
 
 
-def test_matcha_is_offered_only_to_a_feminine_presenter() -> None:
-    """Matcha-TTS is a female voice; a male presenter routed to it would sound wrong."""
+def test_a_matcha_presenter_can_still_fall_back_to_uplift() -> None:
+    """Matcha-TTS serves a voice per presenter, but its server is local and may be down,
+    so every presenter routed to it needs an Uplift Urdu voice of its own to fall back
+    on — otherwise a sentence would be lost rather than merely spoken by the paid voice.
+    """
     for persona in all_personas().values():
         if "matcha" in persona.urdu_engines:
-            assert persona.is_feminine, (
-                f"{persona.id} lists matcha but is not feminine — it is a female voice"
+            assert persona.voice("ur", "uplift"), (
+                f"{persona.id} lists matcha but has no uplift:ur voice to fall back to"
             )
 
 
