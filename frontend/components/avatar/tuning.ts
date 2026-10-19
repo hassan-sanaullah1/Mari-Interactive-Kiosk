@@ -411,10 +411,19 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
     skinEmissive: 0.08,
     /** This export authors real roughness on every material — nothing to correct. */
     skinRoughness: null,
-    /** Pulls this export's brighter albedo down onto the female rig's level
-     *  under the shared lights. */
+    /** Pulls this export's brighter skin albedo down onto the female rig's
+     *  level under the shared lights.
+     *
+     *  The kurta (pasted__pasted__lambert6) had a 0.62 tint here too, carried
+     *  over from male_initial13 where it corrected a kurta genuinely brighter
+     *  than its waistcoat needed. glb1's own kameez02.jpg texture already
+     *  sits at the right level on its own — measured off the raw textures,
+     *  luminance 0.58 against the waistcoat's untouched 0.33, the same ~1.8x
+     *  contrast the artist painted into them. Carrying the 0.62 over here
+     *  darkened the kurta to ~0.36, almost erasing that contrast and reading
+     *  as one flat grey outfit. Removed rather than refitted: nothing about
+     *  this export's kurta needs correcting. */
     materialTint: {
-      "pasted__pasted__lambert6": 0.62,
       lambert5: 0.95,
       Std_Skin_Arm: 0.95,
     },

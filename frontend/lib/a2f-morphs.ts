@@ -128,7 +128,7 @@ export function applyA2FLipsync(
   if (s) {
     if (state.names !== s.names) resolve(state, s.names, morphMeshes);
 
-    // The keyframes were already time-interpolated in blendshapePlayer; this
+    // The keyframes were already time-interpolated in blendshape-player.ts; this
     // lerp only smooths the render-rate remainder (~50ms time constant).
     const alpha = Math.min(1, delta * 20);
     for (const { mesh, drives, touched, accum } of state.meshes) {

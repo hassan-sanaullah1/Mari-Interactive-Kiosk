@@ -155,8 +155,7 @@
    },
    "materialTint": {
     "Std_Skin_Arm": 0.95,
-    "lambert5": 0.95,
-    "pasted__pasted__lambert6": 0.62
+    "lambert5": 0.95
    },
    "segments": {
     "breathing": {
