@@ -20,10 +20,10 @@ frontend/public/models/*
 # Keep this list in step with components/avatar/models.ts. Superseded rigs come
 # OFF the list and get deleted; they are 30-65MB each, and an unreferenced one is
 # dead weight in the build context and in every layer of the image.
-!frontend/public/models/dress2.glb
-!frontend/public/models/dress2.glb.gz
-!frontend/public/models/male_initial13.glb
-!frontend/public/models/male_initial13.glb.gz
+!frontend/public/models/dress2_v2.glb
+!frontend/public/models/dress2_v2.glb.gz
+!frontend/public/models/glb1.glb
+!frontend/public/models/glb1.glb.gz
 *.bin
 .DS_Store
 Thumbs.db
@@ -91,5 +91,3 @@ CODE_CLEANLINESS_REPORT.md
 
 # New-machine setup kit: holds real API keys (.env, NGC key) — never commit.
 /new-machine-setup/
-
-

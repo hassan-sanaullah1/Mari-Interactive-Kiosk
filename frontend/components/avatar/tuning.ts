@@ -346,14 +346,12 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
     makeupDesaturation: 0.01,
 
     alphaTest: {
-      /** Scalp: base colour sits just over the mask-only threshold, so it was
-       *  taking the soft cut and hazing the hairline. */
-      lambert19: 0.35,
-      /** Hair cards: the default cut leaves a translucent grey haze at the fringe. */
-      lambert20: 0.22,
-      lambert21: 0.22,
-      lambert22: 0.22,
-      lambert23: 0.22,
+      /** Hair: the default cut leaves a translucent grey haze at the fringe.
+       *  dress2_v2 merged the four hair cards and the scalp (lambert19 through
+       *  lambert23) into one 111k-vertex mesh on this single material, so the
+       *  card value carries over here and the scalp's own 0.35 is gone with the
+       *  separate scalp geometry it was cutting. */
+      pasted__lambert2: 0.22,
     },
 
     materialRoughness: {
@@ -368,10 +366,7 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
       lambert10: 0.35, // lower teeth
       lambert15: 0.35, // tongue, wet
       /** Hair: a tighter specular lobe lets the top light lay a sheen on the crown. */
-      lambert20: 0.32,
-      lambert21: 0.32,
-      lambert22: 0.32,
-      lambert23: 0.32,
+      pasted__lambert2: 0.32,
     },
     materialSpecular: {},
     materialEnvIntensity: {
@@ -384,11 +379,7 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
       lambert17: 0.55,
       lambert12: 0.55,
       /** Hair: near-black cards handed a bright room back read as grey sheen. */
-      lambert20: 0.15,
-      lambert21: 0.15,
-      lambert22: 0.15,
-      lambert23: 0.15,
-      lambert19: 0.1, // scalp
+      pasted__lambert2: 0.15,
       /** Dupatta, dulled again — shine comes from reflection as well as roughness. */
       "pasted__lambert10": 0.2,
     },
@@ -413,8 +404,10 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
     lensMm: 135,
     cameraDistanceM: 4.92,
 
-    /** This export names the head material lambert5, not Std_Skin_Head. */
-    skinMaterials: new Set(["lambert5", "Std_Skin_Arm", "Std_Skin_Leg"]),
+    /** This export names the head material lambert5, not Std_Skin_Head. glb1
+     *  dropped Std_Skin_Leg — legs and feet are no longer separate skin
+     *  geometry — so head and arms are the whole of his skin now. */
+    skinMaterials: new Set(["lambert5", "Std_Skin_Arm"]),
     skinEmissive: 0.08,
     /** This export authors real roughness on every material — nothing to correct. */
     skinRoughness: null,
@@ -424,7 +417,6 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
       "pasted__pasted__lambert6": 0.62,
       lambert5: 0.95,
       Std_Skin_Arm: 0.95,
-      Std_Skin_Leg: 0.95,
     },
 
     faceMaterial: null,
@@ -433,8 +425,15 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
 
     /** Keyed to this export's hair material name, which has changed before. */
     alphaTest: { standardSurface2: 0.08 },
-    /** The export authors real roughness on the kurta/shalwar — nothing to correct. */
-    materialRoughness: {},
+    /** male_initial13 authored real roughness on every material; glb1 omits
+     *  roughnessFactor on the kurta and on one of the two new waistcoat
+     *  materials, and glTF defaults that to fully matte. Same correction, and
+     *  the same reason, as the female rig's kameez. `waistcoat:lambert3`
+     *  authors its own 0.5 and is left alone. */
+    materialRoughness: {
+      "pasted__pasted__lambert6": 0.5,
+      "waistcoat:lambert2": 0.5,
+    },
     /** His hair's sheen. */
     materialSpecular: { standardSurface2: 0.6 },
     /** Not yet measured against the lobby plate the way the female rig has been. */

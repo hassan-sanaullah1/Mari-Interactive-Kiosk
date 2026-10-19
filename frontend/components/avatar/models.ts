@@ -5,7 +5,7 @@
  * skeleton and one clip name, so the animation machinery in AvatarModel is common
  * to both. What is NOT common is everything below: the loop windows are cut from
  * each clip's own curves and the material names are per-export. Those all used to
- * be module constants keyed to girl15.glb; they are per-model here so a second rig
+ * be module constants keyed to a single rig; they are per-model here so a second rig
  * does not have to pretend to be the first.
  *
  * Both rigs carry the 51 ARKit blendshapes, so both drive the real lib/a2f-morphs.ts
@@ -91,23 +91,68 @@ export interface AvatarConfig extends RigTuning {
 const f = (frame: number) => frame / FPS;
 
 /**
- * girl15.glb — the original MARI presenter. See AvatarModel's header for the
- * full derivation of these windows; in short, they minimise the baked cloth
- * sim's drift at each seam subject to a tight body match, and they are
- * load-bearing for the ASSET as well as for playback (scripts/optimize_glb.py
- * strips keyframes outside them, so widening one without re-running the script
- * seeks into frames that are no longer in the file).
+ * dress2_v2.glb — the MARI presenter. See AvatarModel's header for how this
+ * rig's windows are derived; in short, they minimise the baked cloth sim's
+ * drift at each seam subject to a tight body match.
+ *
+ * Her FACE is byte-identical to the dress2 export this replaces: all 12
+ * primitives of Mesh.003, every rest position and all 51 ARKit morph deltas
+ * compare exactly equal. So lipsync, the procedural blink and the A2F
+ * calibration below port across untouched, and the girl12 shifted-name class
+ * of bug is ruled out by construction rather than by inspection.
+ *
+ * What DID change is the hair and the clip. The four hair-card meshes and the
+ * scalp (lambert19 through lambert23, ~29.7k vertices) are gone, replaced by
+ * one 111k-vertex mesh on a single material, `pasted__lambert2` — which is why
+ * the hair keys in tuning.ts moved there.
+ *
+ * SEGMENTS. This is NOT dress2's clip retimed: same 1084 tracks, but 37.54s
+ * against 30.03s and the curves diverge immediately, so the windows below were
+ * re-cut from scratch. Per-frame motion locates the breaks (110 body joints,
+ * summed quaternion angle):
+ *
+ *   0-39      a dead hold at the head of the clip, skipped entirely
+ *   40-289    breathing  (at-rest idle; arms 0.02-0.11, spine 0.04-0.24 deg/frame)
+ *   290-519   listening  (the same idle carrying more spine, peaking 0.69)
+ *   520-1126  talking    (the gesture performance, up to 92 deg/frame)
+ *
+ * The windows inside them were then scored by SIMULATING the runtime entry
+ * search (`bestLoopEntry`) against this clip's own curves — take the pose at
+ * loopEnd-0.35s, scan the same excluded tail, and measure how much of the
+ * window still plays and how far apart the outgoing and incoming poses sit —
+ * and, because this rig's visible motion at rest is the cloth rather than the
+ * body, by the cloth seam alongside it. Cloth cost is quoted in frames of
+ * ordinary cloth motion, the unit AvatarModel's header uses; the figures in
+ * brackets are dress2's for the same measurement, for comparison.
  */
 const FEMALE: AvatarConfig = {
   id: "female",
-  // Same clip as the girl15 export it replaced (rotations within 0.04 deg), so
-  // the loop windows below carried over unchanged.
-  url: "/models/dress2.glb.gz",
-  bytes: { decoded: 70442516, encoded: 52101323 },
+  url: "/models/dress2_v2.glb.gz",
+  // Served as the pre-compressed .gz (next.config.ts), so `encoded` is what
+  // crosses the wire and `decoded` is what the reader counts. 76MB raw, 53MB
+  // gzipped. The RAW export: scripts/optimize_glb.py has not been run on it.
+  bytes: { decoded: 76410448, encoded: 53455982 },
   segments: {
-    breathing: { loop: [f(119), f(241)] },
-    listening: { loop: [f(300), f(393)] },
-    talking: { loop: [f(558), f(780)] },
+    // Three seconds of the at-rest idle. Re-enters 4 frames in and plays 2.87s
+    // (96%) at a body gap of 0.000, for the cheapest cloth seam anywhere in the
+    // segment: 1.6 frames [dress2: 2.0]. Longer windows exist and carry no more
+    // motion worth having — the body moves 0.7 rad across this whole window —
+    // while costing 2.4x the seam (the best window of 4s or more is 3.9 frames).
+    // It also starts late enough that the cloth has settled out of its rest
+    // state, the same reason dress2's breathing window did not start at frame 1.
+    breathing: { loop: [f(188), f(278)] },
+    // The settled listening pose. Re-enters 3 frames in and plays 3.93s (98%)
+    // at a body gap of 0.001 and a cloth seam of 5.7 frames [dress2: 5.0] —
+    // the cheapest in the segment. The windows carrying the most spine motion
+    // sit at 9.0 frames of cloth for 0.1 rad more, which is not a trade.
+    listening: { loop: [f(371), f(491)] },
+    // The gesture performance. Enters at loop[0] — the pose genuinely closes on
+    // itself here — and plays all 6.00s (100%) at a gap of 0.019, carrying
+    // 84.7 rad through a cloth seam of 22.2 frames [dress2: 38.0, and that
+    // segment offered nothing better]. The 8s windows carry 106 rad but cost
+    // 47.5 frames of cloth and a gap of 0.120; a quarter more motion is not
+    // worth doubling the one seam on this rig that cannot be made cheap.
+    talking: { loop: [f(852), f(1032)] },
   },
   hasMorphs: true,
   grammaticalGender: "f",
@@ -118,79 +163,65 @@ const FEMALE: AvatarConfig = {
 };
 
 /**
- * male_initial13.glb — the alternate presenter. Still the RAW export (see `bytes`):
- * run scripts/optimize_glb.py before this rig goes in front of anyone on a slow link.
+ * glb1.glb — the alternate presenter. Still a RAW export (see `bytes`), though
+ * at 49MB/27MB it is now the cheaper of the two rigs to download.
  *
- * Carries the same facial bone rig as 12 — 302 nodes, 295 rotation tracks, of which
- * 178 are face (EyeJoint, upperLidMain0..9, lip, cheek, brow) and animated by this
- * clip. They are ordinary quaternion tracks, so buildPoseIndex matches on them
- * alongside the body joints; that is why the window numbers below are an order of
- * magnitude larger than the 51-joint era's and must only be compared against each
- * other.
+ * A drop-in for the male_initial13 export it replaces, and verified as one
+ * rather than assumed:
  *
- * Against male_initial12: the clip is the SAME 30fps but 894 keys over 29.80s where
- * 12 was 716 over 23.83s, and the content differs too — 12's windows land in the
- * wrong segments here (its breathing window falls inside this clip's idle but its
- * listening and talking windows both land in the idle's tail). So the windows below
- * were re-cut from scratch rather than rescaled.
+ *   - ANIMATION. Same 295 rotation tracks under the same names, same 29.80s at
+ *     30fps. Summed over every track the per-frame curves differ by at most
+ *     3.83 deg (mean 0.13), which is re-export rounding and not content — so
+ *     the loop windows below carried over unchanged, and re-scoring them
+ *     against this clip confirms them (see each window).
+ *   - FACE. All 52 morph target names in the same order, and the head
+ *     (lambert5), arms, eyes, both teeth rows, tongue, brows, beard and
+ *     eyelashes compare byte-identical to 13 — rest positions and all 52
+ *     deltas, max difference exactly zero. So lipsync, blink and the
+ *     lip-outline multipliers fitted in server/personas.toml need nothing.
  *
- * The face morphs are untouched: the same 52 target names on the same 12-primitive
- * head mesh (Mesh.003), with jawOpen and the mirrored blinks at 12's amplitudes — so
- * lipsync and the procedural blink need nothing. This export adds two morphs
- * (`kameez2`, `kameez2_Copy`) to a garment mesh; nothing drives them by name.
+ * What changed is below the waist and the garment. `Std_Skin_Leg` is gone
+ * (legs and feet are no longer separate skin geometry, and `Std_Nails` drops
+ * from 1112 vertices to 680 with the toes), and the kurta gains a waistcoat on
+ * two new materials, `waistcoat:lambert2` and `waistcoat:lambert3`. Neither
+ * waistcoat material authors a roughnessFactor, and glTF defaults that to fully
+ * matte — the correction is in tuning.ts, the same one dress2's kameez needs.
  *
- * The head texture is the same DARK repaint as 12 (`Std_Skin_Head_Diffuse7 copy`), and
- * every material name and roughness matches 12 except the hair: it is
- * `standardSurface2` again here (12 called it `standardSurface2.001`), which is why
- * the hair keys in tuning.ts moved back. The skin tints were set against this same
- * texture level, so the lighting carries over unchanged.
- *
- * SEGMENTS, measured off this clip's own per-frame motion rather than carried over
- * (summed joint rotation per frame, 10-frame means — scripts/lipsync_audit.py's rig
- * table is the same measurement path):
- *
- *   20-299   breathing  (at-rest idle, a clean ~30-frame cycle at 6-13 deg/frame)
- *   300-399  listening  (the authored hands-rise, 15-55)
- *   400-890  talking    (the gesture performance, 20-150)
- *
- * The windows inside them were scored the way every male window since male2 has
- * been: by SIMULATING the runtime entry search (`bestLoopEntry`) against this clip's
- * own curves — take the pose at loopEnd-0.35s, scan the same excluded tail, and
- * measure how much of the window still plays and how far apart the outgoing and
- * incoming trajectories sit through the fade.
+ * The hair is `standardSurface2` again, so the hair keys in tuning.ts stay put.
  */
 const MALE: AvatarConfig = {
   id: "male",
-  url: "/models/male_initial13.glb.gz",
+  url: "/models/glb1.glb.gz",
   // Served as the pre-compressed .gz (next.config.ts), so `encoded` is what crosses
   // the wire and `decoded` is what the reader counts — the ratio keeps the loading
-  // percentage honest. 68MB raw, 42MB gzipped. Still the RAW export: run
+  // percentage honest. 49MB raw, 27MB gzipped. Still the RAW export: run
   // scripts/optimize_glb.py before this rig goes in front of anyone on a slow link.
-  bytes: { decoded: 67752008, encoded: 42294045 },
+  bytes: { decoded: 48863788, encoded: 26858655 },
   segments: {
     // Two full breath cycles of the at-rest idle. The idle here is strictly
     // periodic at 30 frames, so a whole number of cycles closes on itself: the
     // entry search lands on loop[0] and plays all 2.00s (100%) through a
-    // crossfade gap of 0.000 — nothing in the segment does better.
+    // crossfade gap of 0.000 — nothing in the segment does better. Unchanged
+    // against this export, which scores it identically.
     breathing: { loop: [f(36), f(96)] },
     // The authored hands-rise and the settled pose after it, which is nearly the
     // whole 100-frame segment. Re-enters at loop[0] and plays all 3.20s (100%)
     // at a gap of 0.014, carrying 49.3 rad — the most motion of any window in
-    // this segment that still plays in full.
+    // this segment that still plays in full. Scores identically here.
     listening: { loop: [f(300), f(396)] },
-    // The gesture performance. Re-enters at f571, 27 frames in, and plays 7.10s
-    // of its 8.00s (89%) carrying 211.3 rad — the most motion of any candidate
-    // that keeps both its gap under 0.15 and 85% of the window. loop[0] is only
-    // the pose for a first entry that has no outgoing pose to match; every loop
-    // re-enters through the search above rather than playing the seam.
+    // The gesture performance. On this export it re-enters at f554, 10 frames
+    // in, and plays 7.67s of its 8.00s (96%) carrying 210.2 rad at a gap of
+    // 0.097 — slightly better than the 89% it played on male_initial13, from
+    // the same re-export rounding noted above. loop[0] is only the pose for a
+    // first entry that has no outgoing pose to match; every loop re-enters
+    // through the search above rather than playing the seam.
     talking: { loop: [f(544), f(784)] },
   },
-  // Unlike male1, this export carries the full 51 ARKit shapes on one 12-primitive
-  // mesh, so lipsync and blink both run the same code the female rig does.
-  // Checked the way girl12's shifted-name bug taught us to: the names align with
-  // the geometry (eyeBlinkLeft/Right are mirror-symmetric at x -0.0035/+0.0036
-  // with matching y drops, jawOpen drops the jaw by 0.027, smile L/R are opposed)
-  // rather than merely being present and plausible.
+  // This export carries the full 51 ARKit shapes on one 11-primitive mesh, so
+  // lipsync and blink both run the same code the female rig does. Checked the
+  // way girl12's shifted-name bug taught us to, and then some: the names align
+  // with the geometry AND the geometry is byte-identical to the previous export
+  // (see the header), so the shapes are the same ones already measured.
   hasMorphs: true,
   grammaticalGender: "m",
   label: { en: "Male presenter", ur: "مرد پیشکار" },

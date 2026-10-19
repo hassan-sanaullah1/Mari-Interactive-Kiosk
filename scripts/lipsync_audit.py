@@ -44,10 +44,15 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODELS = os.path.join(ROOT, "frontend", "public", "models")
 RIGS = {
     "female": dict(
-        glb="girl15.glb", head="lambert12", upper_teeth="upper_teeth", lower_teeth="lower_teeth"
+        # Material names are dress2_v2's; the girl15 export these were first
+        # written against named the same parts lambert12/upper_teeth/lower_teeth.
+        glb="dress2_v2.glb",
+        head="lambert14",
+        upper_teeth="lambert9",
+        lower_teeth="lambert10",
     ),
     "male": dict(
-        glb="male_initial13.glb",
+        glb="glb1.glb",
         head="lambert5",
         upper_teeth="Std_Upper_Teeth",
         lower_teeth="Std_Lower_Teeth",

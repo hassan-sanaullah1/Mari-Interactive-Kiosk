@@ -99,7 +99,7 @@ describe("every presenter is renderable", () => {
 
 describe("lipsync calibration", () => {
   it.each(IDS)("%s installs its own calibration rather than the module default", (id) => {
-    // The shipped default in blendshapePlayer (0.55 / jawOpen 0.45) was measured on an
+    // The shipped default in blendshape-player.ts (0.55 / jawOpen 0.45) was measured on an
     // older rig. A presenter that does not override it reads as murmuring.
     const { a2f } = AVATARS[id];
     expect(a2f).not.toBeNull();

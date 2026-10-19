@@ -8,19 +8,15 @@
     }
    },
    "alphaTest": {
-    "lambert19": 0.35,
-    "lambert20": 0.22,
-    "lambert21": 0.22,
-    "lambert22": 0.22,
-    "lambert23": 0.22
+    "pasted__lambert2": 0.22
    },
    "backLight": {
     "kick": 1,
     "rim": 1
    },
    "bytes": {
-    "decoded": 70442516,
-    "encoded": 52101323
+    "decoded": 76410448,
+    "encoded": 53455982
    },
    "cameraDistanceM": null,
    "darkThemeLighting": {
@@ -56,13 +52,9 @@
     "lambert14": 0.55,
     "lambert16": 1.8,
     "lambert17": 0.55,
-    "lambert19": 0.1,
-    "lambert20": 0.15,
-    "lambert21": 0.15,
-    "lambert22": 0.15,
-    "lambert23": 0.15,
     "lambert9": 0.8,
-    "pasted__lambert10": 0.2
+    "pasted__lambert10": 0.2,
+    "pasted__lambert2": 0.15
    },
    "materialRoughness": {
     "Kameez:lambert2": 0.5,
@@ -70,32 +62,29 @@
     "lambert11": 0.08,
     "lambert15": 0.35,
     "lambert16": 0.25,
-    "lambert20": 0.32,
-    "lambert21": 0.32,
-    "lambert22": 0.32,
-    "lambert23": 0.32,
     "lambert9": 0.35,
-    "pasted__lambert10": 0.9
+    "pasted__lambert10": 0.9,
+    "pasted__lambert2": 0.32
    },
    "materialSpecular": {},
    "materialTint": {},
    "segments": {
     "breathing": {
      "loop": [
-      3.966666666666667,
-      8.033333333333333
+      6.266666666666667,
+      9.266666666666667
      ]
     },
     "listening": {
      "loop": [
-      10,
-      13.1
+      12.366666666666667,
+      16.366666666666667
      ]
     },
     "talking": {
      "loop": [
-      18.6,
-      26
+      28.4,
+      34.4
      ]
     }
    },
@@ -108,7 +97,7 @@
     ]
    },
    "skinRoughness": null,
-   "url": "/models/dress2.glb.gz",
+   "url": "/models/dress2_v2.glb.gz",
    "widthSqueeze": 1
   },
   "male": {
@@ -126,8 +115,8 @@
     "rim": 0
    },
    "bytes": {
-    "decoded": 67752008,
-    "encoded": 42294045
+    "decoded": 48863788,
+    "encoded": 26858655
    },
    "cameraDistanceM": 4.92,
    "darkThemeLighting": {
@@ -157,13 +146,15 @@
    },
    "makeupDesaturation": 0.2,
    "materialEnvIntensity": {},
-   "materialRoughness": {},
+   "materialRoughness": {
+    "pasted__pasted__lambert6": 0.5,
+    "waistcoat:lambert2": 0.5
+   },
    "materialSpecular": {
     "standardSurface2": 0.6
    },
    "materialTint": {
     "Std_Skin_Arm": 0.95,
-    "Std_Skin_Leg": 0.95,
     "lambert5": 0.95,
     "pasted__pasted__lambert6": 0.62
    },
@@ -191,12 +182,11 @@
    "skinMaterials": {
     "__set": [
      "Std_Skin_Arm",
-     "Std_Skin_Leg",
      "lambert5"
     ]
    },
    "skinRoughness": null,
-   "url": "/models/male_initial13.glb.gz",
+   "url": "/models/glb1.glb.gz",
    "widthSqueeze": 0.93
   }
  },

@@ -240,8 +240,8 @@ const AVATAR_POSITION_X = 0;
  * usually crops them — a visible forearm and an invisible shin should not be
  * different colours if the shot ever widens.
  */
-// Per-rig, as `skinMaterials` in ./tuning.ts: girl15's lambert11/12/13 and
-// the male rig's lambert5/Std_Skin_Arm/Std_Skin_Leg.
+// Per-rig, as `skinMaterials` in ./tuning.ts: the female rig's
+// lambert12/14/17 and the male rig's lambert5/Std_Skin_Arm.
 
 /**
  * How much to lift skin, as an emissive term.
@@ -1129,7 +1129,7 @@ export default function AvatarModel({
         const envIntensity = config.materialEnvIntensity?.[std.name];
         if (envIntensity !== undefined) std.envMapIntensity = envIntensity;
 
-        // dress2 exports every material doubleSided (a Maya default, not a
+        // dress2_v2 exports every material doubleSided (a Maya default, not a
         // decision). THREE reads a doubleSided material as casting from BOTH
         // faces, so a closed surface shadows itself — the classic acne case,
         // and one that only a bias big enough to detach the nose shadow would
