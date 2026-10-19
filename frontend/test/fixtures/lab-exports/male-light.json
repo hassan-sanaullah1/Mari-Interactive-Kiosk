@@ -1,0 +1,1044 @@
+{
+  "kind": "mari-avatar-lab-export",
+  "version": 2,
+  "exportedAt": "2026-10-19T09:10:20.519Z",
+  "scope": {
+    "presenter": "male",
+    "theme": "light"
+  },
+  "destinations": {
+    "rig": {
+      "studio.light": "frontend/components/avatar/tuning.ts → STUDIO.light (LIGHT_STUDIO)",
+      "rigLighting.male": "frontend/components/avatar/tuning.ts → RIG_TUNING.male.lightThemeLighting / backLight",
+      "camera.desktop": "frontend/components/avatar/tuning.ts → CAMERA (frameHeightM, headRoom, sway; shared by every presenter) and RIG_TUNING.male.lensMm / cameraDistanceM / widthSqueeze",
+      "camera.mobile": "NEW: the kiosk has one CAMERA for every layout. Mobile values that differ from camera.desktop need a portrait override added to tuning.ts and read by Framing when the stage is portrait."
+    },
+    "phaseA": "frontend/components/avatar/realism.ts, liveliness.ts, PostEffects.tsx (not yet in the kiosk)"
+  },
+  "changedFromKiosk": [
+    {
+      "path": "studio.light.placement.key.position.0",
+      "kiosk": -2.4,
+      "lab": -2.3
+    },
+    {
+      "path": "studio.light.placement.key.position.1",
+      "kiosk": 2.9,
+      "lab": 1.3
+    },
+    {
+      "path": "studio.light.states.idle.key",
+      "kiosk": 2.2,
+      "lab": 2.3
+    },
+    {
+      "path": "studio.light.environment.lightformers.0.intensity",
+      "kiosk": 2.6,
+      "lab": 1.95
+    },
+    {
+      "path": "studio.light.environment.lightformers.1.intensity",
+      "kiosk": 2,
+      "lab": 2.3
+    },
+    {
+      "path": "studio.light.environment.lightformers.2.intensity",
+      "kiosk": 1.5,
+      "lab": 1.3
+    },
+    {
+      "path": "studio.light.environment.lightformers.3.intensity",
+      "kiosk": 0.3,
+      "lab": 0.65
+    },
+    {
+      "path": "studio.light.shadow.intensity",
+      "kiosk": 0.2,
+      "lab": 0.21
+    },
+    {
+      "path": "rigLighting.male.light.exposure",
+      "kiosk": 0.98,
+      "lab": 0.75
+    },
+    {
+      "path": "camera.mobile.headRoom",
+      "kiosk": 0.045,
+      "lab": 0.055
+    }
+  ],
+  "rig": {
+    "studio": {
+      "light": {
+        "ambientColor": "#fffefd",
+        "colors": {
+          "key": "#fffcfa",
+          "fill": "#fffcfa",
+          "top": "#fffbf3",
+          "rim": "#d8e6ff",
+          "kick": "#000000",
+          "face": "#fffdfc"
+        },
+        "placement": {
+          "key": {
+            "position": [
+              -2.3,
+              1.3,
+              2.2
+            ],
+            "intensity": 2.6
+          },
+          "fill": {
+            "position": [
+              2.6,
+              1.6,
+              1.4
+            ],
+            "intensity": 0.8
+          },
+          "top": {
+            "position": [
+              0,
+              3.2,
+              0.8
+            ],
+            "angle": 0.5,
+            "penumbra": 1,
+            "intensity": 1.4,
+            "decay": 2
+          },
+          "rim": {
+            "position": [
+              2,
+              2.4,
+              -2.2
+            ],
+            "angle": 0.8,
+            "penumbra": 1,
+            "intensity": 3,
+            "decay": 2
+          },
+          "kick": {
+            "position": [
+              0.3,
+              0.35,
+              2.2
+            ],
+            "angle": 1,
+            "penumbra": 1,
+            "intensity": 3.2,
+            "decay": 2
+          },
+          "face": {
+            "position": [
+              0,
+              2,
+              1.2
+            ],
+            "angle": 0.22,
+            "penumbra": 0.8,
+            "intensity": 0.9,
+            "distance": 2,
+            "decay": 2
+          }
+        },
+        "states": {
+          "idle": {
+            "key": 2.3,
+            "fill": 0.7,
+            "rim": 2.5,
+            "kick": 1.7,
+            "top": 1.1
+          },
+          "listening": {
+            "key": 2.4,
+            "fill": 0.75,
+            "rim": 2.7,
+            "kick": 1.7,
+            "top": 1.15
+          },
+          "thinking": {
+            "key": 2.05,
+            "fill": 0.75,
+            "rim": 2.3,
+            "kick": 1.6,
+            "top": 1
+          },
+          "speaking": {
+            "key": 2.4,
+            "fill": 0.75,
+            "rim": 2.9,
+            "kick": 1.8,
+            "top": 1.25
+          }
+        },
+        "environment": {
+          "resolution": 512,
+          "lightformers": [
+            {
+              "intensity": 1.95,
+              "position": [
+                -3.2,
+                1.6,
+                1.2
+              ],
+              "scale": [
+                2,
+                4,
+                1
+              ],
+              "color": "#fffcfb"
+            },
+            {
+              "intensity": 2.3,
+              "position": [
+                0,
+                3.2,
+                0.4
+              ],
+              "scale": [
+                6,
+                0.5,
+                1
+              ],
+              "color": "#fff6e6",
+              "rotation": [
+                1.5708,
+                0,
+                0
+              ]
+            },
+            {
+              "intensity": 1.3,
+              "position": [
+                0,
+                -1,
+                0.8
+              ],
+              "scale": [
+                6,
+                3,
+                1
+              ],
+              "color": "#fffcf9",
+              "rotation": [
+                -1.5708,
+                0,
+                0
+              ]
+            },
+            {
+              "intensity": 0.65,
+              "position": [
+                3,
+                1.2,
+                -0.6
+              ],
+              "scale": [
+                2,
+                3,
+                1
+              ],
+              "color": "#5a6478"
+            }
+          ]
+        },
+        "shadow": {
+          "intensity": 0.21,
+          "mapSize": 2048,
+          "bias": -0.0002,
+          "normalBias": 0.01,
+          "extent": 1,
+          "targetY": 1.1
+        }
+      }
+    },
+    "rigLighting": {
+      "male": {
+        "light": {
+          "exposure": 0.75,
+          "ambient": 0.5,
+          "fill": 1.15,
+          "environment": 1.2
+        },
+        "backLight": {
+          "rim": 0,
+          "kick": 0
+        }
+      }
+    },
+    "camera": {
+      "desktop": {
+        "frameHeightM": 1.15,
+        "headRoom": 0.045,
+        "sway": {
+          "amplitude": 0.015,
+          "speed": 0.08
+        },
+        "rigs": {
+          "male": {
+            "lensMm": 135,
+            "cameraDistanceM": 4.92,
+            "widthSqueeze": 0.93
+          }
+        }
+      },
+      "mobile": {
+        "frameHeightM": 1.15,
+        "headRoom": 0.055,
+        "sway": {
+          "amplitude": 0.015,
+          "speed": 0.08
+        },
+        "rigs": {
+          "male": {
+            "lensMm": 135,
+            "cameraDistanceM": 4.92,
+            "widthSqueeze": 0.93
+          }
+        }
+      }
+    }
+  },
+  "scene": {
+    "presenter": "male",
+    "look": "kiosk",
+    "lights": "editable",
+    "environment": "panels",
+    "backdropStrength": 1,
+    "backdropBlur": 2.5,
+    "realism": {
+      "skinGlow": false,
+      "skinScatter": true,
+      "lipGloss": false,
+      "surfaceDetail": true,
+      "skinSmooth": false,
+      "skinSheen": true,
+      "skinTone": true,
+      "browDefinition": true,
+      "hairTame": false,
+      "wetEyes": true,
+      "hairCoverage": false
+    },
+    "realismParams": {
+      "scatterWrap": 0.5,
+      "scatterStrength": 0.9,
+      "scatterWarmth": 0.8,
+      "lipGloss": 0.85,
+      "skinDetail": 0.4,
+      "clothDetail": 0,
+      "smoothAmount": 0.6,
+      "smoothRadius": 0.0025,
+      "skinRoughness": 0.72,
+      "skinSheen": 0.4,
+      "skinSaturation": 1,
+      "skinWarmth": 0.15,
+      "skinBrightness": 1.02,
+      "calmRedness": 0,
+      "eyeBrightness": 1.1,
+      "browDarken": 0.52,
+      "browDensity": 1.3,
+      "hairReflection": 0.1,
+      "hairCutoff": 0.25,
+      "hairShade": 0.9,
+      "hairRoughness": 0.32
+    },
+    "life": {
+      "smile": 0.5,
+      "gaze": true,
+      "headDrift": true
+    },
+    "ao": {
+      "enabled": true,
+      "intensity": 0.6,
+      "radius": 0.1
+    },
+    "grade": {
+      "enabled": true,
+      "contrast": 1.19,
+      "saturation": 1,
+      "lift": 0.07,
+      "warmth": -0.06,
+      "tealShadows": 0.05
+    },
+    "shadowSoftness": 5,
+    "shadowStrength": 1,
+    "theme": "light",
+    "tone": "neutral",
+    "view": "lit",
+    "pose": "breathing",
+    "camera": "editable",
+    "layout": "mobile",
+    "device": "android",
+    "mobileBackdrop": "/bg-mobile-light.png",
+    "showGuides": false,
+    "compare": {
+      "mode": "off",
+      "opacity": 0.5,
+      "image": "/lab/reference.webp"
+    },
+    "backdrop": "artwork"
+  },
+  "resolved": {
+    "presenter": {
+      "id": "male",
+      "model": "/models/glb1.glb.gz",
+      "headTargetY": 1.6
+    },
+    "theme": "light",
+    "layout": "mobile",
+    "device": "android",
+    "background": {
+      "page": "artwork",
+      "image": "/bg-mobile-light.png",
+      "blurPx": 2.5
+    },
+    "renderer": {
+      "toneMapping": "neutral",
+      "outputColorSpace": "srgb",
+      "antialias": true,
+      "shadowMap": "VSM",
+      "shadowRadius": 5,
+      "shadowStrengthOverride": 1
+    },
+    "lights": {
+      "source": "lab editable rig",
+      "type": "studio",
+      "theme": "light",
+      "studio": {
+        "ambientColor": "#fffefd",
+        "colors": {
+          "key": "#fffcfa",
+          "fill": "#fffcfa",
+          "top": "#fffbf3",
+          "rim": "#d8e6ff",
+          "kick": "#000000",
+          "face": "#fffdfc"
+        },
+        "placement": {
+          "key": {
+            "position": [
+              -2.3,
+              1.3,
+              2.2
+            ],
+            "intensity": 2.6
+          },
+          "fill": {
+            "position": [
+              2.6,
+              1.6,
+              1.4
+            ],
+            "intensity": 0.8
+          },
+          "top": {
+            "position": [
+              0,
+              3.2,
+              0.8
+            ],
+            "angle": 0.5,
+            "penumbra": 1,
+            "intensity": 1.4,
+            "decay": 2
+          },
+          "rim": {
+            "position": [
+              2,
+              2.4,
+              -2.2
+            ],
+            "angle": 0.8,
+            "penumbra": 1,
+            "intensity": 3,
+            "decay": 2
+          },
+          "kick": {
+            "position": [
+              0.3,
+              0.35,
+              2.2
+            ],
+            "angle": 1,
+            "penumbra": 1,
+            "intensity": 3.2,
+            "decay": 2
+          },
+          "face": {
+            "position": [
+              0,
+              2,
+              1.2
+            ],
+            "angle": 0.22,
+            "penumbra": 0.8,
+            "intensity": 0.9,
+            "distance": 2,
+            "decay": 2
+          }
+        },
+        "states": {
+          "idle": {
+            "key": 2.3,
+            "fill": 0.7,
+            "rim": 2.5,
+            "kick": 1.7,
+            "top": 1.1
+          },
+          "listening": {
+            "key": 2.4,
+            "fill": 0.75,
+            "rim": 2.7,
+            "kick": 1.7,
+            "top": 1.15
+          },
+          "thinking": {
+            "key": 2.05,
+            "fill": 0.75,
+            "rim": 2.3,
+            "kick": 1.6,
+            "top": 1
+          },
+          "speaking": {
+            "key": 2.4,
+            "fill": 0.75,
+            "rim": 2.9,
+            "kick": 1.8,
+            "top": 1.25
+          }
+        },
+        "environment": {
+          "resolution": 512,
+          "lightformers": [
+            {
+              "intensity": 1.95,
+              "position": [
+                -3.2,
+                1.6,
+                1.2
+              ],
+              "scale": [
+                2,
+                4,
+                1
+              ],
+              "color": "#fffcfb"
+            },
+            {
+              "intensity": 2.3,
+              "position": [
+                0,
+                3.2,
+                0.4
+              ],
+              "scale": [
+                6,
+                0.5,
+                1
+              ],
+              "color": "#fff6e6",
+              "rotation": [
+                1.5708,
+                0,
+                0
+              ]
+            },
+            {
+              "intensity": 1.3,
+              "position": [
+                0,
+                -1,
+                0.8
+              ],
+              "scale": [
+                6,
+                3,
+                1
+              ],
+              "color": "#fffcf9",
+              "rotation": [
+                -1.5708,
+                0,
+                0
+              ]
+            },
+            {
+              "intensity": 0.65,
+              "position": [
+                3,
+                1.2,
+                -0.6
+              ],
+              "scale": [
+                2,
+                3,
+                1
+              ],
+              "color": "#5a6478"
+            }
+          ]
+        },
+        "shadow": {
+          "intensity": 0.21,
+          "mapSize": 2048,
+          "bias": -0.0002,
+          "normalBias": 0.01,
+          "extent": 1,
+          "targetY": 1.1
+        }
+      },
+      "presenterLighting": {
+        "exposure": 0.75,
+        "ambient": 0.5,
+        "fill": 1.15,
+        "environment": 1.2
+      },
+      "backLight": {
+        "rim": 0,
+        "kick": 0
+      }
+    },
+    "environment": {
+      "source": "lab editable rig",
+      "type": "panels",
+      "resolution": 512,
+      "lightformers": [
+        {
+          "intensity": 1.95,
+          "position": [
+            -3.2,
+            1.6,
+            1.2
+          ],
+          "scale": [
+            2,
+            4,
+            1
+          ],
+          "color": "#fffcfb"
+        },
+        {
+          "intensity": 2.3,
+          "position": [
+            0,
+            3.2,
+            0.4
+          ],
+          "scale": [
+            6,
+            0.5,
+            1
+          ],
+          "color": "#fff6e6",
+          "rotation": [
+            1.5708,
+            0,
+            0
+          ]
+        },
+        {
+          "intensity": 1.3,
+          "position": [
+            0,
+            -1,
+            0.8
+          ],
+          "scale": [
+            6,
+            3,
+            1
+          ],
+          "color": "#fffcf9",
+          "rotation": [
+            -1.5708,
+            0,
+            0
+          ]
+        },
+        {
+          "intensity": 0.65,
+          "position": [
+            3,
+            1.2,
+            -0.6
+          ],
+          "scale": [
+            2,
+            3,
+            1
+          ],
+          "color": "#5a6478"
+        }
+      ]
+    },
+    "camera": {
+      "source": "lab editable rig",
+      "type": "framing",
+      "layout": "mobile",
+      "frameHeightM": 1.15,
+      "headRoom": 0.055,
+      "sway": {
+        "amplitude": 0.015,
+        "speed": 0.08
+      },
+      "lensMm": 135,
+      "cameraDistanceM": 4.92,
+      "widthSqueeze": 0.93
+    },
+    "surface": {
+      "look": "kiosk",
+      "realism": {
+        "skinGlow": false,
+        "skinScatter": true,
+        "lipGloss": false,
+        "surfaceDetail": true,
+        "skinSmooth": false,
+        "skinSheen": true,
+        "skinTone": true,
+        "browDefinition": true,
+        "hairTame": false,
+        "wetEyes": true,
+        "hairCoverage": false
+      },
+      "realismParams": {
+        "scatterWrap": 0.5,
+        "scatterStrength": 0.9,
+        "scatterWarmth": 0.8,
+        "lipGloss": 0.85,
+        "skinDetail": 0.4,
+        "clothDetail": 0,
+        "smoothAmount": 0.6,
+        "smoothRadius": 0.0025,
+        "skinRoughness": 0.72,
+        "skinSheen": 0.4,
+        "skinSaturation": 1,
+        "skinWarmth": 0.15,
+        "skinBrightness": 1.02,
+        "calmRedness": 0,
+        "eyeBrightness": 1.1,
+        "browDarken": 0.52,
+        "browDensity": 1.3,
+        "hairReflection": 0.1,
+        "hairCutoff": 0.25,
+        "hairShade": 0.9,
+        "hairRoughness": 0.32
+      }
+    },
+    "life": {
+      "smile": 0.5,
+      "gaze": true,
+      "headDrift": true
+    },
+    "post": {
+      "ao": {
+        "enabled": true,
+        "intensity": 0.6,
+        "radius": 0.1
+      },
+      "grade": {
+        "enabled": true,
+        "contrast": 1.19,
+        "saturation": 1,
+        "lift": 0.07,
+        "warmth": -0.06,
+        "tealShadows": 0.05
+      }
+    },
+    "view": "lit",
+    "pose": "breathing"
+  },
+  "presets": {
+    "lights": {
+      "reference": {
+        "key": {
+          "position": [
+            -2.3,
+            2.7,
+            2.6
+          ],
+          "color": "#fff1e2",
+          "intensity": 2.4
+        },
+        "fill": {
+          "position": [
+            2.6,
+            1.5,
+            2.4
+          ],
+          "color": "#eef3fb",
+          "intensity": 1.1
+        },
+        "rimLeft": {
+          "position": [
+            -1.6,
+            2.6,
+            -2.4
+          ],
+          "color": "#d6ecff",
+          "intensity": 1.1
+        },
+        "rimRight": {
+          "position": [
+            1.8,
+            2.3,
+            -2.1
+          ],
+          "color": "#e9f1ff",
+          "intensity": 0.5
+        },
+        "hemisphere": {
+          "sky": "#cfe2e6",
+          "ground": "#8c8076",
+          "intensity": 0.55
+        },
+        "shadow": {
+          "intensity": 0.4,
+          "targetY": 1.2
+        }
+      },
+      "reference3": {
+        "key": {
+          "position": [
+            3,
+            4,
+            1.8
+          ],
+          "color": "#fff6ef",
+          "intensity": 4
+        },
+        "fill": {
+          "position": [
+            -2.5,
+            1.7,
+            2.6
+          ],
+          "color": "#eef3f9",
+          "intensity": 0.45
+        },
+        "rimLeft": {
+          "position": [
+            -1.6,
+            2.6,
+            -2.4
+          ],
+          "color": "#e1eeff",
+          "intensity": 0.7
+        },
+        "rimRight": {
+          "position": [
+            1.8,
+            2.4,
+            -2.1
+          ],
+          "color": "#eef3ff",
+          "intensity": 0.6
+        },
+        "hemisphere": {
+          "sky": "#dde8ee",
+          "ground": "#9a8f86",
+          "intensity": 0.22
+        },
+        "shadow": {
+          "intensity": 0.8,
+          "targetY": 1.4,
+          "extent": 0.7
+        }
+      }
+    },
+    "environment": {
+      "reference": {
+        "resolution": 512,
+        "panels": [
+          {
+            "intensity": 3,
+            "position": [
+              -3,
+              1.8,
+              2.2
+            ],
+            "scale": [
+              3,
+              4,
+              1
+            ],
+            "color": "#fff6ec"
+          },
+          {
+            "intensity": 1.2,
+            "position": [
+              3,
+              1.4,
+              2
+            ],
+            "scale": [
+              3,
+              3,
+              1
+            ],
+            "color": "#f2f6fb"
+          },
+          {
+            "intensity": 0.5,
+            "position": [
+              0,
+              3.4,
+              0.5
+            ],
+            "scale": [
+              8,
+              4,
+              1
+            ],
+            "color": "#f5f7f8",
+            "rotation": [
+              1.5708,
+              0,
+              0
+            ]
+          },
+          {
+            "intensity": 0.7,
+            "position": [
+              0,
+              -0.8,
+              1
+            ],
+            "scale": [
+              8,
+              4,
+              1
+            ],
+            "color": "#d8cfc6",
+            "rotation": [
+              -1.5708,
+              0,
+              0
+            ]
+          },
+          {
+            "intensity": 0.8,
+            "position": [
+              0,
+              1.6,
+              -3.5
+            ],
+            "scale": [
+              8,
+              4,
+              1
+            ],
+            "color": "#9fc4c9"
+          }
+        ]
+      },
+      "reference3": {
+        "resolution": 512,
+        "backdropStrength": 0.3,
+        "panels": [
+          {
+            "intensity": 4,
+            "position": [
+              2.4,
+              2.3,
+              2.2
+            ],
+            "scale": [
+              1.4,
+              1.8,
+              1
+            ],
+            "color": "#fff6ee"
+          },
+          {
+            "intensity": 10,
+            "position": [
+              0.8,
+              1.95,
+              2.3
+            ],
+            "scale": [
+              0.35,
+              0.25,
+              1
+            ],
+            "color": "#ffffff"
+          },
+          {
+            "intensity": 0.7,
+            "position": [
+              -3,
+              1.4,
+              2
+            ],
+            "scale": [
+              3,
+              3,
+              1
+            ],
+            "color": "#eef3f8"
+          },
+          {
+            "intensity": 0.35,
+            "position": [
+              0,
+              3.4,
+              0.5
+            ],
+            "scale": [
+              8,
+              4,
+              1
+            ],
+            "color": "#f5f7f8",
+            "rotation": [
+              1.5708,
+              0,
+              0
+            ]
+          },
+          {
+            "intensity": 0.45,
+            "position": [
+              0,
+              -0.8,
+              1
+            ],
+            "scale": [
+              8,
+              4,
+              1
+            ],
+            "color": "#d8cfc6",
+            "rotation": [
+              -1.5708,
+              0,
+              0
+            ]
+          }
+        ]
+      }
+    },
+    "grade": {
+      "reference": {
+        "enabled": true,
+        "contrast": 1.06,
+        "saturation": 1.04,
+        "lift": 0.025,
+        "warmth": 0.06,
+        "tealShadows": 0.05
+      },
+      "reference3": {
+        "enabled": true,
+        "contrast": 1.08,
+        "saturation": 1,
+        "lift": 0.015,
+        "warmth": 0,
+        "tealShadows": 0.03
+      }
+    },
+    "backdropBlur": {
+      "reference": 4
+    }
+  }
+}

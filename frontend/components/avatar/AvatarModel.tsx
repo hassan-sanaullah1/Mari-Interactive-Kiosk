@@ -731,6 +731,69 @@ export interface AvatarModelProps {
    * fetch/parse time Suspense already covers.
    */
   onReady?: () => void;
+  /**
+   * False puts every material back exactly as the file shipped it, with none of
+   * the corrections below (the avatar lab's "raw" look, which a presenter look
+   * in profiles/looks.ts may be signed off in). Default true.
+   */
+  isCorrected?: boolean;
+}
+
+/** A material's values before the first correction, so they can be put back. */
+interface PristineMaterial {
+  color: THREE.Color;
+  roughness: number;
+  envMapIntensity: number;
+  emissive: THREE.Color;
+  emissiveMap: THREE.Texture | null;
+  emissiveIntensity: number;
+  alphaTest: number;
+  depthWrite: boolean;
+  shadowSide: THREE.Side | null;
+  map: THREE.Texture | null;
+  anisotropy: number;
+  specularColor: THREE.Color | null;
+}
+
+// Captured the first time each is seen, which is before anything here edits it:
+// drei hands back the same cached objects on every remount.
+const pristineMaterials = new WeakMap<THREE.MeshStandardMaterial, PristineMaterial>();
+const pristineShadows = new WeakMap<THREE.Mesh, { cast: boolean; receive: boolean }>();
+/** The makeup-toned copy of a face map, so correcting again reuses it instead of re-toning. */
+const tonedMaps = new WeakMap<THREE.Texture, THREE.Texture>();
+
+function capturePristine(std: THREE.MeshStandardMaterial): PristineMaterial {
+  const physical = std as THREE.MeshPhysicalMaterial;
+  return {
+    color: std.color.clone(),
+    roughness: std.roughness,
+    envMapIntensity: std.envMapIntensity,
+    emissive: std.emissive.clone(),
+    emissiveMap: std.emissiveMap,
+    emissiveIntensity: std.emissiveIntensity,
+    alphaTest: std.alphaTest,
+    depthWrite: std.depthWrite,
+    shadowSide: std.shadowSide,
+    map: std.map,
+    anisotropy: std.map?.anisotropy ?? 1,
+    specularColor: "specularColor" in physical ? physical.specularColor.clone() : null,
+  };
+}
+
+function restorePristine(std: THREE.MeshStandardMaterial, pristine: PristineMaterial): void {
+  std.color.copy(pristine.color);
+  std.roughness = pristine.roughness;
+  std.envMapIntensity = pristine.envMapIntensity;
+  std.emissive.copy(pristine.emissive);
+  std.emissiveMap = pristine.emissiveMap;
+  std.emissiveIntensity = pristine.emissiveIntensity;
+  std.alphaTest = pristine.alphaTest;
+  std.depthWrite = pristine.depthWrite;
+  std.shadowSide = pristine.shadowSide;
+  std.map = pristine.map;
+  if (pristine.map) pristine.map.anisotropy = pristine.anisotropy;
+  if (pristine.specularColor) (std as THREE.MeshPhysicalMaterial).specularColor.copy(pristine.specularColor);
+  tintedMaterials.delete(std);
 }
 
 /**
@@ -784,6 +847,7 @@ export default function AvatarModel({
   state = "idle",
   onMeasure,
   onReady,
+  isCorrected = true,
 }: AvatarModelProps) {
   const segments = config.segments;
   // The loader is pointed at the single shared download (lib/avatar-fetch.ts)
@@ -1041,16 +1105,25 @@ export default function AvatarModel({
       const mesh = child as THREE.Mesh;
       if (!mesh.isMesh) return;
 
+      if (!pristineShadows.has(mesh)) pristineShadows.set(mesh, { cast: mesh.castShadow, receive: mesh.receiveShadow });
       // Both, on every mesh: with no ground plane and her feet below the
       // frame, the only shadows anyone sees are the ones she casts onto
       // herself, and a mesh that does not RECEIVE cannot show them.
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
+      const shadows = pristineShadows.get(mesh)!;
+      mesh.castShadow = isCorrected || shadows.cast;
+      mesh.receiveShadow = isCorrected || shadows.receive;
 
       const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       for (const material of materials) {
         const std = material as THREE.MeshStandardMaterial;
         if (!std.isMeshStandardMaterial) continue;
+
+        if (!pristineMaterials.has(std)) pristineMaterials.set(std, capturePristine(std));
+        if (!isCorrected) {
+          restorePristine(std, pristineMaterials.get(std)!);
+          std.needsUpdate = true;
+          continue;
+        }
 
         // Tone the painted-on makeup before anything else reads std.map — the
         // emissive lift below points at the same texture, so it has to pick up
@@ -1061,9 +1134,10 @@ export default function AvatarModel({
           std.map &&
           !MAKEUP_TONED.has(std.map)
         ) {
-          const toned = desaturateMakeup(std.map, config.makeupDesaturation);
+          const toned = tonedMaps.get(std.map) ?? desaturateMakeup(std.map, config.makeupDesaturation);
           if (toned) {
             MAKEUP_TONED.add(toned);
+            tonedMaps.set(std.map, toned);
             std.map.dispose();
             std.map = toned;
           }
@@ -1171,7 +1245,7 @@ export default function AvatarModel({
         std.needsUpdate = true;
       }
     });
-  }, [scene, gl, config]);
+  }, [scene, gl, config, isCorrected]);
 
   // ── MORPH TARGET MESHES ─────────────────────────────────────
   // Only the meshes carrying FACE blendshapes. A rig can ship morphs that have

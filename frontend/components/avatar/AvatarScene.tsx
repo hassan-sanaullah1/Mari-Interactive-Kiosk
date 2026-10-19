@@ -39,7 +39,19 @@ import * as THREE from "three";
 import AvatarModel from "./AvatarModel";
 import { fetchAvatar, isAvatarParsed } from "@/lib/avatar-fetch";
 import { type AvatarState } from "./state";
-import { avatarConfig, DEFAULT_AVATAR, type AvatarId } from "./models";
+import { avatarConfig, DEFAULT_AVATAR, type AvatarConfig, type AvatarId } from "./models";
+import { NO_LIFE } from "./look/liveliness";
+import {
+  FixedLights,
+  LifeLayer,
+  PanelEnvironment,
+  RealismLayer,
+  RealismParamsSync,
+  ShadowSoftness,
+  ToneMappingSync,
+} from "./look/LookLayers";
+import PostEffects from "./look/PostEffects";
+import { ENABLE_AVATAR_LOOKS, presenterLook, type PresenterLook } from "./profiles/looks";
 // Every number that decides how the scene looks lives in ./tuning.ts — this
 // file is the machinery that applies them.
 import {
@@ -93,11 +105,14 @@ export function Framing({
   widthSqueeze = 1,
   lensMm = CAMERA.lensMm,
   cameraDistanceM = null,
+  headRoom = CAMERA.headRoom,
 }: {
   modelHeight: number;
   widthSqueeze?: number;
   lensMm?: number;
   cameraDistanceM?: number | null;
+  /** Overrides CAMERA.headRoom (a presenter look's portrait framing). */
+  headRoom?: number;
 }) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const size = useThree((s) => s.size);
@@ -105,7 +120,7 @@ export function Framing({
 
   useEffect(() => {
     if (size.width <= 0 || size.height <= 0) return;
-    const topY = modelHeight * (1 + CAMERA.headRoom);
+    const topY = modelHeight * (1 + headRoom);
     // Never frame more than the whole rig — past her feet there is only empty
     // floor to show, and she would shrink for no reason.
     const frameHeight = Math.min(CAMERA.frameHeightM, topY);
@@ -133,7 +148,7 @@ export function Framing({
     camera.updateProjectionMatrix();
     // `size` is a dependency so a container resize re-applies the framing —
     // the stage's shape changes the fov, and with it the distance.
-  }, [camera, size.width, size.height, modelHeight, widthSqueeze, lensMm, cameraDistanceM]);
+  }, [camera, size.width, size.height, modelHeight, widthSqueeze, lensMm, cameraDistanceM, headRoom]);
 
   // A very slow sway keeps the shot from reading as a still image — see
   // CAMERA.sway in ./tuning.ts.
@@ -183,14 +198,15 @@ function crossfadeStudios(
   lights: Record<LightName, THREE.Light | null>,
   studios: { dark: StudioObjects; light: StudioObjects },
   mix: number,
+  rooms: Record<Theme, Studio>,
 ): void {
   for (const name of LIGHT_NAMES) {
     const light = lights[name];
     if (!light) continue;
     light.color.lerpColors(studios.dark.colors[name], studios.light.colors[name], mix);
     light.position.lerpVectors(studios.dark.positions[name], studios.light.positions[name], mix);
-    const from = STUDIO.dark.placement[name];
-    const to = STUDIO.light.placement[name];
+    const from = rooms.dark.placement[name];
+    const to = rooms.light.placement[name];
     const spot = light as THREE.SpotLight;
     if (from.angle !== undefined && to.angle !== undefined) {
       spot.angle = THREE.MathUtils.lerp(from.angle, to.angle, mix);
@@ -222,6 +238,8 @@ interface DynamicLightingProps {
   backLight: { rim: number; kick: number };
   /** Which studio to light her in — see STUDIO in ./tuning.ts. */
   theme: Theme;
+  /** Both rooms to ease between; STUDIO unless a presenter look brings its own. */
+  studio?: Record<Theme, Studio>;
 }
 
 /** The six light names, in the order the refs below are read. */
@@ -245,6 +263,7 @@ export function DynamicLighting({
   lighting,
   backLight,
   theme,
+  studio: rooms = STUDIO,
 }: DynamicLightingProps) {
   const { gl, scene } = useThree();
   const ambientLightRef = useRef<THREE.AmbientLight>(null);
@@ -274,8 +293,8 @@ export function DynamicLighting({
       ) as Record<LightName, THREE.Vector3>,
       ambient: new THREE.Color(studio.ambientColor),
     });
-    return { dark: build(STUDIO.dark), light: build(STUDIO.light) };
-  }, []);
+    return { dark: build(rooms.dark), light: build(rooms.light) };
+  }, [rooms]);
 
   useFrame(() => {
     const vol = levelRef?.current ?? 0;
@@ -284,7 +303,7 @@ export function DynamicLighting({
 
     themeMix.current = THREE.MathUtils.lerp(themeMix.current, theme === "light" ? 1 : 0, LERP_SPEED);
     const mix = themeMix.current;
-    const studio = STUDIO[theme];
+    const studio = rooms[theme];
     const config = studio.states[state];
 
     crossfadeStudios(
@@ -298,6 +317,7 @@ export function DynamicLighting({
       },
       studios,
       mix,
+      rooms,
     );
 
     if (keyLightRef.current) {
@@ -355,6 +375,16 @@ export function DynamicLighting({
       // graph, so its world matrix has to be refreshed by hand.
       faceLightRef.current.target.position.set(0, headTargetY, 0);
       faceLightRef.current.target.updateMatrixWorld();
+      // The kiosk's own studios leave the face spot at its mount value (the dark
+      // room's). A presenter look was signed off in the lab with its theme's own
+      // value, and measured 2-4% brighter on the face without this.
+      if (rooms !== STUDIO) {
+        faceLightRef.current.intensity = THREE.MathUtils.lerp(
+          faceLightRef.current.intensity,
+          studio.placement.face.intensity,
+          LERP_SPEED,
+        );
+      }
     }
     if (keyLightRef.current) {
       // Same bare-target case as the face spot. Aimed at her torso rather than
@@ -468,6 +498,113 @@ export interface AvatarSceneProps {
   theme?: Theme;
 }
 
+/** The kiosk's portrait layout: the same switch as globals.css and page.module.css. */
+const PORTRAIT_QUERY = "(max-aspect-ratio: 6/5)";
+
+function useIsPortrait(): boolean {
+  const [isPortrait, setIsPortrait] = useState(() => window.matchMedia(PORTRAIT_QUERY).matches);
+  useEffect(() => {
+    const query = window.matchMedia(PORTRAIT_QUERY);
+    const onChange = () => setIsPortrait(query.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+  return isPortrait;
+}
+
+const LOOK_TONE_MAPPING: Record<PresenterLook["toneMapping"], THREE.ToneMapping> = {
+  neutral: THREE.NeutralToneMapping,
+  aces: THREE.ACESFilmicToneMapping,
+};
+
+/**
+ * A presenter look's surface and post layers (profiles/looks.ts), laid over
+ * the loaded rig. Mounted only while the feature is on; with no look for this
+ * presenter and theme it puts back the kiosk's tone mapping and clears the
+ * resting expression, then does nothing.
+ */
+function LookLayers({
+  look,
+  config,
+  root,
+  version,
+}: {
+  look: PresenterLook | null;
+  config: AvatarConfig;
+  root: THREE.Object3D | null;
+  version: number;
+}) {
+  return (
+    <>
+      <ToneMappingSync toneMapping={look ? LOOK_TONE_MAPPING[look.toneMapping] : THREE.ACESFilmicToneMapping} />
+      {/* Kept mounted with everything off when there is no look: one frame of
+          that clears the smile and gaze it wrote. Keyed on the load, so it runs
+          after the rig's own frame callbacks. */}
+      {root && <LifeLayer key={version} root={root} options={look?.life ?? NO_LIFE} />}
+      {look && (
+        <>
+          {/* Laid again whenever the rig loads or its materials are reset. */}
+          <RealismLayer rig={config} realism={look.realism} version={`${version}-${look.isCorrected}`} />
+          <RealismParamsSync params={look.realismParams} />
+          <ShadowSoftness radius={Math.max(1, look.shadowSoftness)} strength={look.shadowStrength} />
+          {(look.ao.enabled || look.grade.enabled) && <PostEffects ao={look.ao} grade={look.grade} />}
+        </>
+      )}
+    </>
+  );
+}
+
+/** The light rig and reflections: a look's own, or the kiosk's studio. */
+function SceneLighting({
+  look,
+  config,
+  theme,
+  state,
+  levelRef,
+}: {
+  look: PresenterLook | null;
+  config: AvatarConfig;
+  theme: Theme;
+  state: AvatarState;
+  levelRef?: { current: number };
+}) {
+  const lookLighting = look?.lighting;
+  const rooms = useMemo(
+    () => (lookLighting?.kind === "studio" ? { ...STUDIO, [theme]: lookLighting.studio } : STUDIO),
+    [lookLighting, theme],
+  );
+  if (lookLighting?.kind === "fixed") {
+    return (
+      <>
+        <FixedLights rig={lookLighting.lights} />
+        <PanelEnvironment key={`fixed-${config.id}-${theme}`} {...lookLighting.environment} />
+      </>
+    );
+  }
+  let themeLighting = theme === "light" ? config.lightThemeLighting : config.darkThemeLighting;
+  if (lookLighting?.kind === "studio") themeLighting = lookLighting.rigLighting;
+  return (
+    <>
+      <DynamicLighting
+        state={state}
+        levelRef={levelRef}
+        headTargetY={config.headTargetY}
+        lighting={themeLighting}
+        backLight={config.backLight}
+        theme={theme}
+        studio={rooms}
+      />
+      {/* Reflections only — an <Environment> with no `background` prop does not
+          draw anything, so the artwork behind the canvas stays visible. */}
+      <Environment key={look ? `${theme}-${config.id}` : theme} resolution={rooms[theme].environment.resolution}>
+        {rooms[theme].environment.lightformers.map((panel, i) => (
+          <Lightformer key={i} {...panel} />
+        ))}
+      </Environment>
+    </>
+  );
+}
+
 export default function AvatarScene({
   state = "idle",
   avatar = DEFAULT_AVATAR,
@@ -476,10 +613,9 @@ export default function AvatarScene({
   theme = "dark",
 }: AvatarSceneProps) {
   const config = avatarConfig(avatar);
-  const lighting =
-    theme === "light"
-      ? config.lightThemeLighting
-      : config.darkThemeLighting;
+  const look = presenterLook(config.id, theme);
+  const isPortrait = useIsPortrait();
+  const headRoom = look ? look.headRoom[isPortrait ? "portrait" : "landscape"] : CAMERA.headRoom;
 
   /**
    * The rig's height, tagged with the rig it was measured on.
@@ -503,6 +639,15 @@ export default function AvatarScene({
     [config.id],
   );
 
+  // A presenter look layers over the posed rig, so it needs to know when one
+  // has loaded and which group holds it.
+  const modelGroupRef = useRef<THREE.Group>(null);
+  const [loaded, setLoaded] = useState<{ root: THREE.Object3D | null; version: number }>({ root: null, version: 0 });
+  const onModelReady = useCallback(() => {
+    setLoaded((previous) => ({ root: modelGroupRef.current, version: previous.version + 1 }));
+    onReady?.();
+  }, [onReady]);
+
   // The presenter's own bytes, warmed as soon as the choice is known — the
   // module-scope call above only covers whichever rig was stored at load.
   //
@@ -525,8 +670,9 @@ export default function AvatarScene({
       // cheek, chin on neck, arm on torso. That is the modelling the rig was
       // missing. `shadows` cannot be toggled per theme without recreating the
       // renderer, so both themes get shadow maps and the per-theme dial is
-      // STUDIO[theme].shadow.intensity.
-      shadows={{ type: THREE.PCFSoftShadowMap }}
+      // STUDIO[theme].shadow.intensity. A presenter look with soft shadows
+      // switches the map to VSM, the only type that blurs by a radius.
+      shadows={look && look.shadowSoftness > 0 ? "variance" : { type: THREE.PCFSoftShadowMap }}
       gl={{ antialias: true, alpha: true, toneMapping: THREE.ACESFilmicToneMapping }}
       camera={{ position: [0, 1.26, 4], fov: 20, near: 0.1, far: 100, manual: true }}
       // Transparent clear, so the kiosk artwork shows through the whole canvas.
@@ -539,38 +685,29 @@ export default function AvatarScene({
         widthSqueeze={config.widthSqueeze}
         lensMm={config.lensMm}
         cameraDistanceM={config.cameraDistanceM}
+        headRoom={headRoom}
       />
-      <DynamicLighting
-        state={state}
-        levelRef={levelRef}
-        headTargetY={config.headTargetY}
-        lighting={lighting}
-        backLight={config.backLight}
-        theme={theme}
-      />
-
-      {/* Reflections only — an <Environment> with no `background` prop does not
-          draw anything, so the artwork behind the canvas stays visible. */}
-      <Environment key={theme} resolution={STUDIO[theme].environment.resolution}>
-        {STUDIO[theme].environment.lightformers.map((panel, i) => (
-          <Lightformer key={i} {...panel} />
-        ))}
-      </Environment>
+      <SceneLighting look={look} config={config} theme={theme} state={state} levelRef={levelRef} />
 
       {/* Keyed on the rig, so switching presenters tears the old one down
           rather than trying to reconcile two different skeletons through the
           same component instance. */}
       <ModelErrorBoundary key={config.id} url={config.url}>
         {(modelUrl) => (
-          <AvatarModel
-            url={modelUrl}
-            config={config}
-            state={state}
-            onMeasure={onMeasure}
-            onReady={onReady}
-          />
+          <group ref={modelGroupRef}>
+            <AvatarModel
+              url={modelUrl}
+              config={config}
+              state={state}
+              onMeasure={onMeasure}
+              onReady={onModelReady}
+              isCorrected={look?.isCorrected ?? true}
+            />
+          </group>
         )}
       </ModelErrorBoundary>
+
+      {ENABLE_AVATAR_LOOKS && <LookLayers look={look} config={config} root={loaded.root} version={loaded.version} />}
     </Canvas>
   );
 }
