@@ -199,6 +199,8 @@ interface Originals {
 const wetEyeMaterials = new Map<THREE.MeshPhysicalMaterial, THREE.Color>();
 const browMaterials = new Map<THREE.MeshStandardMaterial, Originals>();
 const hairMaterials = new Map<THREE.MeshStandardMaterial, Originals>();
+/** Beard cards with taming on: the hair's sheen and shade, never its cut-off. */
+const beardMaterials = new Map<THREE.MeshStandardMaterial, Originals>();
 
 /** Brow cut-off with definition on: low, so the edges density fills in survive. */
 const BROW_CUTOFF = 0.03;
@@ -251,6 +253,11 @@ export function setRealismParams(params: RealismParams): void {
     material.color.copy(original.color).multiplyScalar(params.hairShade);
     material.envMapIntensity = params.hairReflection;
     material.alphaTest = Math.max(original.alphaTest, params.hairCutoff);
+    material.roughness = params.hairRoughness;
+  }
+  for (const [material, original] of beardMaterials) {
+    material.color.copy(original.color).multiplyScalar(params.hairShade);
+    material.envMapIntensity = params.hairReflection;
     material.roughness = params.hairRoughness;
   }
 }
@@ -505,12 +512,18 @@ const COVERAGE_MIN_CUTOFF = 0.15;
 
 /**
  * Brows and lashes are excluded: they are thin enough that their blended edge
- * already reads right, and coverage made them harsh and dark.
+ * already reads right, and coverage made them harsh and dark. So is the male
+ * rig's beard card: stubble is all faint texels, and the hair cut-off erased
+ * most of it.
  */
 function isHairCard(material: THREE.MeshStandardMaterial): boolean {
   const label = `${material.name} ${material.map?.name ?? ""}`;
-  return material.transparent && !/brow|lash/i.test(label);
+  return material.transparent && !/brow|lash|beard/i.test(label);
 }
+
+/** Measured on the male rig: its beard card ships at roughness 0.29 and the key's reflection greyed the moustache. */
+const isBeardCard = (material: THREE.MeshStandardMaterial): boolean =>
+  material.transparent && /beard/i.test(`${material.name} ${material.map?.name ?? ""}`);
 
 function softenEdges(material: THREE.Material, undo: (() => void)[]): void {
   const before = {
@@ -568,6 +581,7 @@ function applyToMaterial(
     densifyBrow(material, undo);
   }
   if (options.hairTame && isHairCard(material)) track(hairMaterials, material, undo);
+  if (options.hairTame && isBeardCard(material)) track(beardMaterials, material, undo);
   if (options.surfaceDetail && isCloth(material)) addSurfaceDetail(material, "cloth", undo);
   if (options.hairCoverage && isHairCard(material)) softenEdges(material, undo);
 }

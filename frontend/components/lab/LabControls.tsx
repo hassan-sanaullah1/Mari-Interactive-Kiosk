@@ -16,6 +16,7 @@ import {
   type RealismOptions,
   type RealismParams,
 } from "@/components/avatar/realism";
+import type { PhaseA } from "./lab-looks";
 import type { LabSettings } from "./LabScene";
 import { REFERENCE_BACKDROP_BLUR, REFERENCE_GRADE, REFERENCE_V3_GRADE } from "./reference-look";
 
@@ -109,10 +110,6 @@ export function Slider({
   );
 }
 
-type PhaseA = Pick<
-  LabSettings,
-  "realism" | "realismParams" | "life" | "ao" | "grade" | "shadowSoftness" | "shadowStrength"
->;
 
 /** What the kiosk renders today. */
 export const KIOSK_PHASE_A: PhaseA = {
@@ -286,6 +283,98 @@ export const REFERENCE_V4: Partial<LabSettings> = {
   shadowStrength: 1,
 };
 
+/**
+ * Male v1: the v3 light and room, with his surfaces tuned for a bearded face.
+ *
+ *   no smoothing      it blurred the stubble painted into his skin texture away
+ *   no redness calm   the beard's brown sits in the blotch band of the mask
+ *                     (calibrated on her face) and went grey
+ *   skin rough 0.72   at 0.35-0.5 the key's highlight laid a grey sheen over the
+ *                     dark painted moustache; it was gone at 0.9
+ *   warmer skin       his texture reads pale and grey under the neutral key
+ *   hair cut-off 0.1  his hair ships at 0.08; v4's 0.35 thinned it (the beard
+ *                     card is no longer touched by the cut-off at all)
+ *   ACES, wider AO    lifts the kurta folds and the arms against the body
+ */
+export const MALE_V1: Partial<LabSettings> = {
+  ...REFERENCE_V3,
+  // No presenter here: presenters are data (AGENTS.md), so this is a look, chosen with the Presenter switch.
+  tone: "aces",
+  realism: { ...ALL_REALISM, lipGloss: false, skinSmooth: false, browDefinition: false },
+  realismParams: {
+    ...(REFERENCE_V3.realismParams as RealismParams),
+    skinDetail: 0.2,
+    skinRoughness: 0.72,
+    skinSheen: 0.35,
+    skinSaturation: 1.05,
+    skinWarmth: 0.2,
+    skinBrightness: 1.05,
+    calmRedness: 0,
+    eyeBrightness: 1.05,
+    hairReflection: 0.15,
+    hairCutoff: 0.1,
+    hairShade: 1,
+    hairRoughness: 0.55,
+  },
+  life: { smile: 0, gaze: true, headDrift: true },
+  ao: { enabled: true, intensity: 0.75, radius: 0.09 },
+  grade: { enabled: true, contrast: 1.1, saturation: 1.02, lift: 0.01, warmth: 0.02, tealShadows: 0.02 },
+  shadowSoftness: 5,
+  shadowStrength: 1,
+};
+
+/**
+ * Male, light theme, matched to the female light look the team accepted
+ * (exported 2026-10-19): the same raw look, Reference v1 lights and lobby
+ * panels, neutral tone mapping, 2.5 px backdrop blur, AO, grade, shadows and
+ * smile. Only what her face needs and his does not is changed:
+ *
+ *   skin rough 0.72, sheen 0.4   her 0.53 / 0.82 made his face read sweaty
+ *   skin detail 0.4              her 2.1 turned his stubble into wet bumps
+ *   smoothing and lip gloss off  smoothing blurs the painted stubble; the
+ *                                gloss mask follows her lip colour
+ *   redness calm 0               the beard's brown sits in that mask's band
+ *   warmth 0.15, saturation 1    his texture reads paler and pinker than hers
+ */
+export const MALE_LIGHT_V2: Partial<LabSettings> = {
+  look: "raw",
+  lights: "reference",
+  environment: "reference",
+  tone: "neutral",
+  view: "lit",
+  backdropBlur: 2.5,
+  realism: { ...ALL_REALISM, lipGloss: false, skinSmooth: false, hairTame: false },
+  realismParams: {
+    ...DEFAULT_REALISM_PARAMS,
+    scatterWrap: 0.5,
+    scatterStrength: 0.9,
+    scatterWarmth: 0.8,
+    lipGloss: 0.85,
+    skinDetail: 0.4,
+    clothDetail: 0,
+    smoothAmount: 0.6,
+    smoothRadius: 0.0025,
+    skinRoughness: 0.72,
+    skinSheen: 0.4,
+    skinSaturation: 1,
+    skinWarmth: 0.15,
+    skinBrightness: 1.02,
+    calmRedness: 0,
+    eyeBrightness: 1.1,
+    browDarken: 0.52,
+    browDensity: 1.3,
+    hairReflection: 0.1,
+    hairCutoff: 0.25,
+    hairShade: 0.9,
+    hairRoughness: 0.32,
+  },
+  life: { smile: 0.5, gaze: true, headDrift: true },
+  ao: { enabled: true, intensity: 0.6, radius: 0.1 },
+  grade: { enabled: true, contrast: 1.16, saturation: 1, lift: 0.07, warmth: -0.06, tealShadows: 0.05 },
+  shadowSoftness: 5,
+  shadowStrength: 1,
+};
+
 /** What the kiosk renders today, including its lights, environment and tone mapping. */
 export const KIOSK_TODAY: Partial<LabSettings> = {
   look: "kiosk",
@@ -452,7 +541,10 @@ export function PhaseAPanel({ value, onChange }: { value: PhaseA; onChange: (val
   return (
     <section className={styles.section}>
       <h2>Phase A</h2>
-      <p className={styles.hint}>Applied on top of the look above. Kiosk today: glow on, everything else off.</p>
+      <p className={styles.hint}>
+        Applied on top of the look above. Each presenter has its own Phase A in each theme: these values belong to the
+        presenter and theme selected now, and switching brings in theirs. Kiosk today: glow on, everything else off.
+      </p>
       <div className={styles.row}>
         <button type="button" onClick={() => onChange(KIOSK_PHASE_A)}>
           Kiosk today

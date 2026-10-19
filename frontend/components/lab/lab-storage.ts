@@ -6,6 +6,7 @@
  * A convenience, not a record: the export is still how values leave the lab.
  */
 
+import { fileCurrentLook } from "./lab-looks";
 import type { LabSettings } from "./LabScene";
 
 const STORAGE_KEY = "mari-avatar-lab-v1";
@@ -80,11 +81,14 @@ export function settingsFromImport(base: LabSettings, text: string): ImportResul
     if (!isObject(data.rig) || !isObject(data.scene)) {
       return { ok: false, error: "A lab export, but its rig or scene is missing." };
     }
-    const { backdrop, ...scene } = data.scene;
-    return { ok: true, settings: merge(base, { ...scene, rig: data.rig }), backdrop, source: "export" };
+    // An export holds one presenter's look in one theme: it is filed under them
+    // only, and the other presenters and theme keep theirs.
+    const { backdrop, looks: _looks, ...scene } = data.scene;
+    const settings = fileCurrentLook(merge(base, { ...scene, rig: data.rig }));
+    return { ok: true, settings, backdrop, source: "export" };
   }
   if (isObject(data.rig) && "look" in data) {
-    return { ok: true, settings: merge(base, data), backdrop: undefined, source: "settings" };
+    return { ok: true, settings: fileCurrentLook(merge(base, data)), backdrop: undefined, source: "settings" };
   }
   return { ok: false, error: "Not a lab export: expected kind \"mari-avatar-lab-export\"." };
 }

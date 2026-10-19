@@ -13,7 +13,7 @@
  */
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type CSSProperties, type ReactNode, type SetStateAction } from "react";
 import styles from "./lab.module.css";
 import bgStyles from "../page.module.css";
 import { AVATARS, type AvatarId } from "@/components/avatar/models";
@@ -27,6 +27,8 @@ import {
   REFERENCE_V2,
   REFERENCE_V3,
   REFERENCE_V4,
+  MALE_LIGHT_V2,
+  MALE_V1,
   Slider,
 } from "@/components/lab/LabControls";
 import {
@@ -39,7 +41,7 @@ import {
 } from "@/components/lab/CompareTools";
 import { DEVICES, MOBILE_BACKDROPS, type DeviceId } from "@/components/lab/devices";
 import { DeviceFrame } from "@/components/lab/DeviceFrame";
-import { diff, kioskRig, type LightName } from "@/components/lab/lab-rig";
+import { kioskRig, scopedChanges, type LightName } from "@/components/lab/lab-rig";
 import type { LabSettings } from "@/components/lab/LabScene";
 import {
   clearLabSettings,
@@ -48,6 +50,7 @@ import {
   settingsFromImport,
 } from "@/components/lab/lab-storage";
 import { resolvedLook } from "@/components/lab/resolved-look";
+import { fileCurrentLook, sameLookEverywhere, syncLooks } from "@/components/lab/lab-looks";
 import { RigEditor } from "@/components/lab/RigEditor";
 
 // three.js needs WebGL, which exists only in the browser.
@@ -85,6 +88,7 @@ const INITIAL: LabSettings = {
   mobileBackdrop: "theme",
   showGuides: true,
   compare: { mode: "off", opacity: 0.5, image: "/lab/reference.webp" },
+  looks: sameLookEverywhere(KIOSK_PHASE_A),
 };
 
 function InventoryPanel({ data }: { data: AssetInventory | null }) {
@@ -282,12 +286,18 @@ function LabStage({
 }
 
 export default function LabPage() {
-  const [settings, setSettings] = useState<LabSettings>(INITIAL);
+  const [settings, setRawSettings] = useState<LabSettings>(INITIAL);
+  // Every edit is filed under the presenter and theme on screen, and a switch
+  // swaps their Phase A look in (lab-looks.ts). Restore, import and reset set
+  // whole, already consistent settings and use the raw setter.
+  const setSettings = useCallback((action: SetStateAction<LabSettings>) => {
+    setRawSettings((previous) => syncLooks(previous, typeof action === "function" ? action(previous) : action));
+  }, []);
   // Restored after mount (localStorage does not exist during the server render),
   // and saved only once restored, so the defaults never overwrite a saved session.
   const [isRestored, setIsRestored] = useState(false);
   useEffect(() => {
-    setSettings(loadLabSettings(INITIAL));
+    setRawSettings(fileCurrentLook(loadLabSettings(INITIAL)));
     setIsRestored(true);
   }, []);
   useEffect(() => {
@@ -302,7 +312,7 @@ export default function LabPage() {
     <K extends keyof LabSettings>(key: K) =>
       (value: LabSettings[K]) =>
         setSettings((s) => ({ ...s, [key]: value })),
-    [],
+    [setSettings],
   );
 
   // A new rig or look means a new load.
@@ -338,21 +348,23 @@ export default function LabPage() {
       rig.studio[s.theme].placement[name].position = position;
       return { ...s, rig };
     });
-  }, []);
+  }, [setSettings]);
 
   // Recorded in the export, so the values come with the scene they were judged in.
-  const { rig: _rig, editLight: _editLight, showHandles: _showHandles, ...sceneSettings } = settings;
+  // `looks` stays out: an export carries the look on screen only (one presenter, one theme).
+  const { rig: _rig, editLight: _editLight, showHandles: _showHandles, looks: _looks, ...sceneSettings } = settings;
   const exportScene = { ...sceneSettings, backdrop };
 
   const onImport = (text: string): string => {
     const result = settingsFromImport(settings, text);
     if (!result.ok) return `Import failed: ${result.error}`;
-    setSettings(result.settings);
+    setRawSettings(result.settings);
     if (result.backdrop === "artwork" || (typeof result.backdrop === "string" && result.backdrop in BACKDROP_COLOR)) {
       setBackdrop(result.backdrop as Backdrop);
     }
-    const changes = diff(kioskRig(), result.settings.rig).length;
-    return `Imported ${result.source === "export" ? "a lab export" : "lab settings"}: ${changes} value(s) differ from the kiosk. Keep editing; Export saves the new version.`;
+    const { presenter, theme } = result.settings;
+    const changes = scopedChanges(result.settings.rig, presenter, theme).length;
+    return `Imported ${result.source === "export" ? "a lab export" : "lab settings"} for the ${presenter} presenter, ${theme} theme: ${changes} value(s) differ from the kiosk. Keep editing; Export saves the new version.`;
   };
 
   const scene = (
@@ -408,6 +420,12 @@ export default function LabPage() {
             <button type="button" onClick={() => setSettings((s) => ({ ...s, ...REFERENCE_V4 }))}>
               Reference v4
             </button>
+            <button type="button" onClick={() => setSettings((s) => ({ ...s, ...MALE_V1 }))}>
+              Male v1 (look)
+            </button>
+            <button type="button" onClick={() => setSettings((s) => ({ ...s, ...MALE_LIGHT_V2 }))}>
+              Male light v2 (matches female)
+            </button>
             <button type="button" onClick={() => setSettings((s) => ({ ...s, ...KIOSK_PHASE_A, ...KIOSK_TODAY }))}>
               Kiosk today
             </button>
@@ -416,7 +434,7 @@ export default function LabPage() {
               title="Forget the saved session and start from the defaults"
               onClick={() => {
                 clearLabSettings();
-                setSettings(INITIAL);
+                setRawSettings(INITIAL);
               }}
             >
               Reset lab

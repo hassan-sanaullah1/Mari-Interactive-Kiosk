@@ -42,6 +42,7 @@ import type { Theme } from "@/lib/theme";
 import { EditablePanels, EditableStudioLights, LabFraming, LightHandles } from "./EditableStudio";
 import type { DeviceId } from "./devices";
 import type { LabRig, Layout, LightName } from "./lab-rig";
+import type { Looks } from "./lab-looks";
 import RawModel, { type LabPose } from "./RawModel";
 import {
   REFERENCE_ENVIRONMENT,
@@ -112,6 +113,11 @@ export interface LabSettings {
   showGuides: boolean;
   /** Step 0: the target picture beside or over the render. The page draws it. */
   compare: { mode: "off" | "side" | "overlay"; opacity: number; image: string };
+  /**
+   * The Phase A look of every presenter in every theme (lab-looks.ts). The
+   * top-level Phase A fields are the one on screen; the page keeps both in step.
+   */
+  looks: Looks;
 }
 
 interface LabSceneProps {

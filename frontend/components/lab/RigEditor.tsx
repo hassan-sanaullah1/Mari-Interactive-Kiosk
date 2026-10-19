@@ -15,8 +15,8 @@ import { Choice, Slider } from "./LabControls";
 import { PRESET_LIBRARY } from "./resolved-look";
 import {
   buildExport,
-  diff,
   kioskRig,
+  scopedChanges,
   LIGHT_NAMES,
   STATE_LIGHTS,
   type LabRig,
@@ -175,11 +175,15 @@ function ExportBar({
   rig,
   scene,
   resolved,
+  presenter,
+  theme,
   onImport,
 }: {
   rig: LabRig;
   scene: Record<string, unknown>;
   resolved: unknown;
+  presenter: AvatarId;
+  theme: Theme;
   onImport: (text: string) => string;
 }) {
   const [copied, setCopied] = useState(false);
@@ -194,13 +198,14 @@ function ExportBar({
       setImportStatus("Could not read the clipboard (the browser may have blocked it). Load the file instead.");
     }
   };
-  const changes = diff(kioskRig(), rig).length;
-  const document_ = () => JSON.stringify(buildExport(rig, scene, { resolved, presets: PRESET_LIBRARY }), null, 2);
+  const changes = scopedChanges(rig, presenter, theme).length;
+  const document_ = () =>
+    JSON.stringify(buildExport(rig, scene, { presenter, theme }, { resolved, presets: PRESET_LIBRARY }), null, 2);
   const download = () => {
     const blob = new Blob([document_()], { type: "application/json" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `avatar-lab-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.json`;
+    link.download = `avatar-lab-${presenter}-${theme}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.json`;
     link.click();
     URL.revokeObjectURL(link.href);
   };
@@ -212,9 +217,10 @@ function ExportBar({
   return (
     <>
       <p className={styles.hint}>
-        {changes === 0 ? "Identical to the kiosk." : `${changes} value(s) differ from the kiosk.`} The export holds the
-        whole rig, the list of changes with where each belongs in the code, every scene setting, and the look on
-        screen as plain values (lights, environment, camera, surface, post), so it can be rebuilt anywhere.
+        Export is for the {presenter} presenter in the {theme} theme only:{" "}
+        {changes === 0 ? "identical to the kiosk." : `${changes} value(s) differ from the kiosk.`} It holds their
+        lights, panels, knobs and framing (desktop and mobile), the changes with where each belongs in the code, every
+        scene setting, and the look on screen as plain values. Switch presenter or theme and export again for another.
       </p>
       <div className={styles.row}>
         <button type="button" onClick={download}>
@@ -226,7 +232,7 @@ function ExportBar({
       </div>
       <p className={styles.hint}>
         Import an export (yours or a teammate&apos;s) to render the avatar exactly as it was set, then keep editing.
-        Settings the file does not mention keep their current values.
+        It changes only the presenter and theme it was exported for; everything else keeps its current values.
       </p>
       <div className={styles.row}>
         <label className={styles.fileButton}>
@@ -353,7 +359,14 @@ export function RigEditor(props: RigEditorProps) {
       </div>
 
       <h3>Export and import</h3>
-      <ExportBar rig={rig} scene={scene} resolved={props.resolved} onImport={onImport} />
+      <ExportBar
+        rig={rig}
+        scene={scene}
+        resolved={props.resolved}
+        presenter={presenter}
+        theme={theme}
+        onImport={onImport}
+      />
     </section>
   );
 }

@@ -109,36 +109,74 @@ export function diff(kiosk: unknown, lab: unknown, path = ""): Change[] {
 }
 
 /**
+ * The part of the rig one presenter in one theme uses: that theme's studio,
+ * that presenter's knobs for that theme and back light, and both layouts'
+ * framing with only that presenter's lens. The framing's height, head room and
+ * sway are shared by every presenter in the kiosk, so they always come along.
+ */
+export interface ScopedRig {
+  studio: Partial<Record<Theme, Studio>>;
+  rigLighting: Partial<Record<AvatarId, Partial<Omit<RigLighting, "backLight">> & Pick<RigLighting, "backLight">>>;
+  camera: Record<Layout, Omit<LabCameraRig, "rigs"> & { rigs: Partial<Record<AvatarId, RigCamera>> }>;
+}
+
+export function scopeRig(rig: LabRig, presenter: AvatarId, theme: Theme): ScopedRig {
+  const lighting = rig.rigLighting[presenter];
+  const camera = (layout: Layout) => {
+    const { rigs, ...framing } = rig.camera[layout];
+    return { ...framing, rigs: { [presenter]: rigs[presenter] } };
+  };
+  return {
+    studio: { [theme]: rig.studio[theme] },
+    rigLighting: { [presenter]: { [theme]: lighting[theme], backLight: lighting.backLight } },
+    camera: { desktop: camera("desktop"), mobile: camera("mobile") },
+  };
+}
+
+/**
  * Where each exported section belongs in the code, so the JSON says what to
  * edit without anyone having to remember.
  */
-const DESTINATIONS = {
-  rig: {
-    studio: "frontend/components/avatar/tuning.ts → STUDIO (DARK_STUDIO, LIGHT_STUDIO)",
-    rigLighting:
-      "frontend/components/avatar/tuning.ts → RIG_TUNING[presenter].lightThemeLighting / darkThemeLighting / backLight",
-    "camera.desktop":
-      "frontend/components/avatar/tuning.ts → CAMERA (frameHeightM, headRoom, sway) and RIG_TUNING[presenter].lensMm / cameraDistanceM / widthSqueeze",
-    "camera.mobile":
-      "NEW: the kiosk has one CAMERA for every layout. Mobile values that differ from camera.desktop need a portrait override added to tuning.ts and read by Framing when the stage is portrait.",
-  },
-  phaseA: "frontend/components/avatar/realism.ts, liveliness.ts, PostEffects.tsx (not yet in the kiosk)",
-};
+function destinations(presenter: AvatarId, theme: Theme) {
+  const studio = theme === "light" ? "LIGHT_STUDIO" : "DARK_STUDIO";
+  const knobs = theme === "light" ? "lightThemeLighting" : "darkThemeLighting";
+  return {
+    rig: {
+      [`studio.${theme}`]: `frontend/components/avatar/tuning.ts → STUDIO.${theme} (${studio})`,
+      [`rigLighting.${presenter}`]: `frontend/components/avatar/tuning.ts → RIG_TUNING.${presenter}.${knobs} / backLight`,
+      "camera.desktop": `frontend/components/avatar/tuning.ts → CAMERA (frameHeightM, headRoom, sway; shared by every presenter) and RIG_TUNING.${presenter}.lensMm / cameraDistanceM / widthSqueeze`,
+      "camera.mobile":
+        "NEW: the kiosk has one CAMERA for every layout. Mobile values that differ from camera.desktop need a portrait override added to tuning.ts and read by Framing when the stage is portrait.",
+    },
+    phaseA: "frontend/components/avatar/realism.ts, liveliness.ts, PostEffects.tsx (not yet in the kiosk)",
+  };
+}
 
-/** The export document: the full lab rig, what differs from the kiosk, and the scene it was judged in. */
+/** What an export of this presenter and theme would list as changed from the kiosk. */
+export function scopedChanges(rig: LabRig, presenter: AvatarId, theme: Theme): Change[] {
+  return diff(scopeRig(kioskRig(), presenter, theme), scopeRig(rig, presenter, theme));
+}
+
+/**
+ * The export document for ONE presenter in ONE theme: their part of the rig,
+ * what differs from the kiosk there, and the scene it was judged in. Importing
+ * it changes only that part; the other presenter and theme keep their values.
+ */
 export function buildExport(
   rig: LabRig,
   scene: Record<string, unknown>,
+  scope: { presenter: AvatarId; theme: Theme },
   extras: { resolved?: unknown; presets?: unknown } = {},
 ): Record<string, unknown> {
-  const kiosk = kioskRig();
+  const { presenter, theme } = scope;
   return {
     kind: "mari-avatar-lab-export",
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
-    destinations: DESTINATIONS,
-    changedFromKiosk: diff(kiosk, rig),
-    rig,
+    scope: { presenter, theme },
+    destinations: destinations(presenter, theme),
+    changedFromKiosk: scopedChanges(rig, presenter, theme),
+    rig: scopeRig(rig, presenter, theme),
     scene,
     // What is on screen with every preset name replaced by its values; import reads rig and scene.
     ...(extras.resolved === undefined ? {} : { resolved: extras.resolved }),
