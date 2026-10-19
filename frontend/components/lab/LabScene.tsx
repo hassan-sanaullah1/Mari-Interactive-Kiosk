@@ -43,7 +43,6 @@ import { EditablePanels, EditableStudioLights, LabFraming, LightHandles } from "
 import type { DeviceId } from "./devices";
 import type { LabRig, Layout, LightName } from "./lab-rig";
 import RawModel, { type LabPose } from "./RawModel";
-import { MOBILE_BACKDROP_DEFAULT } from "./devices";
 import {
   REFERENCE_ENVIRONMENT,
   REFERENCE_LIGHTS,
@@ -51,6 +50,7 @@ import {
   REFERENCE_V3_LIGHTS,
   type ReferencePanel,
 } from "./reference-look";
+import { currentBackdrop, ORBIT_FOV, orbitView } from "./resolved-look";
 import { applyMaterialView, inventory, type AssetInventory, type MaterialView } from "./lab-tools";
 
 export type LabLook = "raw" | "kiosk";
@@ -131,12 +131,6 @@ const KIOSK_STATE: Record<LabPose, AvatarState> = {
   talking: "speaking",
 };
 
-/** The landscape artwork per theme — the same files page.module.css shows. */
-const BACKDROP_IMAGE: Record<Theme, string> = {
-  dark: "/bg-desktop-dark.png",
-  light: "/bg-desktop-light.png",
-};
-
 function ToneMapping({ tone }: { tone: LabTone }) {
   const gl = useThree((s) => s.gl);
   useEffect(() => {
@@ -205,12 +199,6 @@ function BackdropEnvironment({
       ))}
     </Environment>
   );
-}
-
-/** The picture behind her right now: the portrait artwork in the mobile frame, else the landscape one. */
-function currentBackdrop(settings: LabSettings): string {
-  if (settings.layout === "desktop") return BACKDROP_IMAGE[settings.theme];
-  return settings.mobileBackdrop === "theme" ? MOBILE_BACKDROP_DEFAULT[settings.theme] : settings.mobileBackdrop;
 }
 
 /** The reference portrait's lobby as soft panels (reference-look.ts). */
@@ -335,7 +323,7 @@ function OrbitRig({ targetY, distance }: { targetY: number; distance: number }) 
     camera.updateProjectionMatrix();
   }, [camera, size.width, size.height]);
   useEffect(() => {
-    camera.fov = 30;
+    camera.fov = ORBIT_FOV;
     camera.position.set(0, targetY, distance);
     camera.lookAt(0, targetY, 0);
     camera.updateProjectionMatrix();
@@ -432,12 +420,8 @@ function CameraRig({ settings, config, modelHeight }: { settings: LabSettings; c
       />
     );
   }
-  if (settings.camera === "orbit-wide") {
-    // Far enough back to see every studio light (they stand 2-3 m out) and drag them.
-    return <OrbitRig targetY={1.3} distance={8} />;
-  }
-  const isFace = settings.camera === "orbit-face";
-  return <OrbitRig targetY={isFace ? config.headTargetY + 0.12 : modelHeight * 0.62} distance={isFace ? 0.75 : 3.2} />;
+  const { targetY, distance } = orbitView(settings.camera, config, modelHeight);
+  return <OrbitRig targetY={targetY} distance={distance} />;
 }
 
 /** The editable studio for the current theme and presenter, plus its handles. */

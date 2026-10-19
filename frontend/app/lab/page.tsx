@@ -47,6 +47,7 @@ import {
   saveLabSettings,
   settingsFromImport,
 } from "@/components/lab/lab-storage";
+import { resolvedLook } from "@/components/lab/resolved-look";
 import { RigEditor } from "@/components/lab/RigEditor";
 
 // three.js needs WebGL, which exists only in the browser.
@@ -591,6 +592,7 @@ export default function LabPage() {
             showHandles={settings.showHandles}
             onShowHandles={set("showHandles")}
             scene={exportScene}
+            resolved={resolvedLook(settings, backdrop)}
             onImport={onImport}
             visible={{
               lights: settings.lights === "editable",

@@ -12,6 +12,7 @@ import type { AvatarId } from "@/components/avatar/models";
 import type { AvatarState } from "@/components/avatar/state";
 import type { Theme } from "@/lib/theme";
 import { Choice, Slider } from "./LabControls";
+import { PRESET_LIBRARY } from "./resolved-look";
 import {
   buildExport,
   diff,
@@ -173,10 +174,12 @@ function CameraEditor({
 function ExportBar({
   rig,
   scene,
+  resolved,
   onImport,
 }: {
   rig: LabRig;
   scene: Record<string, unknown>;
+  resolved: unknown;
   onImport: (text: string) => string;
 }) {
   const [copied, setCopied] = useState(false);
@@ -192,7 +195,7 @@ function ExportBar({
     }
   };
   const changes = diff(kioskRig(), rig).length;
-  const document_ = () => JSON.stringify(buildExport(rig, scene), null, 2);
+  const document_ = () => JSON.stringify(buildExport(rig, scene, { resolved, presets: PRESET_LIBRARY }), null, 2);
   const download = () => {
     const blob = new Blob([document_()], { type: "application/json" });
     const link = document.createElement("a");
@@ -210,7 +213,8 @@ function ExportBar({
     <>
       <p className={styles.hint}>
         {changes === 0 ? "Identical to the kiosk." : `${changes} value(s) differ from the kiosk.`} The export holds the
-        whole rig, the list of changes with where each belongs in the code, and the scene it was judged in.
+        whole rig, the list of changes with where each belongs in the code, every scene setting, and the look on
+        screen as plain values (lights, environment, camera, surface, post), so it can be rebuilt anywhere.
       </p>
       <div className={styles.row}>
         <button type="button" onClick={download}>
@@ -257,6 +261,8 @@ interface RigEditorProps {
   onShowHandles: (show: boolean) => void;
   /** Everything else about the scene, recorded in the export. */
   scene: Record<string, unknown>;
+  /** The look on screen with every preset replaced by its values (resolved-look.ts). */
+  resolved: unknown;
   /** What the scene is currently showing, to warn when these edits are not on screen. */
   visible: { lights: boolean; camera: boolean; panels: boolean };
   /** Switch the scene to show the editable lights, panels and framing. */
@@ -347,7 +353,7 @@ export function RigEditor(props: RigEditorProps) {
       </div>
 
       <h3>Export and import</h3>
-      <ExportBar rig={rig} scene={scene} onImport={onImport} />
+      <ExportBar rig={rig} scene={scene} resolved={props.resolved} onImport={onImport} />
     </section>
   );
 }

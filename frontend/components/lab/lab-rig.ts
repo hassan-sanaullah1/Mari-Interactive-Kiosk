@@ -126,7 +126,11 @@ const DESTINATIONS = {
 };
 
 /** The export document: the full lab rig, what differs from the kiosk, and the scene it was judged in. */
-export function buildExport(rig: LabRig, scene: Record<string, unknown>): Record<string, unknown> {
+export function buildExport(
+  rig: LabRig,
+  scene: Record<string, unknown>,
+  extras: { resolved?: unknown; presets?: unknown } = {},
+): Record<string, unknown> {
   const kiosk = kioskRig();
   return {
     kind: "mari-avatar-lab-export",
@@ -136,5 +140,8 @@ export function buildExport(rig: LabRig, scene: Record<string, unknown>): Record
     changedFromKiosk: diff(kiosk, rig),
     rig,
     scene,
+    // What is on screen with every preset name replaced by its values; import reads rig and scene.
+    ...(extras.resolved === undefined ? {} : { resolved: extras.resolved }),
+    ...(extras.presets === undefined ? {} : { presets: extras.presets }),
   };
 }
