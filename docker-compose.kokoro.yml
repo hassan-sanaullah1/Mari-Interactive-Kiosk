@@ -1,0 +1,8 @@
+# Opt-in: builds the backend with the local Kokoro English voice (torch, transformers,
+# spacy — see requirements-kokoro.txt). `make dev KOKORO=1` adds this file.
+# Never merge this into docker-compose.yml: the default image stays without torch.
+services:
+  backend:
+    build:
+      args:
+        INSTALL_KOKORO: "true"

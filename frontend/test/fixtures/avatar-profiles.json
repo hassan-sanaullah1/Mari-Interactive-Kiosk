@@ -15,8 +15,8 @@
     "rim": 1
    },
    "bytes": {
-    "decoded": 76410448,
-    "encoded": 53455982
+    "decoded": 77338924,
+    "encoded": 53545823
    },
    "cameraDistanceM": null,
    "darkThemeLighting": {
@@ -71,20 +71,20 @@
    "segments": {
     "breathing": {
      "loop": [
-      6.266666666666667,
-      9.266666666666667
+      6.466666666666667,
+      9.066666666666666
      ]
     },
     "listening": {
      "loop": [
-      12.366666666666667,
-      16.366666666666667
+      11.766666666666667,
+      15.8
      ]
     },
     "talking": {
      "loop": [
-      28.4,
-      34.4
+      28.266666666666666,
+      34.6
      ]
     }
    },
@@ -97,7 +97,7 @@
     ]
    },
    "skinRoughness": null,
-   "url": "/models/dress2_v2.glb.gz",
+   "url": "/models/dress2_v3.glb.gz",
    "widthSqueeze": 1
   },
   "male": {

@@ -125,6 +125,15 @@ def ur_tts_for(persona_id: str) -> str:
     return env(f"APP_UR_TTS_{persona_id.upper()}", UR_TTS)
 
 
+def en_tts_for(persona_id: str) -> str:
+    """Which English engine this presenter prefers: APP_EN_TTS_<PRESENTER>, else APP_EN_TTS.
+
+    Same pattern as ur_tts_for: one presenter can use a local OmniVoice server while
+    the other stays on Uplift or in-process Kokoro.
+    """
+    return env(f"APP_EN_TTS_{persona_id.upper()}", EN_TTS)
+
+
 # ── English STT/TTS. Urdu uses Soniox, and Uplift or Matcha-TTS (UR_TTS). English TTS
 #    defaults to Uplift because no Kokoro instance is deployed; set
 #    APP_EN_TTS=local|remote when one is. ──
@@ -215,15 +224,16 @@ async def _en_tts_status() -> dict:
     """English TTS per presenter."""
     from .personas import all_personas, tts_engine
 
-    engine_label = {"uplift": "uplift", "local": "kokoro-local"}.get(EN_TTS, "kokoro-remote")
-    return {
-        persona.id: {
-            "provider": engine_label,
+    result: dict[str, dict] = {}
+    for persona in all_personas().values():
+        engine = tts_engine("en", persona)
+        label = {"uplift": "uplift", "local": "kokoro-local"}.get(engine, "kokoro-remote")
+        result[persona.id] = {
+            "provider": label,
             "ready": tts_ready("en", persona.id),
-            "voice": persona.voice("en", tts_engine("en", persona)) or None,
+            "voice": persona.voice("en", engine) or None,
         }
-        for persona in all_personas().values()
-    }
+    return result
 
 
 async def _ur_tts_status() -> dict:

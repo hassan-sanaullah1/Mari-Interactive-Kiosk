@@ -90,6 +90,10 @@ export default function ChatPanel({
         {messages.map((m) => (
           <div
             key={m.id}
+            // The role is in the DOM because the styling class is a hashed CSS-module
+            // name, so a browser test cannot tell the kiosk's own words from the
+            // visitor's without it. e2e/kiosk.spec.ts asserts on this.
+            data-role={m.role}
             className={`${m.role === "user" ? styles.user : styles.assistant} ${rtl ? styles.rtl : ""}`}
           >
             {m.text}

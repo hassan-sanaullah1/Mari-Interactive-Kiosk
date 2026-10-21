@@ -91,68 +91,66 @@ export interface AvatarConfig extends RigTuning {
 const f = (frame: number) => frame / FPS;
 
 /**
- * dress2_v2.glb — the MARI presenter. See AvatarModel's header for how this
+ * dress2_v3.glb — the MARI presenter. See AvatarModel's header for how this
  * rig's windows are derived; in short, they minimise the baked cloth sim's
  * drift at each seam subject to a tight body match.
  *
- * Her FACE is byte-identical to the dress2 export this replaces: all 12
- * primitives of Mesh.003, every rest position and all 51 ARKit morph deltas
- * compare exactly equal. So lipsync, the procedural blink and the A2F
- * calibration below port across untouched, and the girl12 shifted-name class
- * of bug is ruled out by construction rather than by inspection.
+ * Her FACE is byte-identical to dress2_v2's: all 12 primitives of Mesh.003 —
+ * positions, normals and every one of the 51 ARKit morph-target deltas —
+ * compare equal by SHA-256. So lipsync, the procedural blink and the A2F
+ * calibration below port across untouched, same as v2 did from its own
+ * predecessor. Materials and mesh names are also an exact set match with v2.
  *
- * What DID change is the hair and the clip. The four hair-card meshes and the
- * scalp (lambert19 through lambert23, ~29.7k vertices) are gone, replaced by
- * one 111k-vertex mesh on a single material, `pasted__lambert2` — which is why
- * the hair keys in tuning.ts moved there.
+ * The export carries two pieces of dead weight that are NOT wired into the
+ * kiosk and were left alone rather than guessed at: a second, orphaned copy
+ * of the 109-joint body skeleton (scene root "DeformationSystem.001") that no
+ * mesh is skinned to, and a second animation clip ("CINEMA_4D_Main.001", 327
+ * channels) that only that orphaned skeleton uses. Confirmed via the glTF
+ * skin/node data that neither affects anything rendered. scripts/optimize_glb.py
+ * would be the place to strip them later; this swap did not touch it.
  *
- * SEGMENTS. This is NOT dress2's clip retimed: same 1084 tracks, but 37.54s
- * against 30.03s and the curves diverge immediately, so the windows below were
- * re-cut from scratch. Per-frame motion locates the breaks (110 body joints,
- * summed quaternion angle):
+ * SEGMENTS. The main clip retimed slightly from v2's (37.500s / 1126 frames
+ * here vs v2's 37.542s / 1126.3), so v2's windows were not safe to reuse as-is
+ * and were re-measured fresh against this clip, by the same method v2's own
+ * comment describes: per-frame motion over the 109 body joints (summed
+ * quaternion angle) locates the same phase shape v2 has —
  *
  *   0-39      a dead hold at the head of the clip, skipped entirely
- *   40-289    breathing  (at-rest idle; arms 0.02-0.11, spine 0.04-0.24 deg/frame)
- *   290-519   listening  (the same idle carrying more spine, peaking 0.69)
- *   520-1126  talking    (the gesture performance, up to 92 deg/frame)
+ *   40-289    breathing  (at-rest idle, under ~2 deg/frame)
+ *   290-519   listening  (the same idle carrying more spine, up to ~2 deg/frame)
+ *   520-1125  talking    (the gesture performance, up to 92 deg/frame — matches
+ *                         v2's documented peak almost exactly)
  *
- * The windows inside them were then scored by SIMULATING the runtime entry
- * search (`bestLoopEntry`) against this clip's own curves — take the pose at
- * loopEnd-0.35s, scan the same excluded tail, and measure how much of the
- * window still plays and how far apart the outgoing and incoming poses sit —
- * and, because this rig's visible motion at rest is the cloth rather than the
- * body, by the cloth seam alongside it. Cloth cost is quoted in frames of
- * ordinary cloth motion, the unit AvatarModel's header uses; the figures in
- * brackets are dress2's for the same measurement, for comparison.
+ * — then candidate windows near v2's equivalent frames were scored on (a) the
+ * body-pose gap between the window's last and first frame and (b) the cloth
+ * seam at that same cut, in frames of ordinary cloth motion, same units v2's
+ * comment uses. NOTE: this measurement was done with a one-off script written
+ * for this swap, replicating the documented method rather than running it
+ * through the designer's own avatar-lab tool — re-verify there if the loop
+ * points look off in practice, particularly listening's (see below).
  */
 const FEMALE: AvatarConfig = {
   id: "female",
-  url: "/models/dress2_v2.glb.gz",
+  url: "/models/dress2_v3.glb.gz",
   // Served as the pre-compressed .gz (next.config.ts), so `encoded` is what
-  // crosses the wire and `decoded` is what the reader counts. 76MB raw, 53MB
-  // gzipped. The RAW export: scripts/optimize_glb.py has not been run on it.
-  bytes: { decoded: 76410448, encoded: 53455982 },
+  // crosses the wire and `decoded` is what the reader counts. 77MB raw, 53MB
+  // gzipped (plain gzip -9 of the raw export, same as v2: optimize_glb.py has
+  // not been run on this file either).
+  bytes: { decoded: 77338924, encoded: 53545823 },
   segments: {
-    // Three seconds of the at-rest idle. Re-enters 4 frames in and plays 2.87s
-    // (96%) at a body gap of 0.000, for the cheapest cloth seam anywhere in the
-    // segment: 1.6 frames [dress2: 2.0]. Longer windows exist and carry no more
-    // motion worth having — the body moves 0.7 rad across this whole window —
-    // while costing 2.4x the seam (the best window of 4s or more is 3.9 frames).
-    // It also starts late enough that the cloth has settled out of its rest
-    // state, the same reason dress2's breathing window did not start at frame 1.
-    breathing: { loop: [f(188), f(278)] },
-    // The settled listening pose. Re-enters 3 frames in and plays 3.93s (98%)
-    // at a body gap of 0.001 and a cloth seam of 5.7 frames [dress2: 5.0] —
-    // the cheapest in the segment. The windows carrying the most spine motion
-    // sit at 9.0 frames of cloth for 0.1 rad more, which is not a trade.
-    listening: { loop: [f(371), f(491)] },
-    // The gesture performance. Enters at loop[0] — the pose genuinely closes on
-    // itself here — and plays all 6.00s (100%) at a gap of 0.019, carrying
-    // 84.7 rad through a cloth seam of 22.2 frames [dress2: 38.0, and that
-    // segment offered nothing better]. The 8s windows carry 106 rad but cost
-    // 47.5 frames of cloth and a gap of 0.120; a quarter more motion is not
-    // worth doubling the one seam on this rig that cannot be made cheap.
-    talking: { loop: [f(852), f(1032)] },
+    // Body gap 0.56deg (summed over 109 joints), cloth seam 6.3 frames —
+    // cheapest nearby candidate; a near-identical window to v2's own [188,278].
+    breathing: { loop: [f(194), f(272)] },
+    // The weakest of the three: body gap ~14.7deg even after widening the
+    // search well past v2's equivalent window, so this phase of the clip does
+    // not close on itself as cleanly as v2's did (0.001-equivalent gap) — not
+    // a search-radius artifact, the clip's own motion here. Worth a second
+    // look from the avatar-lab tool if the listening loop visibly pops.
+    listening: { loop: [f(353), f(474)] },
+    // Body gap 30.1deg, cloth seam 8.6 frames. Like v2's talking window, this
+    // is the gesture performance itself — some pose mismatch at the cut is
+    // expected here, the same trade v2's comment describes for its own window.
+    talking: { loop: [f(848), f(1038)] },
   },
   hasMorphs: true,
   grammaticalGender: "f",

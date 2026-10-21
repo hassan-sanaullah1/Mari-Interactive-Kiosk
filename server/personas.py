@@ -28,8 +28,9 @@ class Persona:
     display_name: str
     # "f" or "m". Urdu marks gender on verbs, so replies and UI copy agree with this.
     grammatical_gender: str
-    # Urdu TTS engines this persona may use, best first.
+    # TTS engines this persona may use per language, best first.
     urdu_engines: tuple[str, ...]
+    english_engines: tuple[str, ...]
     # "<engine>:<lang>" -> the name of the config setting holding the voice id.
     voice_settings: dict[str, str] = field(default_factory=dict)
     # Audio2Face per-clip tuning. Empty means the NIM's defaults.
@@ -70,6 +71,12 @@ class Persona:
             return configured
         return self.urdu_engines[0]
 
+    def english_engine(self, configured: str) -> str:
+        """Same as :meth:`urdu_engine`, for English."""
+        if configured in self.english_engines:
+            return configured
+        return self.english_engines[0]
+
 
 def _parse(raw: dict) -> dict[str, Persona]:
     personas = {}
@@ -80,6 +87,7 @@ def _parse(raw: dict) -> dict[str, Persona]:
             display_name=table["display_name"],
             grammatical_gender=table["grammatical_gender"],
             urdu_engines=tuple(table["urdu_engines"]),
+            english_engines=tuple(table.get("english_engines", ("remote", "local", "uplift"))),
             voice_settings=dict(table.get("voices", {})),
             a2f_face_params=dict(a2f.get("face_params", {})),
             a2f_blendshape_multipliers=dict(a2f.get("blendshape_multipliers", {})),
@@ -112,15 +120,16 @@ def default_persona() -> Persona:
 def tts_engine(lang: str, persona: Persona) -> str:
     """Which engine speaks this language for this presenter.
 
-    Urdu is the interesting case: the preference is per presenter (config.ur_tts_for),
-    and it only applies if the persona lists that engine.
+    Both languages follow the same pattern: a per-presenter env override
+    (APP_UR_TTS_<ID> / APP_EN_TTS_<ID>), validated against the engines the
+    persona lists.
 
     Here rather than in providers/tts.py so that config.tts_ready() can ask the same
     question without the bottom layer importing the adapter layer.
     """
     if lang == "ur":
         return persona.urdu_engine(config.ur_tts_for(persona.id))
-    return config.EN_TTS
+    return persona.english_engine(config.en_tts_for(persona.id))
 
 
 def get_persona(persona_id: str | None) -> Persona:

@@ -11,8 +11,9 @@ are. The compose file keeps one-line comments and points here for the reasoning.
 | `docker-compose.override.yml` | Local runs only; Compose merges it automatically | Published ports (`8010`, `3000`) |
 | `docker-compose.dev.yml` | `make dev` only | Live reload: read-only source mounts, `uvicorn --reload`, `next dev` (the frontend Dockerfile's `dev` stage), and the frontend's production limits lifted |
 | `docker-compose.a2f.yml` | Local runs through `make dev` or `make prod`, which first start `deploy/a2f/` when the machine has its `.env` | Joins the backend to the Audio2Face stack's network |
+| `docker-compose.kokoro.yml` | Local runs through `make dev KOKORO=1` or `make prod KOKORO=1` | Builds the backend with the local Kokoro English voice (`requirements-kokoro.txt`: torch, transformers, spacy) |
 
-Coolify is pointed at `docker-compose.yml` alone, so nothing in the other three reaches a
+Coolify is pointed at `docker-compose.yml` alone, so nothing in the other four reaches a
 server. `make prod` leaves out `docker-compose.dev.yml`, so it runs what Coolify builds. Ports stay out of the deployed file because Coolify routes through its own
 proxy, and a published port collides as soon as two environments share a host.
 
@@ -20,6 +21,12 @@ The A2F join is a separate opt-in file, not part of the override, because it nam
 `external` network: a plain `docker compose up` on a machine that has never run the A2F
 stack would fail outright. Never declare a `networks:` block in `docker-compose.yml`;
 Coolify attaches its own network at deploy time.
+
+The Kokoro build is opt-in for the same reason: it pulls in torch, transformers and
+spacy, which `requirements.txt` deliberately leaves out of the default image (see its
+FastEmbed comment). `KOKORO=1` passes `INSTALL_KOKORO=true` to `server/Dockerfile`,
+which installs `requirements-kokoro.txt` on top of the normal install; Coolify never
+sets it, so the deployed image stays without them.
 
 ## Audio2Face
 

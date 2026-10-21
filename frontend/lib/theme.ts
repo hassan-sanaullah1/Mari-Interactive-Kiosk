@@ -14,8 +14,19 @@ export function applyTheme(theme: Theme) {
 
 export function readTheme(): Theme {
   try {
-    return localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark";
+    const stored = localStorage.getItem(THEME_KEY);
+    if (stored === "light" || stored === "dark") return stored;
   } catch {
     return "dark";
   }
+  // No explicit choice yet: mobile/portrait defaults to light (the mobile
+  // background art is light-themed); desktop stays dark. Same breakpoint the
+  // CSS uses everywhere (app/globals.css and friends), kept in sync with the
+  // inline script in app/layout.tsx that applies this before first paint.
+  try {
+    if (window.matchMedia("(max-aspect-ratio: 6/5)").matches) return "light";
+  } catch {
+    /* matchMedia unavailable */
+  }
+  return "dark";
 }

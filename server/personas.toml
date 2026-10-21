@@ -21,6 +21,9 @@ grammatical_gender = "f"
 # Which engines may speak this persona's Urdu, best first. Matcha-TTS serves a voice
 # per presenter; it falls back to Uplift by itself when the local server is down.
 urdu_engines = ["matcha", "uplift"]
+# English engines, best first. "remote" = a local OpenAI-compatible server (OmniVoice
+# or Kokoro), "local" = in-process Kokoro, "uplift" = the paid API.
+english_engines = ["remote", "local", "uplift"]
 
 # Voice id per engine and language, as the name of the setting that holds it.
 [female.voices]
@@ -40,6 +43,7 @@ blendshape_multipliers = {}
 display_name = "Hamza"
 grammatical_gender = "m"
 urdu_engines = ["matcha", "uplift"]
+english_engines = ["remote", "local", "uplift"]
 
 [male.voices]
 # One Uplift voice covers both languages; there is no separate male English id.

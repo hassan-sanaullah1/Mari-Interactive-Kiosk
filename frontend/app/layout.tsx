@@ -35,11 +35,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             enough. */}
       </head>
       <body>
-        {/* Apply the stored theme before first paint so there's no flash. */}
+        {/* Apply the theme before first paint so there's no flash: the stored
+            choice if there is one, else light on mobile/portrait (the same
+            max-aspect-ratio: 6/5 breakpoint the CSS uses everywhere) and dark
+            on desktop. Kept in sync with lib/theme.ts's readTheme(), which
+            can't run this early — localStorage isn't available during SSR. */}
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "try{if(localStorage.getItem('mari-theme')==='light')document.documentElement.dataset.theme='light'}catch(e){}",
+              "try{var t=localStorage.getItem('mari-theme');if(t==='light'){document.documentElement.dataset.theme='light'}else if(t!=='dark'&&window.matchMedia('(max-aspect-ratio: 6/5)').matches){document.documentElement.dataset.theme='light'}}catch(e){}",
           }}
         />
         {children}

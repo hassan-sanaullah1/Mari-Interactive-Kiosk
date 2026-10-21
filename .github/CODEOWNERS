@@ -1,4 +1,4 @@
-# Every file is owned by the repo's approver. The branch rulesets require a code owner's
-# approval, so a pull request into develop, master, main, staging or release/** cannot
-# merge until this person approves it.
+# Who GitHub asks to review a pull request: every file is owned by this person, so they
+# are added as a reviewer automatically. Nothing enforces the review today; a branch
+# ruleset with "require review from Code Owners" would (project-setup §6).
 * @hassan-sanaullah1
