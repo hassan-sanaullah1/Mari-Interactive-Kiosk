@@ -1,0 +1,19 @@
+# Optional: the local Kokoro English voice (APP_EN_TTS=local). Not part of the default
+# backend image — see requirements.txt for why torch stays out of it by default.
+# Installed only when server/Dockerfile is built with INSTALL_KOKORO=true
+# (`make dev KOKORO=1`, docker-compose.kokoro.yml).
+#
+# CPU wheel, not the ~5 GB CUDA build: nothing in this stack gives the backend
+# container a GPU (docker-compose.yml has no device reservation), so the default
+# torch build would just be dead weight. --extra-index-url alone does not force this —
+# pip picks whichever index answers first when a plain "torch" matches on both — so the
+# version is pinned to the exact +cpu local build, which only this index serves; bump
+# it together with its PyPI-tagged counterpart when either moves.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.14.1+cpu
+kokoro>=0.9.4
+misaki[en]>=0.9.4
+
+# misaki's English G2P loads this spacy model by name; it is a model package, not a
+# regular dependency, so pip needs the wheel URL directly.
+https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl

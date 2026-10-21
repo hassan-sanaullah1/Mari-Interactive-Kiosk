@@ -21,12 +21,16 @@ from .. import config
 from .base import STTProvider
 
 # Biases the recognizer toward the kiosk's vocabulary; without it "Mari" comes back as
-# "Mary". A sentence that uses the names in context shifts the decoder more than a list.
+# "Mary". Deliberately a bare name list and not a sentence: this text is also Whisper's
+# initial_prompt, and on near-silent audio the decoder completes the prompt rather than
+# transcribing. Phrased as a narrative opener ("The following is a conversation with
+# Maryam at the Mari Energies kiosk...") it emitted that very line as if a visitor had
+# said it, then drifted into the YouTube boilerplate it resembles ("Thanks for
+# watching!"). A list carries the same vocabulary with no sentence to continue.
 _VOCAB_HINT_EN = (
-    "The following is a conversation with Maryam at the Mari Energies kiosk, "
-    "discussing Mari Energies, Mari Petroleum, MPCL, the Mari Gas Field, Daharki, "
+    "Mari Energies, Mari Petroleum, MPCL, the Mari Gas Field, Daharki, "
     "Mari Services, Mari Minerals, Mari Technologies, Sky47, GEM Energy, "
-    "Faheem Haider, PSX, and OGDCL."
+    "Faheem Haider, PSX, OGDCL, Maryam."
 )
 _VOCAB_HINT_UR = (
     "ماری انرجیز، ماری پیٹرولیم، ایم پی سی ایل، ماری گیس فیلڈ، ڈھرکی، ماری سروسز، "
@@ -303,11 +307,21 @@ class WhisperLocalSTT(STTProvider):
             # constraining it to only these words — it is context, not a grammar. This
             # is what stops "Mari" (the company's own name, said constantly here) from
             # coming back as the far more common English name "Mary".
+            #
+            # The next two arguments keep a silent or noisy buffer from becoming phantom
+            # visitor input. The browser's VAD decides when to send, so a burst of room
+            # noise still arrives here with no speech in it:
+            #   vad_filter  drops non-speech audio, so such a buffer transcribes to ""
+            #               instead of to whatever the decoder invents to fill it.
+            #   condition_on_previous_text=False  stops one hallucination seeding the
+            #               next; with it on, the invented line came back as context and
+            #               the kiosk held a conversation with itself.
             segments, _ = model.transcribe(
                 audio,
                 language="en",
                 beam_size=1,
-                vad_filter=False,
+                vad_filter=True,
+                condition_on_previous_text=False,
                 initial_prompt=_vocab_hint("en"),
             )
             return "".join(s.text for s in segments).strip()

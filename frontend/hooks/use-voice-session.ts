@@ -438,17 +438,25 @@ export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
       } else if (m.type === "reply") {
         const text = typeof m.text === "string" ? m.text : "";
         if (!text) return;
-        setMessages((prev) => {
-          const id = assistantIdRef.current;
-          if (id) {
-            return prev.map((msg) =>
-              msg.id === id ? { ...msg, text: `${msg.text} ${text}`.trim() } : msg,
-            );
-          }
+        // Which message this sentence belongs to is decided HERE, not inside the
+        // updater: React invokes updaters twice in development to surface impure
+        // ones. Claiming the id inside meant the second invocation saw the ref the
+        // first had just set, took the "append to the open message" branch, found
+        // no message with that id in `prev` (the first invocation's result is
+        // discarded), and returned `prev` untouched — so in dev every sentence of
+        // every reply was dropped and the chat log showed nothing from the kiosk.
+        const open = assistantIdRef.current;
+        if (open) {
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === open ? { ...msg, text: `${msg.text} ${text}`.trim() } : msg,
+            ),
+          );
+        } else {
           const fresh = nextId();
           assistantIdRef.current = fresh;
-          return [...prev, { id: fresh, role: "assistant", text }];
-        });
+          setMessages((prev) => [...prev, { id: fresh, role: "assistant", text }]);
+        }
       } else if (m.type === "tts") {
         if (typeof m.mime === "string") pendingMime = m.mime;
         pendingClip = typeof m.clip === "string" ? m.clip : null;

@@ -16,7 +16,7 @@ microphone → speech to text → retrieval → LLM → text to speech → audio
 | **Frontend** | Next.js 15 + three.js (`frontend/`) |
 | **Speech to text** | Soniox for Urdu, faster-whisper for English |
 | **LLM** | Qwen 3.5 on vLLM, or DeepSeek |
-| **Text to speech** | UpliftAI, optionally Matcha-TTS for the female Urdu voice |
+| **Text to speech** | UpliftAI, optionally Matcha-TTS for the female Urdu voice or local Kokoro for English |
 | **Retrieval** | Qdrant, hybrid dense + sparse with FastEmbed |
 | **Lipsync** | NVIDIA Audio2Face-3D, on a separate GPU host, optional |
 | **Deployed** | `docker-compose.yml`, by Coolify |
@@ -98,7 +98,7 @@ when deployed. `.env.example` lists every name, and a test keeps it in step with
 |---|---|
 | LLM | `APP_LLM_*` (DeepSeek-compatible) or `APP_VLLM_*` (vLLM Qwen) |
 | Urdu speech to text | `APP_SONIOX_API_KEY` |
-| Text to speech | `APP_UPLIFT_API_KEY`; `APP_UR_TTS=matcha` for the local Urdu voice |
+| Text to speech | `APP_UPLIFT_API_KEY`; `APP_UR_TTS=matcha` for the local Urdu voice; `APP_EN_TTS=local` for local English (Kokoro, no key needed) — build with `make dev KOKORO=1` / `make prod KOKORO=1` first |
 | English speech to text | local by default, no key needed |
 | Retrieval | `MARI_RAG_*`, including `MARI_RAG_QDRANT_API_KEY` (required) |
 | Lipsync | `APP_A2F_URL`; unset means no lipsync |

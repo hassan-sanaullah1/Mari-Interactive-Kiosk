@@ -91,3 +91,4 @@ CODE_CLEANLINESS_REPORT.md
 
 # New-machine setup kit: holds real API keys (.env, NGC key) — never commit.
 /new-machine-setup/
+.env.bak

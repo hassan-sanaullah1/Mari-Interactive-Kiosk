@@ -22,12 +22,12 @@
      Desktop numbers come from UI.png (2000x1125 space); the mobile block below
      re-derives every one of them from mobile_UI.png (402x874 space), so the two
      layouts share components but not coordinates. */
-  --mic: calc(144 * var(--s));
+  --mic: calc(158 * var(--s));
   --mic-ring1: 1.222; /* halo diameter, as a multiple of --mic */
   --mic-ring1-a: 0.28;
   --mic-ring2: 1.222; /* desktop has a single ring: ring2 matches ring1, alpha 0 */
   --mic-ring2-a: 0;
-  --dock-btn: calc(59 * var(--s));
+  --dock-btn: calc(68 * var(--s));
   --dock-gap: calc(58.5 * var(--s));
   --dock-bottom: calc(23.5 * var(--s));
 
@@ -57,12 +57,12 @@
   :root {
     --s: min(calc(100vw / 402), calc(100dvh / 874));
 
-    --mic: calc(64 * var(--s));
+    --mic: calc(100 * var(--s));
     --mic-ring1: 1.1875; /* mobile shows a two-tone halo: dense inner ring... */
     --mic-ring1-a: 0.45;
     --mic-ring2: 1.406; /* ...and a softer outer one */
     --mic-ring2-a: 0.21;
-    --dock-btn: calc(32 * var(--s));
+    --dock-btn: calc(45 * var(--s));
     --dock-gap: calc(22 * var(--s));
     --dock-bottom: calc(104.5 * var(--s));
 

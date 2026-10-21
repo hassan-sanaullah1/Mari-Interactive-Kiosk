@@ -121,10 +121,13 @@ test.describe("a spoken turn", () => {
 
     await askTyped(page, "Who are you?");
 
-    // The reply arrives sentence by sentence, so the first one is quick.
-    await expect(page.getByText(/Mari|Maryam|Hamza/i).first()).toBeVisible({
-      timeout: 60_000,
-    });
+    // The reply arrives sentence by sentence, so the first one is quick. Assert on
+    // the assistant bubble itself, not on getByText(/Mari/): the kiosk's branding
+    // puts that word on the page already, so a page-wide text match passed happily
+    // while the chat log showed nothing from the kiosk at all.
+    const reply = page.locator('[data-role="assistant"]').first();
+    await expect(reply).toBeVisible({ timeout: 60_000 });
+    await expect(reply).not.toHaveText("");
 
     // Lipsync frames arrive after their sentence's audio, tagged with a clip id.
     // framesReceived staying at 0 is the silent death this whole suite exists for.
