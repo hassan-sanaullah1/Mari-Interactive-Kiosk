@@ -238,7 +238,7 @@
 
 /* Portrait screens (same switch as globals.css): the panel takes the lower
    sheet instead of a fixed column. */
-@media (max-aspect-ratio: 6/5) {
+@media (min-width: 0) {
   .panel {
     right: calc(10 * var(--s));
     left: calc(10 * var(--s));

@@ -1,9 +1,21 @@
-/* Full-bleed kiosk canvas. Layers, back to front:
-   0 background art · 10 avatar · 20 controls · 30 chat panel */
+/* Mobile-size kiosk canvas, letterboxed in the middle of the browser window.
+   Layers, back to front: 0 background art · 10 avatar · 20 controls · 30 chat panel.
 
+   Width tracks the 402:874 mobile reference aspect ratio (same ratio the
+   portrait --s formula in globals.css uses) against the real viewport height,
+   capped at 100vw: on a screen narrower than that ratio (an actual phone)
+   width resolves to 100vw and there is no letterboxing at all; on a wider one
+   (a desktop/kiosk browser) it leaves bars on the sides, filled by the dark
+   page background behind this box. `transform` here also makes `.root` the
+   containing block for `position: fixed` descendants (LoadingScreen's
+   overlay), so that stays within the frame instead of covering the bars too. */
 .root {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 50%;
+  width: min(100vw, calc(100dvh * 402 / 874));
+  height: 100dvh;
+  transform: translateX(-50%);
   overflow: hidden;
 }
 
@@ -23,8 +35,8 @@
   background-image: url("/bg-desktop-light.png");
 }
 
-/* Same layout switch as globals.css. */
-@media (max-aspect-ratio: 6/5) {
+/* Same layout switch as globals.css — forced on for every screen right now. */
+@media (min-width: 0) {
   .bg {
     background-image: url("/bg-mobile-dark.png");
   }
@@ -74,7 +86,7 @@
 /* Portrait screens follow mobile_UI.png: the dock sits above a single bottom row
    holding the language pill + theme switch on the left and the chat launcher on
    the right. Positions come from --edge-x/--edge-y/--dock-bottom in globals.css. */
-@media (max-aspect-ratio: 6/5) {
+@media (min-width: 0) {
   .toast {
     bottom: calc(220 * var(--s));
     font-size: calc(13 * var(--s));

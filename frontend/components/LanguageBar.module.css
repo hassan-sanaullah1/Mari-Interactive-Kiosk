@@ -129,7 +129,7 @@
 
 /* Matches the portrait layout switch in globals.css, where the cluster shares a
    row with the chat launcher and the two-segment pill no longer fits. */
-@media (max-aspect-ratio: 6/5) {
+@media (min-width: 0) {
   .pill.iconPill {
     display: none;
   }

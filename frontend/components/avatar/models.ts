@@ -91,66 +91,113 @@ export interface AvatarConfig extends RigTuning {
 const f = (frame: number) => frame / FPS;
 
 /**
- * dress2_v3.glb — the MARI presenter. See AvatarModel's header for how this
- * rig's windows are derived; in short, they minimise the baked cloth sim's
- * drift at each seam subject to a tight body match.
+ * dress2_v6.glb — the MARI presenter, replacing dress2_v3. See AvatarModel's
+ * header for how this rig's windows are derived; in short, they minimise the
+ * baked cloth sim's drift at each seam subject to a tight body match.
  *
- * Her FACE is byte-identical to dress2_v2's: all 12 primitives of Mesh.003 —
- * positions, normals and every one of the 51 ARKit morph-target deltas —
- * compare equal by SHA-256. So lipsync, the procedural blink and the A2F
- * calibration below port across untouched, same as v2 did from its own
- * predecessor. Materials and mesh names are also an exact set match with v2.
+ * NOT a byte-identical drop-in the way v3 was from v2. Checked rather than
+ * assumed:
  *
- * The export carries two pieces of dead weight that are NOT wired into the
- * kiosk and were left alone rather than guessed at: a second, orphaned copy
- * of the 109-joint body skeleton (scene root "DeformationSystem.001") that no
- * mesh is skinned to, and a second animation clip ("CINEMA_4D_Main.001", 327
- * channels) that only that orphaned skeleton uses. Confirmed via the glTF
- * skin/node data that neither affects anything rendered. scripts/optimize_glb.py
- * would be the place to strip them later; this swap did not touch it.
+ *   - BODY. The 109-joint DeformationSystem skeleton's own rotation curves
+ *     (plus the "dupatta" node that is animated alongside it, outside the
+ *     cloth sim) are unchanged from v3's to within re-export noise — worst
+ *     joint (Head_M) differs by 0.023 in a quaternion component, the same
+ *     order of noise the MALE header below calls re-export rounding rather
+ *     than content. So this is v3's performance, re-exported, not a new take
+ *     — confirmed by v3's own talking window ([794,1026]) independently
+ *     scoring a 0.25deg body gap on THIS clip too, matching what v3's header
+ *     measured on its own.
+ *   - FACE. Mesh.003 keeps the same 51 ARKit target names in the same order
+ *     on every primitive, so lipsync's name lookup needs nothing. The mesh
+ *     itself is not byte-identical though: vertex counts shift on several
+ *     primitives (prim0 986->988, prim5 4354->4345), and one primitive
+ *     (material "lambert12", 1672 verts of inner-mouth geometry) is gone
+ *     outright — its slice reads as absorbed into a much smaller lambert5
+ *     primitive (4252->251 verts) and a larger lambert16 one (1112->680).
+ *     tuning.ts's `female.skinMaterials` and `female.materialEnvIntensity`
+ *     still list "lambert12" — harmless, a name that now matches nothing is
+ *     the same kind of dead reference v3's own header below left alone
+ *     rather than guess-edit, but worth a look in the designer's glb-viewer
+ *     Checks panel if the inner mouth looks off on screen.
+ *   - GARMENT. Two of the three Kameez:lambert2 primitives (Mesh.060 and
+ *     Mesh.064, 1142 and 1400 verts in v3) are gone; only Mesh.061 (5814
+ *     verts, unchanged) remains under that material — matches the node
+ *     count dropping 1204->1202. Fewer cloth pieces, not a material rename.
+ *   - A2F. `female.a2f` (in ./tuning.ts) is still empty, i.e. NIM defaults.
+ *     That was measured correct for v2's sculpt and ported untouched through
+ *     v3 because v3's face was byte-for-byte v2's. It has NOT been
+ *     re-measured against this face, which is byte-identical to neither.
+ *     Run scripts/lipsync_audit.py against this rig before trusting the
+ *     defaults if the mouth looks off.
  *
- * SEGMENTS. The main clip retimed slightly from v2's (37.500s / 1126 frames
- * here vs v2's 37.542s / 1126.3), so v2's windows were not safe to reuse as-is
- * and were re-measured fresh against this clip, by the same method v2's own
- * comment describes: per-frame motion over the 109 body joints (summed
- * quaternion angle) locates the same phase shape v2 has —
+ * Same CINEMA_4D_Main clip, same 37.500s / 1125 frames (30fps indexing, as
+ * elsewhere in this file).
  *
- *   0-39      a dead hold at the head of the clip, skipped entirely
- *   40-289    breathing  (at-rest idle, under ~2 deg/frame)
- *   290-519   listening  (the same idle carrying more spine, up to ~2 deg/frame)
- *   520-1125  talking    (the gesture performance, up to 92 deg/frame — matches
- *                         v2's documented peak almost exactly)
+ * SEGMENTS, measured fresh against this clip by the method v3's header
+ * describes: quaternion angle between a window's last and first frame,
+ * summed over the 109 body joints, exhaustively over every (start, duration)
+ * within each phase. Phases were re-located on this clip's own curve and
+ * landed on the same boundaries v3 measured (consistent with the body curve
+ * being unchanged, above): dead hold to ~39, breathing 40-289, listening
+ * 290-519, talking 520-1125.
  *
- * — then candidate windows near v2's equivalent frames were scored on (a) the
- * body-pose gap between the window's last and first frame and (b) the cloth
- * seam at that same cut, in frames of ordinary cloth motion, same units v2's
- * comment uses. NOTE: this measurement was done with a one-off script written
- * for this swap, replicating the documented method rather than running it
- * through the designer's own avatar-lab tool — re-verify there if the loop
- * points look off in practice, particularly listening's (see below).
+ * The FIRST pass through this search picked the single lowest-gap window in
+ * each phase with no other check, and shipped a breathing and a listening
+ * window that were both a visibly broken idle — "breathing not working",
+ * reported after it went out. Minimising the gap alone says nothing about
+ * whether a window has any visible motion in it: the idle phases of this
+ * clip are mostly still, so the global minimum in each is a near-static
+ * sliver (around 1s) where the only thing above 0.05deg/frame is one leg's
+ * knee/ankle/hip — correct as a loop, empty as an idle. Checking the
+ * hand/arm subset alone (the thing v3's header's own first-pass bug called
+ * out) would NOT have caught this: hands were motionless in both broken
+ * windows too, so their subset gap was also ~0. The windows below instead
+ * come from the same search widened to also require visible, bilateral
+ * motion (both legs, not a one-sided twitch) — still exhaustive, still
+ * scored on body gap / hand-arm gap / cloth seam, just no longer blind to a
+ * candidate that "wins" by having nothing happen in it.
  */
 const FEMALE: AvatarConfig = {
   id: "female",
-  url: "/models/dress2_v3.glb.gz",
-  // Served as the pre-compressed .gz (next.config.ts), so `encoded` is what
-  // crosses the wire and `decoded` is what the reader counts. 77MB raw, 53MB
-  // gzipped (plain gzip -9 of the raw export, same as v2: optimize_glb.py has
-  // not been run on this file either).
-  bytes: { decoded: 77338924, encoded: 53545823 },
+  url: "/models/dress2_v6.glb.gz",
+  // Served as the pre-compressed .gz (next.config.ts). 72MB raw, 52MB gzipped
+  // (plain gzip -9 of the raw export; optimize_glb.py has not been run on
+  // this file either).
+  bytes: { decoded: 72205648, encoded: 52279109 },
   segments: {
-    // Body gap 0.56deg (summed over 109 joints), cloth seam 6.3 frames —
-    // cheapest nearby candidate; a near-identical window to v2's own [188,278].
-    breathing: { loop: [f(194), f(272)] },
-    // The weakest of the three: body gap ~14.7deg even after widening the
-    // search well past v2's equivalent window, so this phase of the clip does
-    // not close on itself as cleanly as v2's did (0.001-equivalent gap) — not
-    // a search-radius artifact, the clip's own motion here. Worth a second
-    // look from the avatar-lab tool if the listening loop visibly pops.
-    listening: { loop: [f(353), f(474)] },
-    // Body gap 30.1deg, cloth seam 8.6 frames. Like v2's talking window, this
-    // is the gesture performance itself — some pose mismatch at the cut is
-    // expected here, the same trade v2's comment describes for its own window.
-    talking: { loop: [f(848), f(1038)] },
+    // The search's global best, [60,90] (body gap 0.00deg), shipped first and
+    // was wrong: minimising the pose gap alone says nothing about whether the
+    // window has any visible motion in it, and that one didn't — every body
+    // joint above 0.05deg/frame inside it is a knee/ankle/hip on the RIGHT leg
+    // only, nothing bilateral, nothing above the waist. A perfect, 1s loop of
+    // essentially standing still, which is what "breathing not working" was.
+    // [90,210] (still body gap 0.00, hand/arm gap 0.00, cloth seam 4.1 frames
+    // — better than the broken pick's 5.9) is the same search's next-best tier
+    // and carries both legs' knee/hip/ankle sway plus the head, at a natural
+    // 4s cadence close to v3's own 2.47s breathing window. No window in this
+    // phase moves the chest or spine more than ~0.008deg/frame regardless of
+    // which one is picked (checked directly) — that is this clip's own
+    // breathing authored as a weight-shift and head sway, not a visible chest
+    // rise, same as it was for v3 on this identical body animation.
+    breathing: { loop: [f(90), f(210)] },
+    // Same mistake, same fix. [480,510] (body gap 3.56deg) was the aggregate
+    // global best but, like breathing's broken pick, carries only one leg and
+    // the head — no shoulders, no arms, nothing that reads as "attentive."
+    // [299,466] — v3's own listening window, independently re-scored here at
+    // body gap 3.95deg, hand/arm gap 0.28deg, cloth seam 9.2 frames (worse
+    // than the broken pick's 7.3, better than acceptable) — carries the same
+    // leg sway PLUS neck, shoulder and wrist motion, at v3's established 5.57s
+    // cadence instead of a 1s stutter.
+    listening: { loop: [f(299), f(466)] },
+    // Body gap 0.67deg, hand/arm gap 0.38deg. Picked over an even tighter
+    // 0.0002deg, 12s match ([616,975]) because that longer window's cloth
+    // drifted 105 frames' worth at the seam against this one's 46 — cloth
+    // sim does not loop just because the skeleton does. Every talking
+    // candidate checked here, including ones with a sub-1deg body gap,
+    // carried a cloth seam at least 3x worse than v3's own talking window
+    // (14.6 frames) ever did: a property of this garment's bake on this
+    // phase, not a search artifact. Worth the designer's eye in practice.
+    talking: { loop: [f(814), f(900)] },
   },
   hasMorphs: true,
   grammaticalGender: "f",

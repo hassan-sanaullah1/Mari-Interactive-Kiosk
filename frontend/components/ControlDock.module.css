@@ -68,6 +68,7 @@
   height: 100%;
   background: rgba(0, 119, 220, var(--mic-ring2-a));
   transform: scale(calc(1 + var(--lvl) * 0.09));
+  transition: background 140ms ease, transform 90ms ease-out;
 }
 
 .ring1 {
@@ -75,6 +76,17 @@
   height: calc(var(--mic) * var(--mic-ring1));
   background: rgba(0, 119, 220, var(--mic-ring1-a));
   transform: scale(calc(1 + var(--lvl) * 0.06));
+  transition: background 140ms ease, transform 90ms ease-out;
+}
+
+/* Live halo switches to the same darker blue as the disc/ripples, so the
+   whole mic reads as one colour change rather than just the ripple animation. */
+.micWrap[data-live="1"] .ring2 {
+  background: rgba(0, 76, 140, var(--mic-ring2-a));
+}
+
+.micWrap[data-live="1"] .ring1 {
+  background: rgba(0, 76, 140, var(--mic-ring1-a));
 }
 
 /* --- travelling waves ---
@@ -101,6 +113,7 @@
 }
 
 .micWrap[data-live="1"] .ripple {
+  border-color: var(--mic-live);
   animation: ripple 2.1s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
 }
 
@@ -151,6 +164,16 @@
 
 .micWrap:active .disc {
   transform: scale(0.96);
+}
+
+/* Listening/speaking: swap to red so "active" is a colour change, not just
+   the ripple animation — the ripple alone was too subtle to read at a glance. */
+.micWrap[data-live="1"] .disc {
+  background: var(--mic-live);
+}
+
+.micWrap[data-live="1"]:hover .disc {
+  background: var(--mic-live-hover);
 }
 
 /* 65x72 viewBox; 45%/50% of the disc matches both references exactly. */

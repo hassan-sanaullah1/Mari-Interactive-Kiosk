@@ -4,6 +4,8 @@ services:
   backend:
     ports:
       - "8010:8010"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
   frontend:
     ports:
       - "3000:3000"

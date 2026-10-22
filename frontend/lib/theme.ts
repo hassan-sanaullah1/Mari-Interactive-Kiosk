@@ -23,8 +23,11 @@ export function readTheme(): Theme {
   // background art is light-themed); desktop stays dark. Same breakpoint the
   // CSS uses everywhere (app/globals.css and friends), kept in sync with the
   // inline script in app/layout.tsx that applies this before first paint.
+  // Forced on for every screen right now (`min-width: 0` always matches), so
+  // the site opens in light mode by default; restore `(max-aspect-ratio: 6/5)`
+  // to go back to real-device detection.
   try {
-    if (window.matchMedia("(max-aspect-ratio: 6/5)").matches) return "light";
+    if (window.matchMedia("(min-width: 0)").matches) return "light";
   } catch {
     /* matchMedia unavailable */
   }

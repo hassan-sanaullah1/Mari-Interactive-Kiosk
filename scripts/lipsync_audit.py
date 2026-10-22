@@ -44,9 +44,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODELS = os.path.join(ROOT, "frontend", "public", "models")
 RIGS = {
     "female": dict(
-        # Material names are dress2_v2's; the girl15 export these were first
-        # written against named the same parts lambert12/upper_teeth/lower_teeth.
-        glb="dress2_v2.glb",
+        # Material names trace back to dress2_v2's; the girl15 export these were
+        # first written against named the same parts lambert12/upper_teeth/
+        # lower_teeth. dress2_v6 (current rig) still carries head=lambert14,
+        # upper_teeth=lambert9, lower_teeth=lambert10 under those same names,
+        # so the landmark picker below (geometric, not index-based) needs
+        # nothing else changed for this swap.
+        glb="dress2_v6.glb",
         head="lambert14",
         upper_teeth="lambert9",
         lower_teeth="lambert10",

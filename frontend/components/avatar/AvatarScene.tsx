@@ -498,8 +498,11 @@ export interface AvatarSceneProps {
   theme?: Theme;
 }
 
-/** The kiosk's portrait layout: the same switch as globals.css and page.module.css. */
-const PORTRAIT_QUERY = "(max-aspect-ratio: 6/5)";
+/** The kiosk's portrait layout: the same switch as globals.css and page.module.css.
+ *  Forced on for every screen right now (`min-width: 0` always matches); restore
+ *  `(max-aspect-ratio: 6/5)` here and at every other site that repeats this query
+ *  to go back to real-device detection. */
+const PORTRAIT_QUERY = "(min-width: 0)";
 
 function useIsPortrait(): boolean {
   const [isPortrait, setIsPortrait] = useState(() => window.matchMedia(PORTRAIT_QUERY).matches);

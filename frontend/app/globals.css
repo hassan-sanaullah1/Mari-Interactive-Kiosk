@@ -17,6 +17,11 @@
   /* Palette sampled from the reference image. */
   --blue: #0077dc;
   --blue-hover: #0f88ee;
+  /* Mic disc while listening/speaking: a darker shade of the same blue (not
+     just the ripple animation) so "active" reads at a glance without
+     introducing an off-palette colour. */
+  --mic-live: #004c8c;
+  --mic-live-hover: #00599f;
 
   /* --- control sizes ---
      Desktop numbers come from UI.png (2000x1125 space); the mobile block below
@@ -29,7 +34,7 @@
   --mic-ring2-a: 0;
   --dock-btn: calc(68 * var(--s));
   --dock-gap: calc(58.5 * var(--s));
-  --dock-bottom: calc(23.5 * var(--s));
+  --dock-bottom: calc(17 * var(--s));
 
   --pill-h: calc(58 * var(--s));
   --pill-seg: calc(127 * var(--s));
@@ -46,25 +51,27 @@
 
 /* --- portrait: a separate 402x874 design space, measured off mobile_UI.png ---
    --s is redefined here, so every calc() below is in mobile reference units.
-   Chosen by SHAPE, not width: phones, portrait tablets and a portrait kiosk
-   screen all get this layout, and a phone on its side keeps the landscape one.
-   6/5 rather than 1/1 so a portrait tablet does not flip layouts when its
-   on-screen keyboard opens and the viewport briefly becomes wider than tall.
-   Every file that switches layout repeats this exact query.
+   Normally chosen by SHAPE, not width: phones, portrait tablets and a portrait
+   kiosk screen get this layout, and a phone on its side keeps the landscape one.
+   Forced on for every screen right now (`min-width: 0` always matches) so the
+   site opens in the mobile layout by default; the desktop query below is left
+   intact to switch back by restoring `(max-aspect-ratio: 6/5)` here and at
+   every other site that repeats this exact query (see grep for the breakpoint
+   string across app/ and components/).
    No upper cap: a 1080x1920 kiosk needs 2.2px, and a cap is what used to leave
    the presenter at a third of the screen there. */
-@media (max-aspect-ratio: 6/5) {
+@media (min-width: 0) {
   :root {
     --s: min(calc(100vw / 402), calc(100dvh / 874));
 
-    --mic: calc(80 * var(--s));
+    --mic: calc(75 * var(--s));
     --mic-ring1: 1.1875; /* mobile shows a two-tone halo: dense inner ring... */
     --mic-ring1-a: 0.45;
     --mic-ring2: 1.406; /* ...and a softer outer one */
     --mic-ring2-a: 0.21;
     --dock-btn: calc(45 * var(--s));
     --dock-gap: calc(22 * var(--s));
-    --dock-bottom: calc(104.5 * var(--s));
+    --dock-bottom: calc(78 * var(--s));
 
     --pill-h: calc(45 * var(--s));
     --pill-seg: calc(79 * var(--s));
@@ -91,6 +98,9 @@
   --text-dim: rgba(255, 255, 255, 0.62);
   --placeholder: rgba(255, 255, 255, 0.42);
   --shadow: rgba(0, 0, 0, 0.5);
+  /* Behind the mobile frame (page.module.css's .root) on a screen wider than
+     its aspect ratio — the letterbox bar colour. */
+  --page-bg: #04121f;
   color-scheme: dark;
 }
 
@@ -105,6 +115,7 @@
   --text-dim: rgba(20, 22, 26, 0.6);
   --placeholder: rgba(20, 22, 26, 0.45);
   --shadow: rgba(0, 0, 0, 0.32);
+  --page-bg: #f4f5f7;
   color-scheme: light;
 }
 
@@ -117,7 +128,7 @@ body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: #04121f;
+  background: var(--page-bg);
   color: var(--text);
   font-family: var(--font-ui), "Segoe UI", system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
