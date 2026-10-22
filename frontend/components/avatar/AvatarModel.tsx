@@ -1108,12 +1108,15 @@ export default function AvatarModel({
       if (!pristineShadows.has(mesh)) pristineShadows.set(mesh, { cast: mesh.castShadow, receive: mesh.receiveShadow });
       // Both, on every mesh: with no ground plane and her feet below the
       // frame, the only shadows anyone sees are the ones she casts onto
-      // herself, and a mesh that does not RECEIVE cannot show them.
+      // herself, and a mesh that does not RECEIVE cannot show them. A rig
+      // with castsShadow false opts out of casting entirely and is lit by the
+      // studio alone — see RigTuning.castsShadow.
       const shadows = pristineShadows.get(mesh)!;
-      mesh.castShadow = isCorrected || shadows.cast;
+      mesh.castShadow = config.castsShadow && (isCorrected || shadows.cast);
       mesh.receiveShadow = isCorrected || shadows.receive;
 
       const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+
       for (const material of materials) {
         const std = material as THREE.MeshStandardMaterial;
         if (!std.isMeshStandardMaterial) continue;

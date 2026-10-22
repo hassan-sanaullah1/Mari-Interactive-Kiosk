@@ -156,6 +156,19 @@ const f = (frame: number) => frame / FPS;
  * motion (both legs, not a one-sided twitch) — still exhaustive, still
  * scored on body gap / hand-arm gap / cloth seam, just no longer blind to a
  * candidate that "wins" by having nothing happen in it.
+ *
+ * A THIRD check, which caught the talking window going out stuck: a window is
+ * only worth the frames it actually PLAYS. AvatarModel does not replay a
+ * window start-to-end — at the seam, `bestLoopEntry` re-enters at whichever
+ * frame best matches the pose ~0.35s before the window ends, so a window
+ * plays in full only if that pose's nearest match lies near the window's
+ * HEAD. Nothing about a tight seam gap guarantees that: the gap compares the
+ * two ENDS, and a window whose end-pose instead matches its own middle will
+ * re-enter there and replay a sliver of itself forever. The only way to know
+ * is to run that search the way the player runs it, so each window below was
+ * simulated over several laps and kept only if it converges to entering near
+ * loop[0] and playing essentially all of itself every lap. Re-run that
+ * simulation for any new rig; the three numbers alone will not tell you.
  */
 const FEMALE: AvatarConfig = {
   id: "female",
@@ -179,25 +192,49 @@ const FEMALE: AvatarConfig = {
     // which one is picked (checked directly) — that is this clip's own
     // breathing authored as a weight-shift and head sway, not a visible chest
     // rise, same as it was for v3 on this identical body animation.
+    //
+    // The play-through check above says this one re-enters 35 frames in and
+    // so plays 2.5s of its 4s. Left alone, and only here: this phase is
+    // exactly 30-frame periodic (every 30-frame multiple scores a 0.00deg
+    // gap), so the 2.5s it plays carries the same 7 moving joints at the same
+    // amplitudes as the full window — the slice and the whole are the same
+    // motion. That argument does NOT transfer to the other two phases.
     breathing: { loop: [f(90), f(210)] },
-    // Same mistake, same fix. [480,510] (body gap 3.56deg) was the aggregate
-    // global best but, like breathing's broken pick, carries only one leg and
-    // the head — no shoulders, no arms, nothing that reads as "attentive."
-    // [299,466] — v3's own listening window, independently re-scored here at
-    // body gap 3.95deg, hand/arm gap 0.28deg, cloth seam 9.2 frames (worse
-    // than the broken pick's 7.3, better than acceptable) — carries the same
-    // leg sway PLUS neck, shoulder and wrist motion, at v3's established 5.57s
-    // cadence instead of a 1s stutter.
-    listening: { loop: [f(299), f(466)] },
-    // Body gap 0.67deg, hand/arm gap 0.38deg. Picked over an even tighter
-    // 0.0002deg, 12s match ([616,975]) because that longer window's cloth
-    // drifted 105 frames' worth at the seam against this one's 46 — cloth
-    // sim does not loop just because the skeleton does. Every talking
-    // candidate checked here, including ones with a sub-1deg body gap,
-    // carried a cloth seam at least 3x worse than v3's own talking window
-    // (14.6 frames) ever did: a property of this garment's bake on this
-    // phase, not a search artifact. Worth the designer's eye in practice.
-    talking: { loop: [f(814), f(900)] },
+    // Body gap 4.76deg, hand/arm gap 0.32deg, cloth seam 9.8 frames. The
+    // loosest seam of the three, and the phase simply does not offer a tight
+    // one — v3's header says the same about its own listening window.
+    //
+    // Two picks were wrong before this one. [480,510] (gap 3.56) was the
+    // aggregate global best and, like breathing's first pick, carried one leg
+    // and the head and nothing that reads as "attentive". [299,466] (gap 3.95)
+    // fixed the content but failed the play-through check above: it converged
+    // on entering 95 frames in, so steady-state it replayed 2.07s of its 5.57s
+    // and dropped the left leg's sway (1.07deg) back to 0.11. This window is
+    // 0.8deg looser at the seam than that one and keeps all 12 moving joints
+    // at full amplitude, because it re-enters at loop[0] and plays 94% of
+    // itself (5.40s) every lap. Trading a slightly wider crossfade for 2.6x
+    // the motion the viewer actually sees is the right side of that deal.
+    listening: { loop: [f(297), f(469)] },
+    // Body gap 0.25deg, hand/arm gap 0.19deg, cloth seam 74.7 frames. This is
+    // v3's own talking window, re-scored against this clip rather than
+    // inherited — further evidence the body animation did not change.
+    //
+    // It replaces [814,900] (gap 0.67, cloth seam 46), which looked better on
+    // both of those numbers and was the "gets stuck in a weird look" bug.
+    // Simulating AvatarModel's own seam logic against this clip is what found
+    // it: `bestLoopEntry` re-enters at whichever frame best matches the pose
+    // ~0.35s before the window ends, and on [814,900] that search converged on
+    // frame 860 — so after the first lap she replayed frames 860-890, a 1.0s
+    // sliver of a 2.87s window, forever. A tight seam gap does NOT imply the
+    // window plays: it only says the two ENDS match. What makes a window play
+    // in full is that the pose near its end matches a frame near its HEAD, and
+    // that has to be simulated, not inferred. This window converges to
+    // entering 9 frames in and playing 92% of its 7.73s on every lap.
+    //
+    // Cloth seam is the one number that got worse (46 -> 74.7 frames), taken
+    // deliberately: the 0.35s crossfade is there to absorb cloth drift at a
+    // seam, and nothing absorbs replaying a 1-second sliver of a gesture.
+    talking: { loop: [f(794), f(1026)] },
   },
   hasMorphs: true,
   grammaticalGender: "f",

@@ -68,6 +68,9 @@
    },
    "materialSpecular": {},
    "materialTint": {},
+   "noShadowMaterials": {
+    "__set": []
+   },
    "segments": {
     "breathing": {
      "loop": [
@@ -77,14 +80,14 @@
     },
     "listening": {
      "loop": [
-      9.966666666666667,
-      15.533333333333333
+      9.9,
+      15.633333333333333
      ]
     },
     "talking": {
      "loop": [
-      27.133333333333333,
-      30
+      26.466666666666665,
+      34.2
      ]
     }
    },
@@ -156,6 +159,11 @@
    "materialTint": {
     "Std_Skin_Arm": 0.95,
     "lambert5": 0.95
+   },
+   "noShadowMaterials": {
+    "__set": [
+     "lambert5"
+    ]
    },
    "segments": {
     "breathing": {
