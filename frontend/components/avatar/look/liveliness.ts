@@ -73,7 +73,8 @@ export interface LifeRig {
   faces: FaceMesh[];
   head: THREE.Object3D | null;
   /** The head rotation this module last wrote, to undo it when nothing else moves the head. */
-  lastHead: THREE.Quaternion | null;
+  lastHead: THREE.Quaternion;
+  hasLastHead: boolean;
   lastOffset: THREE.Quaternion;
   gaze: { x: number; y: number; targetX: number; targetY: number; nextShift: number; returnAt: number };
   /** Whether a switch wrote shapes last frame, so turning it off clears them once. */
@@ -100,7 +101,8 @@ export function createLifeRig(root: THREE.Object3D): LifeRig {
   return {
     faces,
     head,
-    lastHead: null,
+    lastHead: new THREE.Quaternion(),
+    hasLastHead: false,
     lastOffset: new THREE.Quaternion(),
     gaze: { x: 0, y: 0, targetX: 0, targetY: 0, nextShift: 1, returnAt: Infinity },
     wrote: { smile: false, gaze: false },
@@ -139,30 +141,48 @@ function stepGaze(rig: LifeRig, time: number, delta: number): void {
   gaze.y += (gaze.targetY - gaze.y) * step;
 }
 
+const GAZE_SHAPES: Shape[] = [
+  "eyeLookOutLeft",
+  "eyeLookInRight",
+  "eyeLookInLeft",
+  "eyeLookOutRight",
+  "eyeLookUpLeft",
+  "eyeLookUpRight",
+  "eyeLookDownLeft",
+  "eyeLookDownRight",
+];
+// Reused every frame rather than returned fresh — this runs once per rendered
+// frame for as long as the rig is alive, and a plain object literal there
+// made updateLife a steady source of garbage for the GC to sweep.
+const GAZE_VALUES: number[] = GAZE_SHAPES.map(() => 0);
+
 /**
  * Positive x is towards her own left: the left eye looks out, the right eye in.
  * Positive y is up. Each direction is its own shape, so only one of a pair is set.
  */
-function gazeWeights(x: number, y: number): Partial<Record<Shape, number>> {
+function gazeWeights(x: number, y: number): number[] {
   const right = Math.max(0, -x);
   const left = Math.max(0, x);
   const up = Math.max(0, y);
   const down = Math.max(0, -y);
-  return {
-    eyeLookOutLeft: left,
-    eyeLookInRight: left,
-    eyeLookInLeft: right,
-    eyeLookOutRight: right,
-    eyeLookUpLeft: up,
-    eyeLookUpRight: up,
-    eyeLookDownLeft: down,
-    eyeLookDownRight: down,
-  };
+  GAZE_VALUES[0] = left; // eyeLookOutLeft
+  GAZE_VALUES[1] = left; // eyeLookInRight
+  GAZE_VALUES[2] = right; // eyeLookInLeft
+  GAZE_VALUES[3] = right; // eyeLookOutRight
+  GAZE_VALUES[4] = up; // eyeLookUpLeft
+  GAZE_VALUES[5] = up; // eyeLookUpRight
+  GAZE_VALUES[6] = down; // eyeLookDownLeft
+  GAZE_VALUES[7] = down; // eyeLookDownRight
+  return GAZE_VALUES;
 }
 
 // ── head ────────────────────────────────────────────────────────────────
 
 const headEuler = new THREE.Euler();
+// rig.lastHead used to be cloned fresh each frame just to hold last frame's
+// value for comparison; one quaternion per rig, copied into instead, does the
+// same job with no per-frame allocation.
+const invertedOffset = new THREE.Quaternion();
 
 /**
  * Layer a small rotation on the head bone. When the body clip drives the head
@@ -173,11 +193,12 @@ const headEuler = new THREE.Euler();
 function driftHead(rig: LifeRig, time: number, enabled: boolean): void {
   const head = rig.head;
   if (!head) return;
-  if (rig.lastHead && head.quaternion.equals(rig.lastHead)) {
-    head.quaternion.multiply(rig.lastOffset.clone().invert());
+  if (rig.hasLastHead && head.quaternion.equals(rig.lastHead)) {
+    invertedOffset.copy(rig.lastOffset).invert();
+    head.quaternion.multiply(invertedOffset);
   }
   if (!enabled) {
-    rig.lastHead = null;
+    rig.hasLastHead = false;
     return;
   }
   // Sums of slow, unrelated sines: irregular enough not to read as a loop.
@@ -189,19 +210,20 @@ function driftHead(rig: LifeRig, time: number, enabled: boolean): void {
   headEuler.set(pitch, yaw, roll);
   rig.lastOffset.setFromEuler(headEuler);
   head.quaternion.multiply(rig.lastOffset);
-  rig.lastHead = head.quaternion.clone();
+  rig.lastHead.copy(head.quaternion);
+  rig.hasLastHead = true;
 }
 
 // ── per frame ───────────────────────────────────────────────────────────
 
-/** Set some shapes on every face mesh. */
-function writeShapes(rig: LifeRig, weights: Partial<Record<Shape, number>>, floor: boolean): void {
+/** Set some shapes on every face mesh. `shapes` and `values` run in parallel. */
+function writeShapes(rig: LifeRig, shapes: readonly Shape[], values: readonly number[], floor: boolean): void {
   for (const { influences, index } of rig.faces) {
-    for (const [shape, weight] of Object.entries(weights) as [Shape, number][]) {
-      const i = index[shape];
+    for (let k = 0; k < shapes.length; k++) {
+      const i = index[shapes[k]];
       if (i === undefined) continue;
       // A floor leaves lipsync free to pull the shape further; otherwise overwrite.
-      influences[i] = floor ? Math.max(influences[i], weight) : weight;
+      influences[i] = floor ? Math.max(influences[i], values[k]) : values[k];
     }
   }
 }
@@ -214,38 +236,39 @@ const SMILE_SHAPES: Shape[] = [
   "eyeSquintLeft",
   "eyeSquintRight",
 ];
+const SMILE_VALUES: number[] = SMILE_SHAPES.map(() => 0);
+const ZERO_SMILE_VALUES: number[] = SMILE_SHAPES.map(() => 0);
+const ZERO_GAZE_VALUES: number[] = GAZE_SHAPES.map(() => 0);
 
 /**
  * The smile's shape weights. Cheeks and eyes join in only past a light smile
  * (0.15), and stay below the mouth: at 0.45 the cheeks sit at ~0.2 and the eyes
  * at ~0.09, which narrows them without closing them.
  */
-function smileWeights(smile: number): Partial<Record<Shape, number>> {
+function smileWeights(smile: number): number[] {
   const engaged = Math.max(0, smile - 0.15);
-  return {
-    mouthSmileLeft: smile,
-    mouthSmileRight: smile,
-    cheekSquintLeft: engaged * 0.7,
-    cheekSquintRight: engaged * 0.7,
-    eyeSquintLeft: engaged * 0.3,
-    eyeSquintRight: engaged * 0.3,
-  };
+  SMILE_VALUES[0] = smile; // mouthSmileLeft
+  SMILE_VALUES[1] = smile; // mouthSmileRight
+  SMILE_VALUES[2] = engaged * 0.7; // cheekSquintLeft
+  SMILE_VALUES[3] = engaged * 0.7; // cheekSquintRight
+  SMILE_VALUES[4] = engaged * 0.3; // eyeSquintLeft
+  SMILE_VALUES[5] = engaged * 0.3; // eyeSquintRight
+  return SMILE_VALUES;
 }
-const zeroes = (shapes: readonly Shape[]) => Object.fromEntries(shapes.map((s) => [s, 0]));
 
 export function updateLife(rig: LifeRig, options: LifeOptions, time: number, delta: number): void {
   if (options.smile > 0) {
-    writeShapes(rig, smileWeights(options.smile), true);
+    writeShapes(rig, SMILE_SHAPES, smileWeights(options.smile), true);
   } else if (rig.wrote.smile) {
-    writeShapes(rig, zeroes(SMILE_SHAPES), false);
+    writeShapes(rig, SMILE_SHAPES, ZERO_SMILE_VALUES, false);
   }
   rig.wrote.smile = options.smile > 0;
 
   if (options.gaze) {
     stepGaze(rig, time, delta);
-    writeShapes(rig, gazeWeights(rig.gaze.x, rig.gaze.y), false);
+    writeShapes(rig, GAZE_SHAPES, gazeWeights(rig.gaze.x, rig.gaze.y), false);
   } else if (rig.wrote.gaze) {
-    writeShapes(rig, gazeWeights(0, 0), false);
+    writeShapes(rig, GAZE_SHAPES, ZERO_GAZE_VALUES, false);
   }
   rig.wrote.gaze = options.gaze;
 

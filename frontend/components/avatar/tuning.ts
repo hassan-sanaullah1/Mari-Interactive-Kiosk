@@ -294,13 +294,6 @@ export interface RigTuning {
   headTargetY: number;
   /** Materials textured with skin — these get the emissive lift below. */
   skinMaterials: Set<string>;
-  /** Whether this rig casts shadows onto itself at all. The studio's key light
-   *  is the only caster (see Studio.shadow), and with no ground plane the only
-   *  shadows on screen are a rig's own. False opts the rig out: it still
-   *  RECEIVES, there is just nothing casting, so it is lit by the studio alone.
-   *  A per-rig switch because the shared studio is aimed at one set of
-   *  proportions and the same key angle flatters a different build differently. */
-  castsShadow: boolean;
   /** Emissive lift on skinMaterials, driven from their own base-colour texture. */
   skinEmissive: number;
   /** Roughness forced on skinMaterials, or null to keep the export's value. */
@@ -343,9 +336,6 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
 
     /** Head, arms, legs — every material whose texture is a skin diffuse. */
     skinMaterials: new Set(["lambert14", "lambert17", "lambert12"]),
-    /** Her self-shadowing is what the studio was balanced against — the key's
-     *  angle and Studio.shadow's softness were both set looking at this rig. */
-    castsShadow: true,
     skinEmissive: 0.25,
     skinRoughness: null,
     materialTint: {},
@@ -418,18 +408,6 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
      *  dropped Std_Skin_Leg — legs and feet are no longer separate skin
      *  geometry — so head and arms are the whole of his skin now. */
     skinMaterials: new Set(["lambert5", "Std_Skin_Arm"]),
-    /** Off. Under the light studio's camera-left key this rig casts a hard
-     *  slab of shadow down his upper arm, where the waistcoat's shoulder and
-     *  armhole sit over the kurta sleeve — his build and that garment, against
-     *  a key angle set for the female rig. Confirmed by switching only the
-     *  light's `castShadow` off in the live scene: the patch is the one thing
-     *  that changes. Suppressing individual casters was tried first and did
-     *  not hold (the head alone was not the caster), and bending the shared
-     *  key or Studio.shadow to suit him would move her too — she is the rig
-     *  that studio was balanced against. He loses self-shadowing and is lit
-     *  by the studio alone, which on his flat-woven kurta reads as clean
-     *  rather than flat. Revisit if he ever gets a studio of his own. */
-    castsShadow: false,
     skinEmissive: 0.08,
     /** This export authors real roughness on every material — nothing to correct. */
     skinRoughness: null,

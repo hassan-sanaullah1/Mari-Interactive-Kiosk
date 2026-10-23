@@ -193,11 +193,17 @@ export function LabFraming({ camera: settings, rig, modelHeight }: LabFramingPro
     if (size.width <= 0 || size.height <= 0) return;
     const topY = modelHeight * (1 + settings.headRoom);
     const frameHeight = Math.min(settings.frameHeightM, topY);
-    centerY.current = topY - frameHeight / 2;
     camera.aspect = size.width / size.height;
     camera.filmGauge = 36;
     camera.setFocalLength(rig.lensMm);
-    const distance = rig.cameraDistanceM ?? frameHeight / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    // Frame top on topY from what the lens really sees at `distance` — the same
+    // correction as Framing in AvatarScene, kept in step so a look signed off
+    // here frames identically in the kiosk. A pinned cameraDistanceM otherwise
+    // sits the rig low by half the difference between the frame it asked for and
+    // the one it gets.
+    const halfFovTan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    const distance = rig.cameraDistanceM ?? frameHeight / 2 / halfFovTan;
+    centerY.current = topY - distance * halfFovTan;
     camera.aspect = size.width / size.height / rig.widthSqueeze;
     camera.position.set(0, centerY.current, distance);
     camera.lookAt(0, centerY.current, 0);

@@ -124,7 +124,6 @@ export function Framing({
     // Never frame more than the whole rig — past her feet there is only empty
     // floor to show, and she would shrink for no reason.
     const frameHeight = Math.min(CAMERA.frameHeightM, topY);
-    centerY.current = topY - frameHeight / 2;
 
     // three's film gauge applies to the larger side of the frame, which is
     // exactly Blender's Auto sensor fit — so the fov matches Blender's for the
@@ -136,8 +135,21 @@ export function Framing({
     // Then back off until `frameHeight` of her fills that fov.
     // A fixed `cameraDistanceM` wins; otherwise back off until `frameHeight` fills
     // the fov, which keeps the rig the same size on every screen shape.
-    const distance =
-      cameraDistanceM ?? frameHeight / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    const halfFovTan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    const distance = cameraDistanceM ?? frameHeight / 2 / halfFovTan;
+    // Aim so the TOP of the frame lands on topY, measured from what the lens
+    // actually sees at `distance` rather than the frameHeight we asked for.
+    //
+    // The two are equal whenever the distance is derived — that is what
+    // deriving it means — so this is exactly a no-op for a rig with
+    // `cameraDistanceM: null`. They diverge for a rig that pins its distance,
+    // and using frameHeight/2 there sat it low by the difference: the male rig's
+    // 135mm lens at his fixed 4.92m sees 1.31m of world, not the 1.15m asked
+    // for, so half of that surplus (8cm) was parked above his head. Against a
+    // 1.31m frame that is 6.2% of frame height, and it put his head visibly
+    // lower than the female rig's through a presenter switch.
+    const visibleHalfHeight = distance * halfFovTan;
+    centerY.current = topY - visibleHalfHeight;
     // The squeeze: claiming a wider frame than the canvas really is fits more
     // world into the same pixels across, so everything draws narrower while
     // the height is untouched. Needs `manual` on the camera (see <Canvas>), or

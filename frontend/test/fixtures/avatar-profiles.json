@@ -68,9 +68,6 @@
    },
    "materialSpecular": {},
    "materialTint": {},
-   "noShadowMaterials": {
-    "__set": []
-   },
    "segments": {
     "breathing": {
      "loop": [
@@ -159,11 +156,6 @@
    "materialTint": {
     "Std_Skin_Arm": 0.95,
     "lambert5": 0.95
-   },
-   "noShadowMaterials": {
-    "__set": [
-     "lambert5"
-    ]
    },
    "segments": {
     "breathing": {
