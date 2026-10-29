@@ -22,6 +22,16 @@ import type { Theme } from "@/lib/theme";
  */
 export const ENABLE_AVATAR_LOOKS = true;
 
+/**
+ * Resting expression for every presenter in every theme.
+ *
+ * The rest of a look is per-theme, but this is not: a presenter who smiles and
+ * follows you in the light room and goes blank in the dark one reads as two
+ * different people. Only the light themes carry a look (PRESENTER_LOOKS below),
+ * so AvatarScene falls back to this rather than to NO_LIFE where there is none.
+ */
+export const PRESENTER_LIFE: LifeOptions = { smile: 0.5, gaze: true, headDrift: true };
+
 type Vec3 = [number, number, number];
 
 export interface FixedLight {
@@ -97,7 +107,12 @@ const FEMALE_LIGHT: PresenterLook = {
       ],
     },
   },
-  toneMapping: "neutral",
+  // ACES, not the lab's neutral: the kiosk's <Canvas> mounts with ACES, so a
+  // look asking for neutral only took effect once something re-ran
+  // ToneMappingSync (a theme switch), and the same rig rendered visibly warmer
+  // for the rest of the session than it did on a fresh load. Matching the
+  // canvas is what keeps one presenter looking like itself throughout.
+  toneMapping: "aces",
   // Judged with the kiosk's own framing, which has one head room for every layout.
   headRoom: { landscape: 0.045, portrait: 0.045 },
   realism: {
@@ -136,7 +151,7 @@ const FEMALE_LIGHT: PresenterLook = {
     hairShade: 0.9,
     hairRoughness: 0.32,
   },
-  life: { smile: 0.5, gaze: true, headDrift: true },
+  life: PRESENTER_LIFE,
   ao: { enabled: true, intensity: 0.6, radius: 0.1 },
   grade: { enabled: true, contrast: 1.16, saturation: 1, lift: 0.07, warmth: -0.06, tealShadows: 0.05 },
   shadowSoftness: 5,
@@ -182,7 +197,8 @@ const MALE_LIGHT: PresenterLook = {
     // drew the male 2-3% brighter than the approved render, 1 matched it.
     rigLighting: { exposure: 0.75, ambient: 0.5, fill: 1.15, environment: 1 },
   },
-  toneMapping: "neutral",
+  // ACES rather than the lab's neutral — see the female look's note above.
+  toneMapping: "aces",
   headRoom: { landscape: 0.045, portrait: 0.055 },
   realism: {
     skinGlow: false,
@@ -220,8 +236,8 @@ const MALE_LIGHT: PresenterLook = {
     hairShade: 0.9,
     hairRoughness: 0.32,
   },
-  life: { smile: 0.5, gaze: true, headDrift: true },
-  ao: { enabled: true, intensity: 0.6, radius: 0.1 },
+  life: PRESENTER_LIFE,
+  ao: { enabled: false, intensity: 0.6, radius: 0.1 },
   grade: { enabled: true, contrast: 1.19, saturation: 1, lift: 0.07, warmth: -0.06, tealShadows: 0.05 },
   shadowSoftness: 5,
   shadowStrength: 1,
@@ -236,4 +252,19 @@ export const PRESENTER_LOOKS: Record<AvatarId, Partial<Record<Theme, PresenterLo
 export function presenterLook(avatar: AvatarId, theme: Theme): PresenterLook | null {
   if (!ENABLE_AVATAR_LOOKS) return null;
   return PRESENTER_LOOKS[avatar][theme] ?? null;
+}
+
+/**
+ * This presenter's framing, for a theme with no look of its own (today, dark).
+ *
+ * The two rigs are framed differently on purpose — see MALE_LIGHT's headRoom,
+ * 0.055 against the female's 0.045, a correction for how the rigs differ at
+ * the chosen crop — so dark mode falling back to CAMERA.headRoom instead of
+ * this presenter's own value moved the male rig noticeably between themes.
+ * Only `light` carries a look today (PRESENTER_LOOKS above), so that is what
+ * this reads; a presenter with no light look either falls through to null and
+ * AvatarScene keeps using CAMERA.headRoom, same as before looks existed.
+ */
+export function presenterHeadRoom(avatar: AvatarId): PresenterLook["headRoom"] | null {
+  return PRESENTER_LOOKS[avatar].light?.headRoom ?? null;
 }

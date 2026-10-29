@@ -314,6 +314,8 @@ export interface RigTuning {
   materialSpecular: Record<string, number>;
   /** Multiplier on how much of the <Environment> a material reflects, by name. */
   materialEnvIntensity: Record<string, number>;
+  /** Materials whose meshes are lit and receive shadows but cast none, by name. */
+  nonCastingMaterials: Set<string>;
   /** A2F weight calibration, or null for a rig with no morphs to calibrate. */
   a2f: { gain: number; shapeGains: Record<string, number> } | null;
   /** Uniform scale on both wrist bones (hands + fingers). 1 = as authored. */
@@ -383,6 +385,7 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
       /** Dupatta, dulled again — shine comes from reflection as well as roughness. */
       "pasted__lambert10": 0.2,
     },
+    nonCastingMaterials: new Set(),
 
     a2f: { gain: 0.9, shapeGains: { jawopen: 0.375 } },
     handScale: 1,
@@ -447,6 +450,14 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
     materialSpecular: { standardSurface2: 0.6 },
     /** Not yet measured against the lobby plate the way the female rig has been. */
     materialEnvIntensity: {},
+    /** The waistcoat is lit and shadowed like everything else, but casts nothing.
+     *  His key rakes nearly flat across the chest (position [-2.3, 1.3, 2.2] aimed
+     *  at y 1.1 — 0.2m of drop over 3.2m), so the waistcoat's edge threw a long
+     *  grazing shadow down the kurta sleeve behind it. At extent 1 over a 2048 map
+     *  one texel is ~1mm, about the waistcoat-to-sleeve gap, so it resolved as a
+     *  hard banded step rather than soft contact. Both waistcoat materials: the
+     *  vest body and its placket. */
+    nonCastingMaterials: new Set(["waistcoat:lambert2", "waistcoat:lambert3"]),
 
     a2f: { gain: 0.9, shapeGains: { jawopen: 0.375 } },
     /** 1 = hands as authored. Lower (~0.9) to shrink them; below ~0.85 the

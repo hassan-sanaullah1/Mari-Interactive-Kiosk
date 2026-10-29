@@ -173,10 +173,16 @@ const f = (frame: number) => frame / FPS;
 const FEMALE: AvatarConfig = {
   id: "female",
   url: "/models/dress2_v6.glb.gz",
-  // Served as the pre-compressed .gz (next.config.ts). 72MB raw, 52MB gzipped
-  // (plain gzip -9 of the raw export; optimize_glb.py has not been run on
-  // this file either).
-  bytes: { decoded: 72205648, encoded: 52279109 },
+  // Served as the pre-compressed .gz (next.config.ts). Run through
+  // optimize_glb.py with --keep-windows matching the three loop windows
+  // below (converted to this clip's own 24fps: 72-168, 238-375, 635-821 —
+  // see clip_fps in that script): animation keyframes outside the played
+  // windows are dropped, cloth rotations are requantised, and unused morph
+  // target normals are stripped. Geometry, skinning, materials and all 51
+  // morph target names are untouched (verified: mesh/skin/node/material
+  // counts and target names identical to the un-optimized export). 72MB raw
+  // dropped to 46MB, 52MB gzipped dropped to 36MB.
+  bytes: { decoded: 46294600, encoded: 35687593 },
   segments: {
     // The search's global best, [60,90] (body gap 0.00deg), shipped first and
     // was wrong: minimising the pose gap alone says nothing about whether the

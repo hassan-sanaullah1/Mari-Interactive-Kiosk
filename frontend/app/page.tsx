@@ -45,6 +45,24 @@ export default function Page() {
     setAvatar(readAvatar());
   }, []);
 
+  // Warm the OTHER theme's background in the browser's HTTP cache once the page
+  // is idle, so a later light/dark toggle swaps instantly instead of waiting on
+  // a fresh fetch. The CSS in page.module.css deliberately never fetches the
+  // non-matching rule's image on its own (see the .bg comment there) — this is
+  // the one place that asks for it anyway, off the critical path and after the
+  // active background has already painted. Cheap now that both images are a
+  // few hundred KB WebP rather than multi-megabyte PNGs.
+  useEffect(() => {
+    const other = theme === "light" ? "dark" : "light";
+    const idle = window.requestIdleCallback ?? ((fn: () => void) => window.setTimeout(fn, 1));
+    const cancel = window.cancelIdleCallback ?? window.clearTimeout;
+    const handle = idle(() => {
+      const img = new Image();
+      img.src = `/bg-mobile-${other}.webp`;
+    });
+    return () => cancel(handle);
+  }, [theme]);
+
   const changeTheme = (t: Theme) => {
     setTheme(t);
     applyTheme(t);

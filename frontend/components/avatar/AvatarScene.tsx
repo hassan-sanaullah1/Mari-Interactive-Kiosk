@@ -40,7 +40,6 @@ import AvatarModel from "./AvatarModel";
 import { fetchAvatar, isAvatarParsed } from "@/lib/avatar-fetch";
 import { type AvatarState } from "./state";
 import { avatarConfig, DEFAULT_AVATAR, type AvatarConfig, type AvatarId } from "./models";
-import { NO_LIFE } from "./look/liveliness";
 import {
   FixedLights,
   LifeLayer,
@@ -51,7 +50,13 @@ import {
   ToneMappingSync,
 } from "./look/LookLayers";
 import PostEffects from "./look/PostEffects";
-import { ENABLE_AVATAR_LOOKS, presenterLook, type PresenterLook } from "./profiles/looks";
+import {
+  ENABLE_AVATAR_LOOKS,
+  PRESENTER_LIFE,
+  presenterHeadRoom,
+  presenterLook,
+  type PresenterLook,
+} from "./profiles/looks";
 // Every number that decides how the scene looks lives in ./tuning.ts — this
 // file is the machinery that applies them.
 import {
@@ -552,10 +557,10 @@ function LookLayers({
   return (
     <>
       <ToneMappingSync toneMapping={look ? LOOK_TONE_MAPPING[look.toneMapping] : THREE.ACESFilmicToneMapping} />
-      {/* Kept mounted with everything off when there is no look: one frame of
-          that clears the smile and gaze it wrote. Keyed on the load, so it runs
-          after the rig's own frame callbacks. */}
-      {root && <LifeLayer key={version} root={root} options={look?.life ?? NO_LIFE} />}
+      {/* The resting expression is the presenter's, not the theme's — see
+          PRESENTER_LIFE. Keyed on the load, so it runs after the rig's own
+          frame callbacks. */}
+      {root && <LifeLayer key={version} root={root} options={look?.life ?? PRESENTER_LIFE} />}
       {look && (
         <>
           {/* Laid again whenever the rig loads or its materials are reset. */}
@@ -630,7 +635,12 @@ export default function AvatarScene({
   const config = avatarConfig(avatar);
   const look = presenterLook(config.id, theme);
   const isPortrait = useIsPortrait();
-  const headRoom = look ? look.headRoom[isPortrait ? "portrait" : "landscape"] : CAMERA.headRoom;
+  // Framing is the presenter's, not the theme's — see presenterHeadRoom. Falls
+  // through to the look's own value when there is one (today, light), else this
+  // presenter's framing from its light look, else the kiosk's generic default
+  // for a presenter with no look at all.
+  const headRoomSet = look?.headRoom ?? presenterHeadRoom(config.id);
+  const headRoom = headRoomSet ? headRoomSet[isPortrait ? "portrait" : "landscape"] : CAMERA.headRoom;
 
   /**
    * The rig's height, tagged with the rig it was measured on.

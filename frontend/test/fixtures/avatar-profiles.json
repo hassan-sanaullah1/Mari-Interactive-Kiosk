@@ -68,6 +68,9 @@
    },
    "materialSpecular": {},
    "materialTint": {},
+   "nonCastingMaterials": {
+    "__set": []
+   },
    "segments": {
     "breathing": {
      "loop": [
@@ -156,6 +159,12 @@
    "materialTint": {
     "Std_Skin_Arm": 0.95,
     "lambert5": 0.95
+   },
+   "nonCastingMaterials": {
+    "__set": [
+     "waistcoat:lambert2",
+     "waistcoat:lambert3"
+    ]
    },
    "segments": {
     "breathing": {

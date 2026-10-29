@@ -10,7 +10,14 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { Environment, Lightformer } from "@react-three/drei";
 import * as THREE from "three";
 import { createLifeRig, updateLife, type LifeOptions } from "./liveliness";
-import { applyRealism, setRealismParams, type RealismOptions, type RealismParams, type RealismRig } from "./realism";
+import {
+  applyRealism,
+  DEFAULT_REALISM_PARAMS,
+  setRealismParams,
+  type RealismOptions,
+  type RealismParams,
+  type RealismRig,
+} from "./realism";
 import type { FixedLightRig, LightPanel } from "../profiles/looks";
 
 /**
@@ -105,7 +112,13 @@ export function ShadowSoftness({ radius, strength }: { radius: number; strength:
 
 /** Pushes the realism strengths into the shared uniforms; never recompiles. */
 export function RealismParamsSync({ params }: { params: RealismParams }) {
-  useEffect(() => setRealismParams(params), [params]);
+  // Put the defaults back on unmount: the uniforms this writes are module-level
+  // and outlive the look that set them, so a theme with no look of its own
+  // otherwise keeps rendering with the previous look's skin tone values.
+  useEffect(() => {
+    setRealismParams(params);
+    return () => setRealismParams(DEFAULT_REALISM_PARAMS);
+  }, [params]);
   return null;
 }
 

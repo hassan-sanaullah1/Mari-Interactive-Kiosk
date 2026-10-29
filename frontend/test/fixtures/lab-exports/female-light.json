@@ -364,7 +364,7 @@
     "shadowSoftness": 5,
     "shadowStrength": 1,
     "theme": "light",
-    "tone": "neutral",
+    "tone": "aces",
     "view": "lit",
     "pose": "breathing",
     "camera": "kiosk",
@@ -394,7 +394,7 @@
       "blurPx": 2.5
     },
     "renderer": {
-      "toneMapping": "neutral",
+      "toneMapping": "aces",
       "outputColorSpace": "srgb",
       "antialias": true,
       "shadowMap": "VSM",

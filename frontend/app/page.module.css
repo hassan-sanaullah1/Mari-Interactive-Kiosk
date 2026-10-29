@@ -25,24 +25,24 @@
 .bg {
   position: absolute;
   inset: 0;
-  background: url("/bg-desktop-dark.png") center bottom / cover no-repeat;
+  background: url("/bg-desktop-dark.webp") center bottom / cover no-repeat;
   z-index: 0;
   user-select: none;
   pointer-events: none;
 }
 
 :global(:root[data-theme="light"]) .bg {
-  background-image: url("/bg-desktop-light.png");
+  background-image: url("/bg-desktop-light.webp");
 }
 
 /* Same layout switch as globals.css — forced on for every screen right now. */
 @media (min-width: 0) {
   .bg {
-    background-image: url("/bg-mobile-dark.png");
+    background-image: url("/bg-mobile-dark.webp");
   }
 
   :global(:root[data-theme="light"]) .bg {
-    background-image: url("/bg-mobile-light.png");
+    background-image: url("/bg-mobile-light.webp");
   }
 }
 
