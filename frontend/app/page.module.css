@@ -15,7 +15,21 @@
   left: 50%;
   width: min(100vw, calc(100dvh * 402 / 874));
   height: 100dvh;
-  transform: translateX(-50%);
+  /* --kiosk-zoom scales the whole composition - background art, avatar and
+     controls together - so a screen wider than the 402:874 reference ratio can
+     be filled instead of letterboxed. 1 = off (the box is centred and the page
+     background shows at the sides).
+
+     Scaled from the BOTTOM (transform-origin), not the centre: every control is
+     anchored to the bottom edge (--dock-bottom, --edge-y), so growing upward
+     crops ceiling out of the background art and never the mic button or the
+     language bar.
+
+     To fill a screen exactly: zoom = screen_width / (screen_height * 402/874).
+     A 2160x3840 panel needs 2160 / 1766 = 1.223. Overshooting is harmless, it
+     just crops more off the top. Set it in globals.css. */
+  transform: translateX(-50%) scale(var(--kiosk-zoom, 1));
+  transform-origin: bottom center;
   overflow: hidden;
 }
 
@@ -35,7 +49,7 @@
   background-image: url("/bg-desktop-light.webp");
 }
 
-/* Same layout switch as globals.css — forced on for every screen right now. */
+/* LAYOUT SWITCH — keep identical to globals.css (see the box there). */
 @media (min-width: 0) {
   .bg {
     background-image: url("/bg-mobile-dark.webp");
@@ -86,6 +100,7 @@
 /* Portrait screens follow mobile_UI.png: the dock sits above a single bottom row
    holding the language pill + theme switch on the left and the chat launcher on
    the right. Positions come from --edge-x/--edge-y/--dock-bottom in globals.css. */
+/* LAYOUT SWITCH — keep identical to globals.css (see the box there). */
 @media (min-width: 0) {
   .toast {
     bottom: calc(220 * var(--s));

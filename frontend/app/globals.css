@@ -14,6 +14,20 @@
      dock, so below 992px wide the floor follows the width (vw / 1600) instead. */
   --s: clamp(min(0.62px, calc(100vw / 1600)), min(calc(100vw / 2000), calc(100dvh / 1125)), 2.5px);
 
+  /* ── KIOSK ZOOM ──────────────────────────────────────────────────────────
+     Scales the entire kiosk - background, avatar and controls - as one. Use it
+     to fill a screen whose shape is not the 402:874 reference ratio, instead of
+     leaving bars down the sides.
+
+       1       off: the composition is centred, bars show at the sides
+       1.223   fills a 2160x3840 portrait 4K panel (the venue screen)
+
+     Formula: screen_width / (screen_height * 402 / 874)
+     It grows upward from the bottom edge, so the extra is cropped off the top
+     of the background art; the controls never move. Rebuild after changing:
+     make prod KOKORO=1 */
+  --kiosk-zoom: 1.223;
+
   /* Palette sampled from the reference image. */
   --blue: #0077dc;
   --blue-hover: #0f88ee;
@@ -53,14 +67,22 @@
    --s is redefined here, so every calc() below is in mobile reference units.
    Normally chosen by SHAPE, not width: phones, portrait tablets and a portrait
    kiosk screen get this layout, and a phone on its side keeps the landscape one.
-   Forced on for every screen right now (`min-width: 0` always matches) so the
-   site opens in the mobile layout by default; the desktop query below is left
-   intact to switch back by restoring `(max-aspect-ratio: 6/5)` here and at
-   every other site that repeats this exact query (see grep for the breakpoint
-   string across app/ and components/).
+   ┌─ LAYOUT SWITCH ────────────────────────────────────────────────────────┐
+   │ Change the FOUR @media lines below (and PORTRAIT_QUERY in                │
+   │ components/avatar/AvatarScene.tsx) together — they must always agree:    │
+   │                                                                          │
+   │   (min-width: 0)            ALWAYS portrait   <- kiosk, the default      │
+   │   (max-aspect-ratio: 6/5)   auto by screen shape (portrait OR landscape) │
+   │   (max-width: 0)            ALWAYS landscape                             │
+   │                                                                          │
+   │ The kiosk panel is mounted in portrait, so it is pinned to portrait: the │
+   │ auto query would flip the whole UI to the landscape design if the screen │
+   │ were ever rotated or the kiosk run on a normal monitor.                  │
+   │ Sites: globals.css (1), page.module.css (2), AvatarScene.tsx (1).        │
+   └──────────────────────────────────────────────────────────────────────────┘
    No upper cap: a 1080x1920 kiosk needs 2.2px, and a cap is what used to leave
    the presenter at a third of the screen there. */
-@media (min-width: 0) {
+@media (min-width: 0) {  /* LAYOUT SWITCH — see the box above */
   :root {
     --s: min(calc(100vw / 402), calc(100dvh / 874));
 

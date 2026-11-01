@@ -515,10 +515,15 @@ export interface AvatarSceneProps {
   theme?: Theme;
 }
 
-/** The kiosk's portrait layout: the same switch as globals.css and page.module.css.
- *  Forced on for every screen right now (`min-width: 0` always matches); restore
- *  `(max-aspect-ratio: 6/5)` here and at every other site that repeats this query
- *  to go back to real-device detection. */
+/** LAYOUT SWITCH — must stay identical to the @media lines in globals.css and
+ *  page.module.css (the full explanation lives in globals.css):
+ *
+ *    "(min-width: 0)"          ALWAYS portrait   <- kiosk, the default
+ *    "(max-aspect-ratio: 6/5)" auto by screen shape
+ *    "(max-width: 0)"          ALWAYS landscape
+ *
+ *  Pinned to portrait because the kiosk panel is mounted that way; the auto
+ *  query would flip the UI to the landscape design on a rotated or desktop screen. */
 const PORTRAIT_QUERY = "(min-width: 0)";
 
 function useIsPortrait(): boolean {

@@ -50,6 +50,10 @@ services:
       MARI_RAG_METADATA_DB: /app/state/rag_metadata.sqlite
       # Must match the fastembed_cache mount, or 3 GB of weights re-download per recreate.
       FASTEMBED_CACHE_PATH: /root/.cache/fastembed
+      # The Kokoro/Whisper weights are already in whisper_cache, so let the first
+      # synthesis use them instead of HEAD-ing huggingface.co: that call is pure
+      # latency on a good link and a hard dependency on a bad one (a venue).
+      HF_HUB_OFFLINE: "1"
     depends_on:
       qdrant:
         condition: service_healthy

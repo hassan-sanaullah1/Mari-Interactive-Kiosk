@@ -36,6 +36,16 @@ export default function ChatPanel({
   const t = uiCopy(lang, gender);
   const rtl = lang === "ur";
 
+  // The kiosk has no physical keyboard, so an on-screen one has to appear with
+  // the chat panel. A web page cannot launch a desktop app, so the state is
+  // published in the window title and the desktop watcher
+  // (~/.local/bin/mari-kiosk-osk) polls it with wmctrl. The title is the one
+  // piece of page state an outside process can read without a debug port.
+  useEffect(() => {
+    const base = document.title.replace(/ \u2022 CHAT$/, "");
+    document.title = open ? base + " \u2022 CHAT" : base;
+  }, [open]);
+
   // Pin to the newest turn as the reply streams in.
   useLayoutEffect(() => {
     if (!open) return;

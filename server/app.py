@@ -66,7 +66,11 @@ async def log_request(
 @app.on_event("startup")
 async def _startup() -> None:
     get_prompts()  # a missing prompt file stops startup here
-    asyncio.create_task(providers.warm("en"))
+    # Every presenter, not just the default one: each English voice tensor loads
+    # separately, so warming only one leaves the other presenter's first answer
+    # paying the cold-start cost (measured 6.4 s vs 1.9 s).
+    for _persona_id in all_personas():
+        asyncio.create_task(providers.warm("en", _persona_id))
     # Only checks the local TTS server; Soniox has nothing to preload. Warmed as the
     # first presenter routed to it, which is not always the default presenter.
     local_ur = next(

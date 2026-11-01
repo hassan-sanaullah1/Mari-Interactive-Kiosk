@@ -191,7 +191,16 @@ class KokoroLocalTTS(TTSProvider):
         return KokoroLocalTTS._pipe
 
     def warm(self) -> None:
-        self._get_pipe()
+        # Building the pipeline is not enough: the voice tensor and misaki's G2P model
+        # load lazily on the first real call, which measured 6.4 s for a sentence that
+        # takes 1.9 s once they are in (RTF 1.3x vs 4.5x). One throwaway synthesis here
+        # pays that 0.8 s at startup instead of in the visitor's first answer.
+        pipe = self._get_pipe()
+        try:
+            for _ in pipe("Warming up.", voice=self.voice):
+                break
+        except Exception as exc:  # a failed warm must never stop startup
+            logger.warning("Kokoro warm-up synthesis failed: %s", exc)
 
     async def synthesize(self, text: str) -> tuple[bytes, str]:
         import io
