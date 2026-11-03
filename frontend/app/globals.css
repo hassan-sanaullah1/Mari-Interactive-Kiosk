@@ -28,6 +28,18 @@
      make prod KOKORO=1 */
   --kiosk-zoom: 1.223;
 
+  /* ── URDU FONT ───────────────────────────────────────────────────────────
+     Urdu is set in Naskh. Without this the browser fell through to fontconfig,
+     which picked Noto Kufi Arabic - a geometric display face that is hard to
+     read as body text.
+
+     Naskh rather than Nastaliq: Nastaliq is the more traditional style, but it
+     writes on a steep diagonal baseline that needs ~2.1 line-height, which
+     does not fit the kiosk's chat bubbles and status line. Naskh is horizontal
+     and reads cleanly at the existing 1.45-1.62. */
+  --font-urdu: "Noto Naskh Arabic", "Noto Sans Arabic", serif;
+  --urdu-line-height: 1.7;
+
   /* Palette sampled from the reference image. */
   --blue: #0077dc;
   --blue-hover: #0f88ee;
@@ -181,4 +193,27 @@ button {
     animation-duration: 0.001ms !important;
     transition-duration: 0.001ms !important;
   }
+}
+
+/* Every Urdu element, wherever it is: the language pill's "اردو", the status
+   line, chat turns. Keyed on the markup's own language/direction rather than a
+   class, so a component added later is covered without touching this file.
+   See --font-urdu above for why Naskh suits the kiosk's line heights.
+
+   Deliberately NOT :lang(ur): page.tsx sets document.documentElement.lang, so
+   in Urdu mode :lang(ur) matches every element on the page and would put the
+   Naskh face on Latin text too - the "English" pill and the chat placeholder
+   visibly changed shape. An explicit lang="ur" / dir="rtl" attribute marks the
+   elements that really hold Urdu. */
+[lang="ur"],
+[dir="rtl"] {
+  font-family: var(--font-urdu);
+  line-height: var(--urdu-line-height);
+}
+
+/* Buttons and single-line controls must not inherit the tall line - it would
+   stretch the pill. They still get the Naskh face. */
+button[lang="ur"],
+button[dir="rtl"] {
+  line-height: normal;
 }
