@@ -66,21 +66,17 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // The avatar .glb: large, versioned by filename (dress2_v2.glb,
-        // glb1.glb) and never mutated in place — a rename accompanies any
-        // actual model change. Safe to cache immutably so returning visitors skip
-        // the re-download entirely instead of even doing a revalidation round trip.
+        // The avatar .glb: large, versioned by filename (dress2_v6.glb,
+        // Waist_coat_male1.glb) and never mutated in place — a rename
+        // accompanies any actual model change. Safe to cache immutably so
+        // returning visitors skip the re-download entirely instead of even
+        // doing a revalidation round trip.
         //
-        // This wildcard is what caches the MALE rig too; it needs no rule of its
-        // own. Confirmed against the built manifest rather than read off the
-        // pattern — `/models/:file*.glb` compiles to
-        // ^/models(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))?\.glb(?:/)?$, which matches
-        // /models/glb1.glb.
+        // This wildcard caches both rigs; neither needs a rule of its own.
         //
-        // The rename convention is load-bearing HERE, and glb1.glb is the
-        // rig most likely to break it: it is the raw export, still being iterated
-        // on (see models.ts). Re-exporting over that filename hands every returning
-        // visitor a year-stale model with no way to revalidate. Bump the name.
+        // The rename convention is load-bearing HERE: re-exporting over the
+        // same filename hands every returning visitor a year-stale model with
+        // no way to revalidate. Bump the name.
         //
         // Kept for the raw .glb, which is still the canonical asset on disk even
         // though both rigs are now SERVED as .gz (see the rule above).

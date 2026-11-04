@@ -13,8 +13,15 @@ from .. import config
 
 # The hosted endpoint's CDN edge sometimes accepts the TCP connection and never answers.
 # A fresh connection almost always lands, so a failed dial is retried.
-CONNECT_ATTEMPTS = 3
-RETRY_BACKOFF = 0.4  # seconds, multiplied by the attempt number
+#
+# The backoff is deliberately uneven. A dropped connection comes back on the next dial,
+# which the first two quick retries cover. A 502/503 is different: the vLLM server is
+# restarting or out of memory and needs tens of seconds, and on 2026-11-04 07:28-07:44
+# three turns fell through to the demo line because all three attempts finished within
+# 1.5s of each other. The later waits are long enough to outlast that kind of blip while
+# the visitor is still watching the avatar think, instead of hearing a canned line.
+CONNECT_ATTEMPTS = 5
+RETRY_BACKOFF = (0.4, 1.0, 4.0, 9.0)  # seconds before attempts 2..5
 
 # The read timeout applies between streamed chunks, so a half-open tunnel fails at ~12s
 # instead of hanging the turn.
@@ -86,7 +93,7 @@ async def complete_verbose(messages: list[dict], max_tokens: int) -> Completion:
                 raise
             last = exc
             if attempt + 1 < CONNECT_ATTEMPTS:
-                await asyncio.sleep(RETRY_BACKOFF * (attempt + 1))
+                await asyncio.sleep(RETRY_BACKOFF[attempt])
     raise last  # type: ignore[misc]
 
 

@@ -1,0 +1,17 @@
+# Optional: runs the local English STT model (faster-whisper) on the GPU instead of the
+# CPU. Not part of the default backend image — see requirements.txt for why this image
+# stays slim. Installed only when server/Dockerfile is built with INSTALL_CUDA=true
+# (`make dev CUDA=1` / `make prod CUDA=1`, docker-compose.cuda.yml).
+#
+# ctranslate2 links these at run time, not at import: a GPU and the driver alone are
+# not enough, and without them the model loads on cuda and then raises
+# "libcublas.so.12 is not found" on the first decode. WhisperLocalSTT probes for that
+# at startup and falls back to the CPU, so a build without these is slow, not broken.
+#
+# These are the only CUDA pieces ctranslate2 needs — torch stays on the +cpu wheel in
+# requirements-kokoro.txt, because Kokoro synthesis is fast enough there and the CUDA
+# torch build would add ~5 GB for nothing.
+#
+# cuDNN must be 9.x: ctranslate2 4.5+ dropped cuDNN 8.
+nvidia-cublas-cu12>=12.3,<13
+nvidia-cudnn-cu12>=9.0,<10

@@ -111,8 +111,17 @@ class VoiceSession:
         try:
             await self._stt_stream.start()
         except Exception as exc:
-            await self._try_send({"type": "error", "message": f"stt: {exc}"})
-            return False
+            # TEMP popup fix: Soniox could not open (usually no network). Do NOT send an
+            # {"error"} frame or close the socket here - that made the browser reopen the
+            # turn and flash the error toast ~once a second while the network was down.
+            # Degrade quietly: drop the stream and let the turn end with an empty
+            # transcript (the normal "didn't catch that" path). No change when Soniox is up.
+            logger.warning("urdu stt: soniox did not open, degrading quietly: %s", exc)
+            try:
+                await self._stt_stream.close()
+            except Exception:
+                pass
+            self._stt_stream = None
         return True
 
     async def _on_typed_turn(self, event: dict) -> bool:
@@ -132,8 +141,11 @@ class VoiceSession:
         try:
             transcript = await self._transcribe()
         except Exception as exc:
-            await self._try_send({"type": "error", "message": f"stt: {exc}"})
-            return False
+            # TEMP popup fix: an STT failure (e.g. Soniox unreachable, no network) must
+            # not emit an {"error"} frame - that drove the repeating toast. Treat it as a
+            # lost transcript; the empty-transcript path answers with the apology instead.
+            logger.warning("stt failed, treating as empty transcript: %s", exc)
+            transcript = ""
 
         # Embedding starts now, so retrieval finds the vector ready.
         rag.prestart(transcript)

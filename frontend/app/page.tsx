@@ -5,6 +5,7 @@ import styles from "./page.module.css";
 import AvatarStage from "@/components/AvatarStage";
 import ChatPanel from "@/components/ChatPanel";
 import ControlDock from "@/components/ControlDock";
+import Subtitle from "@/components/Subtitle";
 import LanguageBar from "@/components/LanguageBar";
 import LoadingScreen from "@/components/LoadingScreen";
 import { useVoiceSession } from "@/hooks/use-voice-session";
@@ -125,18 +126,24 @@ export default function Page() {
         onTheme={changeTheme}
       />
 
-      <ControlDock
-        className={styles.dock}
-        lang={lang}
-        gender={presenterGender}
-        mode={voice.mode}
-        active={voice.active}
-        paused={voice.paused}
-        levelRef={voice.levelRef}
-        onToggle={voice.toggle}
-        onStop={voice.endAndClear}
-        onTogglePause={voice.togglePause}
-      />
+      {/* The caption sits above the mic and the dock stays pinned to
+          --dock-bottom: the column is anchored to its bottom edge, so a
+          subtitle appearing or clearing grows the column upward without
+          nudging the buttons. */}
+      <div className={styles.dockArea}>
+        <Subtitle lang={lang} line={voice.spokenLine} />
+        <ControlDock
+          lang={lang}
+          gender={presenterGender}
+          mode={voice.mode}
+          active={voice.active}
+          paused={voice.paused}
+          levelRef={voice.levelRef}
+          onToggle={voice.toggle}
+          onStop={voice.endAndClear}
+          onTogglePause={voice.togglePause}
+        />
+      </div>
 
       <ChatPanel
         lang={lang}

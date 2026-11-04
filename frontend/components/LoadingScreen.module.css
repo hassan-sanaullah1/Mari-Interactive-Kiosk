@@ -55,6 +55,21 @@
   font-size: calc(15 * var(--s));
   color: var(--text-dim);
   letter-spacing: 0.01em;
+  /* The label and the percentage are separate spans so the number keeps its
+     own direction; flex keeps a consistent gap in both languages instead of
+     relying on a space that bidi may move. */
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: calc(6 * var(--s));
+}
+
+/* Digits read left-to-right even inside an Urdu line. Tabular figures stop the
+   card twitching as the count goes 9% -> 10%. */
+.pct {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
 }
 
 /* The "slow connection" line under the percentage: the same text, stepped back so it

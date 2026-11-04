@@ -1,0 +1,12 @@
+# Opt-in: gives the backend the host GPU and builds it with the CUDA libraries
+# faster-whisper needs (see requirements-cuda.txt). `make dev CUDA=1` adds this file.
+#
+# Never merge this into docker-compose.yml. `gpus: all` makes the container refuse to
+# start on a host without a GPU, and the deployed image stays slim — the English STT
+# model falls back to the CPU on its own when the GPU is absent.
+services:
+  backend:
+    build:
+      args:
+        INSTALL_CUDA: "true"
+    gpus: all

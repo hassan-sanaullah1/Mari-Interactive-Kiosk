@@ -25,6 +25,14 @@ microphone → speech to text → retrieval → LLM → text to speech → audio
 
 Prerequisites: Docker with Compose, Make, Node 24, pipx (for pre-commit), and for work outside Docker, Python 3.11 (3.12 also works).
 
+English STT runs on the CPU by default. `make dev CUDA=1` (or `make prod CUDA=1`) puts
+it on an NVIDIA GPU instead, which the `large-v3-turbo` and `large-v3` models need to
+answer inside a visitor's patience — measured 3.5 s per turn on the CPU against 0.4 s
+for the much weaker `base.en`. It adds ~1.5 GB of CUDA libraries to the image, so it
+stays opt-in and the deployed image is unchanged; use it only on a machine that has a
+GPU, since `gpus: all` makes the container refuse to start without one. Either way the
+startup log says which device it got: `whisper <model> loaded on cuda|cpu`.
+
 ```bash
 make setup     # once per clone: commit hooks, .env from .env.example (fill in at least
                # the LLM keys and MARI_RAG_QDRANT_API_KEY), frontend packages
@@ -99,7 +107,7 @@ when deployed. `.env.example` lists every name, and a test keeps it in step with
 | LLM | `APP_LLM_*` (DeepSeek-compatible) or `APP_VLLM_*` (vLLM Qwen) |
 | Urdu speech to text | `APP_SONIOX_API_KEY` |
 | Text to speech | `APP_UPLIFT_API_KEY`; `APP_UR_TTS=matcha` for the local Urdu voice; `APP_EN_TTS=local` for local English (Kokoro, no key needed) — build with `make dev KOKORO=1` / `make prod KOKORO=1` first |
-| English speech to text | local by default, no key needed |
+| English speech to text | local by default, no key needed; `APP_ASR_MODEL_SIZE` picks the faster-whisper model and **must be set** — unset falls back to `base.en`, which misrecognizes accented speech at kiosk distance |
 | Retrieval | `MARI_RAG_*`, including `MARI_RAG_QDRANT_API_KEY` (required) |
 | Lipsync | `APP_A2F_URL`; unset means no lipsync |
 | Frontend → backend | `MARI_API_ORIGIN` (build time) and `NEXT_PUBLIC_MARI_WS` (build time) |

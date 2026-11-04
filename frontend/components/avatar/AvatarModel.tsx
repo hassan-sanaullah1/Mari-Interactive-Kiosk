@@ -147,7 +147,9 @@ import {
  */
 // The Segment type itself, and each rig's windows, live in ./models.ts.
 //
-/** Crossfade (s) hiding a loop seam — both ends are near-identical poses. */
+/**
+ * Crossfade (s) hiding a loop seam — both ends are near-identical poses.
+ */
 const LOOP_XFADE_SECS = 0.35;
 /**
  * Crossfade (s) when switching segments.
@@ -710,9 +712,8 @@ const BLINK_CLOSE_FRAC = 0.35;
 
 const smoothstep = (x: number) => x * x * (3 - 2 * x);
 
-/** The bones `config.handScale` applies to, and the clip tracks that would undo it. */
+/** The bones `config.handScale` scales — hands and, through them, the fingers. */
 const HAND_BONES = ["Wrist_L", "Wrist_R"];
-const HAND_SCALE_TRACKS = new Set(HAND_BONES.map((bone) => `${bone}.scale`));
 
 export interface AvatarModelProps {
   url: string;
@@ -858,27 +859,31 @@ export default function AvatarModel({
   const { scene, animations } = useGLTF(url, undefined, undefined, useSharedFetch);
 
   // ── HAND SCALE ──────────────────────────────────────────────
-  // The wrist bones' scale belongs to `config.handScale` alone (set below), so
-  // the clip's own scale track for each wrist is dropped unconditionally — the
-  // mixer rewrites that bone every frame, AFTER this component's own useFrame,
-  // so a track left in place wins. That has to happen before useAnimations binds
-  // its actions, hence here and not in an effect. It mutates the cached clip in
-  // place, which is idempotent.
+  // The wrist scale is the RIG'S OWN, and is played as authored: this export
+  // takes both wrists to 0.87 across the talking window (544-784) and holds
+  // 1.0 through breathing and listening, i.e. the hands are authored smaller
+  // for the gesture performance and full size at rest.
   //
-  // Unconditional because a rig may animate it: male_initial13 scales both
-  // wrists down to 0.8 across frames 424-890, and the talking window (544-784)
-  // sits entirely inside that, so the hands shrank 20% while gesturing and the
-  // wrist pinched against a full-size forearm. breathing and listening play
-  // outside it, which is why it only showed mid-gesture. girl15 carries no
-  // wrist scale track at all, so dropping it is a no-op for her.
-  for (const clip of animations) {
-    clip.tracks = clip.tracks.filter((track) => !HAND_SCALE_TRACKS.has(track.name));
-  }
+  // It used to be stripped out of the clip here and replaced with a constant.
+  // That was measured against male_initial13, which scaled to 0.8 and pinched
+  // the wrist against a full-size forearm; the threshold for that step is
+  // ~0.85 (see tuning.ts), and at 0.87 this export sits above it. Overriding
+  // it instead left the hands ~15% too big for a pose authored around the
+  // smaller ones, which closed the gap between the two hands' fingers from
+  // 2.43cm to 0.08cm at frames 640/680 — the fingers visibly intersecting
+  // mid-gesture, and the one thing a plain glTF viewer did not reproduce.
+  //
+  // `config.handScale` is therefore a MULTIPLIER over that curve rather than an
+  // absolute value, applied per frame in useFrame below because the mixer
+  // rewrites these bones every frame. Only the two wrists vary in this clip —
+  // every forearm, elbow and shoulder scale track holds 1.0 — so this scales
+  // the hands and nothing else.
+  const wristBonesRef = useRef<THREE.Object3D[]>([]);
   useEffect(() => {
-    for (const name of HAND_BONES) {
-      scene.getObjectByName(name)?.scale.setScalar(config.handScale);
-    }
-  }, [scene, config.handScale]);
+    wristBonesRef.current = HAND_BONES.map((name) => scene.getObjectByName(name)).filter(
+      (bone): bone is THREE.Object3D => bone !== undefined,
+    );
+  }, [scene]);
   const groupRef = useRef<THREE.Group>(null);
   const blinkRef = useRef({ nextBlink: 2, blinkProgress: 0 });
   const a2fStateRef = useRef(createA2FMorphState());
@@ -1551,6 +1556,30 @@ export default function AvatarModel({
       if (readyFramesLeftRef.current === 0) onReadyRef.current?.();
     }
   }, -1);
+
+  // ── HAND SCALE, LAYERED ON THE CLIP ─────────────────────────
+  // This has to land AFTER the mixer has written the wrist bones for the frame,
+  // or it is simply overwritten — which is what the old code worked around by
+  // deleting the track instead. drei's useAnimations advances the mixer from
+  // its own useFrame at the default priority 0, and the main callback above is
+  // at -1, i.e. before it.
+  //
+  // Priority 0 rather than 1: R3F switches OFF its automatic gl.render the
+  // moment any subscriber takes a positive priority, handing rendering to that
+  // callback, so a 1 here would blank the canvas. Within one priority the
+  // subscriber list keeps registration order, and useAnimations subscribes from
+  // a hook called above this one, so 0 already runs after the mixer.
+  //
+  // Multiplying rather than assigning keeps the rig's own authored wrist curve
+  // (see HAND SCALE above) intact: `handScale` 1 is the authored size, anything
+  // else a correction on top of it. At exactly 1 there is nothing to apply, so
+  // the common path touches no bones at all.
+  useFrame(() => {
+    if (config.handScale === 1) return;
+    for (const bone of wristBonesRef.current) {
+      bone.scale.multiplyScalar(config.handScale);
+    }
+  });
 
   return (
     <group ref={groupRef}>

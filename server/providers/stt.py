@@ -12,13 +12,17 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
 import struct
+import threading
 
 import httpx
 
 from .. import config
 from .base import STTProvider
+
+logger = logging.getLogger(__name__)
 
 # Biases the recognizer toward the kiosk's vocabulary; without it "Mari" comes back as
 # "Mary". Deliberately a bare name list and not a sentence: this text is also Whisper's
@@ -268,24 +272,57 @@ class WhisperLocalSTT(STTProvider):
     """faster-whisper, in-process (GPU if available)."""
 
     _model = None  # class-level cache: one model instance per process
+    # app.py warms every presenter concurrently and they all share that one instance.
+    # Unlocked, two of those tasks clear the None check together and each builds its own
+    # model; the loser is simply dropped. That was ~150 MB of waste with base.en, but a
+    # stranded large-v3-turbo holds ~1.6 GB of VRAM until the process exits, on a card
+    # also running Audio2Face.
+    _model_lock = threading.Lock()
 
     def __init__(self, model_size: str = ""):
         self.model_size = model_size or config.WHISPER_LOCAL_MODEL
 
     def _get_model(self):
-        if WhisperLocalSTT._model is None:
+        if WhisperLocalSTT._model is not None:
+            return WhisperLocalSTT._model
+        with WhisperLocalSTT._model_lock:
+            # Re-checked with the lock held: whoever waited here while the first caller
+            # built the model must use it rather than build a second.
+            if WhisperLocalSTT._model is not None:
+                return WhisperLocalSTT._model
+            import ctranslate2
             from faster_whisper import WhisperModel
 
-            # "auto" picks CUDA when available; CPU if a GPU is visible but unusable.
-            try:
-                WhisperLocalSTT._model = WhisperModel(
-                    self.model_size, device="auto", compute_type="int8"
-                )
-            except Exception:
-                WhisperLocalSTT._model = WhisperModel(
-                    self.model_size, device="cpu", compute_type="int8"
-                )
-        return WhisperLocalSTT._model
+            # compute_type has to match the device. int8 is right for CPU, but on a GPU
+            # it leaves the card mostly idle, and the turbo and large models are only
+            # fast enough for a visitor's patience in float16.
+            #
+            # The device is chosen by asking ctranslate2 what it can actually see rather
+            # than by passing device="auto": "auto" also resolves to CPU when a GPU is
+            # present but unusable, so a kiosk that lost its GPU passthrough would go on
+            # answering, several seconds slower, with nothing in the log to say why.
+            if ctranslate2.get_cuda_device_count() > 0:
+                try:
+                    model = WhisperModel(
+                        self.model_size, device="cuda", compute_type="float16"
+                    )
+                    # Constructing the model does not touch cuBLAS or cuDNN, so an image
+                    # that has the driver but not those libraries loads cleanly here and
+                    # then raises on every visitor's turn instead. One throwaway decode
+                    # moves that failure to startup, where the CPU fallback can take over.
+                    import numpy as np
+
+                    list(model.transcribe(np.zeros(1600, dtype=np.float32), language="en")[0])
+                    WhisperLocalSTT._model = model
+                    logger.info("whisper %s loaded on cuda (float16)", self.model_size)
+                    return WhisperLocalSTT._model
+                except Exception as exc:
+                    logger.warning("whisper cuda unusable, falling back to cpu: %s", exc)
+            WhisperLocalSTT._model = WhisperModel(
+                self.model_size, device="cpu", compute_type="int8"
+            )
+            logger.info("whisper %s loaded on cpu (int8)", self.model_size)
+            return WhisperLocalSTT._model
 
     def warm(self) -> None:
         self._get_model()
@@ -316,10 +353,21 @@ class WhisperLocalSTT(STTProvider):
             #   condition_on_previous_text=False  stops one hallucination seeding the
             #               next; with it on, the invented line came back as context and
             #               the kiosk held a conversation with itself.
+            #
+            # beam_size stays above 1 because greedy decoding makes the initial_prompt
+            # above leak into the transcript. On real kiosk-mic turns, a visitor asking
+            # "...the industry in which Mari Energies works" came back as "...in which
+            # Mari Minerals, GEM Energy, Faheem Haider, PSX, OGDCL," - the decoder
+            # abandoned the sentence and recited the hint. Greedy has no competing
+            # hypothesis to prefer, so once it steps onto the prompt it cannot come
+            # back; a beam keeps the real continuation alive and outscores it.
+            # Dropping the hint instead is not the fix: without it "Mari" degrades to
+            # "Marley" / "Mardi Gras". Measured on this kiosk GPU over 8 recorded turns
+            # (57s of audio): leaks 1/8 -> 0/8, total STT 2.53s -> 2.56s.
             segments, _ = model.transcribe(
                 audio,
                 language="en",
-                beam_size=1,
+                beam_size=5,
                 vad_filter=True,
                 condition_on_previous_text=False,
                 initial_prompt=_vocab_hint("en"),

@@ -1,0 +1,68 @@
+/* Live caption of the sentence being spoken, centred just above the mic.
+   A translucent, lightly blurred box — the classic subtitle scrim — so it reads
+   over the avatar and the busy artwork without hiding them. Kept theme-aware
+   (dark scrim + light text in dark mode, the reverse in light) rather than using
+   the opaque --surface token the dock buttons use. All sizes come from --s in
+   globals.css, so the desktop and phone geometries scale together. */
+
+.wrap {
+  display: flex;
+  justify-content: center;
+  /* A definite width (of the dock column, which spans the frame) so the single
+     nowrap line below has something to be clipped against — capped to a share of
+     the frame so it can never reach either edge. */
+  width: 100%;
+  max-width: min(calc(460 * var(--s)), 90%);
+  pointer-events: none;
+}
+
+.line {
+  margin: 0;
+  max-width: 100%;
+  min-width: 0;
+  padding: calc(8 * var(--s)) calc(18 * var(--s));
+  border-radius: calc(16 * var(--s));
+  /* Barely-there scrim: just enough to lift the text off the artwork. */
+  background: rgba(16, 18, 20, 0.26);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 calc(3 * var(--s)) calc(14 * var(--s)) rgba(0, 0, 0, 0.28);
+  /* Blur what shows through, so text stays legible over high-contrast artwork.
+     -webkit- prefix for Safari, which the kiosk's browser may be. */
+  backdrop-filter: blur(calc(5 * var(--s)));
+  -webkit-backdrop-filter: blur(calc(5 * var(--s)));
+  font-size: calc(16 * var(--s));
+  line-height: 1.35;
+  text-align: center;
+  /* Exactly one horizontal line — never wrap. A sentence longer than the box is
+     clipped with an ellipsis rather than stacking rows above the mic. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: subtitle-in 180ms ease-out;
+}
+
+/* Light theme: a light frosted scrim with dark text, matching how the rest of
+   the UI flips. The data-theme attribute is set on :root by layout.tsx. */
+:global(:root[data-theme="light"]) .line {
+  background: rgba(255, 255, 255, 0.32);
+  color: #14161a;
+  border-color: rgba(0, 0, 0, 0.07);
+}
+
+@keyframes subtitle-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(6 * var(--s)));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .line {
+    animation: none;
+  }
+}

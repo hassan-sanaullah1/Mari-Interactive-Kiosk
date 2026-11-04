@@ -9,6 +9,10 @@ A2F_DIR := deploy/a2f
 A2F_NETWORK := mari-a2f_default
 # KOKORO=1 builds the backend with the local Kokoro English voice (docker-compose.kokoro.yml).
 KOKORO_COMPOSE := $(if $(KOKORO),-f docker-compose.kokoro.yml,)
+# CUDA=1 gives the backend the GPU and the CUDA libraries the English STT model needs
+# (docker-compose.cuda.yml). Only on a machine that has an NVIDIA GPU: the container
+# refuses to start without one.
+CUDA_COMPOSE := $(if $(CUDA),-f docker-compose.cuda.yml,)
 # An installed pre-commit if there is one; otherwise pipx fetches it for the run.
 PRE_COMMIT := $(shell command -v pre-commit 2>/dev/null || echo "pipx run pre-commit")
 
@@ -20,14 +24,14 @@ setup:  ## once per clone: install the commit hooks, create .env, install fronte
 	test -f .env || cp .env.example .env
 	cd frontend && npm ci
 
-dev: a2f  ## start the kiosk with live reload (:3000, :8010): code changes apply without a rebuild; KOKORO=1 for the local English voice
+dev: a2f  ## start the kiosk with live reload (:3000, :8010): code changes apply without a rebuild; KOKORO=1 for the local English voice, CUDA=1 for GPU English STT
 	@# Checked now, not when make starts, so the first run joins a network it just created.
 	$(DEV_COMPOSE) $$(docker network inspect $(A2F_NETWORK) >/dev/null 2>&1 \
-	  && echo "-f docker-compose.a2f.yml") $(KOKORO_COMPOSE) up -d --build
+	  && echo "-f docker-compose.a2f.yml") $(KOKORO_COMPOSE) $(CUDA_COMPOSE) up -d --build
 
-prod: a2f  ## build and start the production images locally, as Coolify would run them; KOKORO=1 for the local English voice
+prod: a2f  ## build and start the production images locally, as Coolify would run them; KOKORO=1 for the local English voice, CUDA=1 for GPU English STT
 	$(COMPOSE) $$(docker network inspect $(A2F_NETWORK) >/dev/null 2>&1 \
-	  && echo "-f docker-compose.a2f.yml") $(KOKORO_COMPOSE) up -d --build
+	  && echo "-f docker-compose.a2f.yml") $(KOKORO_COMPOSE) $(CUDA_COMPOSE) up -d --build
 
 a2f:    ## start lipsync if this machine can (dev and prod run this first)
 	@# Same rule as scripts/dev.sh: lipsync needs a GPU and deploy/a2f/.env (NGC_API_KEY).

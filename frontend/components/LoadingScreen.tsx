@@ -53,9 +53,18 @@ export default function LoadingScreen({ lang, ready }: LoadingScreenProps) {
     <div className={`${styles.screen} ${ready ? styles.done : ""}`} aria-hidden={ready}>
       <div className={styles.card}>
         <span className={styles.spinner} />
-        <span className={styles.text}>
-          {t.loading}
-          {pct !== null ? ` ${pct}%` : ""}
+        {/* The percentage is its own element with dir="ltr". Concatenated into
+            the Urdu string it gets reordered by the bidi algorithm - "45%"
+            jumps to the wrong side of the sentence and the % lands before the
+            digits. Separating them keeps the number reading left-to-right
+            inside a right-to-left line, which is what a reader expects. */}
+        <span className={styles.text} dir={lang === "ur" ? "rtl" : "ltr"}>
+          <span>{t.loading}</span>
+          {pct !== null ? (
+            <span className={styles.pct} dir="ltr">
+              {pct}%
+            </span>
+          ) : null}
         </span>
         {slow && !ready ? <span className={styles.note}>{t.slowConnection}</span> : null}
       </div>

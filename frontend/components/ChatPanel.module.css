@@ -175,6 +175,9 @@
 .rtl {
   direction: rtl;
   text-align: right;
+  /* Nastaliq, and the taller line it needs - see --font-urdu in globals.css. */
+  font-family: var(--font-urdu);
+  line-height: var(--urdu-line-height);
 }
 
 /* --- composer --- */

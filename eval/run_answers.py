@@ -117,7 +117,7 @@ class LiveRunner:
 
     async def run(self, case: AnswerCase) -> dict:
         from server.agent import responder
-        from server.agent.reply_fixes import gender_agreement
+        from server.agent.reply_fixes import gender_agreement, strip_thinking
         from server.agent.script_fixes import latin_terms
         from server.providers import llm
 
@@ -131,6 +131,7 @@ class LiveRunner:
         t1 = time.perf_counter()
         reply, usage, finish = await llm.complete_verbose(messages, reply_tokens)
         llm_ms = (time.perf_counter() - t1) * 1000
+        reply = strip_thinking(reply)
         reply = gender_agreement(latin_terms(reply, case.lang), case.lang, self.avatar)
 
         res = self._captured

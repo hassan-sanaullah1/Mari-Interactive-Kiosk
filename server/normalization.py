@@ -480,6 +480,13 @@ _SAY_AS = (
     # "MariEnergies" has no word boundary inside it; split on the capital so the
     # ڑ rule below reaches it too.
     (re.compile(r"(?<!\w)Mari(?=[A-Z])"), "ماڑی "),
+    # The domain written without its TLD ("marienergies", "mariservices") is one lower
+    # case word, so neither the capital-split above nor the standalone rule below sees
+    # it: "mari" was left in Latin and read with a tapped ر. Spelled out here as two
+    # words so the brand keeps its retroflex ڑ. These stay in step with the labels in
+    # _DOMAIN_LABELS, which handles the same names when a TLD follows.
+    (re.compile(r"(?<!\w)marienergies(?!\w)", re.I), "ماڑی انرجیز"),
+    (re.compile(r"(?<!\w)mariservices(?!\w)", re.I), "ماڑی سروسز"),
     (re.compile(rf"(?<!\w){_MARI}(?!\w)"), "ماڑی"),
     (re.compile(rf"(?<!\w){_MARI_TICKER}(?!\w)"), "ماڑی"),
 )
@@ -1289,12 +1296,21 @@ _TLD_WORDS = {
     "edu": {"en": "edu", "ur": "ایجو"},
 }
 _DOT = {"en": "dot", "ur": "ڈاٹ"}
+# The sentence splitter needs these to tell a domain dot from a full stop, so the one
+# list serves both: see _DOMAIN_TAIL in agent/responder.py.
+TLDS: tuple[str, ...] = tuple(_TLD_WORDS)
 _WWW = {"en": "double u double u double u", "ur": "ڈبلیو ڈبلیو ڈبلیو"}
 
+# The model often writes the domain with a space after each dot ("marienergies. com. pk.")
+# or around it. Spaces are allowed on both sides of every dot so those spell out too;
+# without this the whole run is left as-is and the TTS swallows the dots.
+_DOT_SEP = r"\s*\.\s*"
+
 _URL_RE = re.compile(
-    r"\b(?:(www)\.)?"
+    rf"\b(?:(www){_DOT_SEP})?"
     rf"({'|'.join(sorted(_DOMAIN_LABELS, key=len, reverse=True))})"
-    rf"((?:\.(?:{'|'.join(_TLD_WORDS)}))+)\b",
+    rf"((?:{_DOT_SEP}(?:{'|'.join(_TLD_WORDS)}))+)"
+    r"(?!\w)",
     re.IGNORECASE,
 )
 
@@ -1306,8 +1322,10 @@ def _say_domain(match: re.Match[str], lang: str) -> str:
     if www:
         parts += [_WWW[lang], dot]
     parts.append(_DOMAIN_LABELS[label][lang])
-    for piece in suffix.strip(".").split("."):
-        parts += [dot, _TLD_WORDS[piece.lower()][lang]]
+    for piece in suffix.split("."):
+        piece = piece.strip()
+        if piece:
+            parts += [dot, _TLD_WORDS[piece.lower()][lang]]
     return " ".join(parts)
 
 

@@ -118,8 +118,8 @@
     "rim": 0
    },
    "bytes": {
-    "decoded": 48863788,
-    "encoded": 26858655
+    "decoded": 48863368,
+    "encoded": 27194112
    },
    "cameraDistanceM": 4.92,
    "darkThemeLighting": {
@@ -194,7 +194,7 @@
     ]
    },
    "skinRoughness": null,
-   "url": "/models/glb1.glb.gz",
+   "url": "/models/Waist_coat_male1.glb.gz",
    "widthSqueeze": 0.93
   }
  },

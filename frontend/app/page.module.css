@@ -67,12 +67,22 @@
   z-index: 20;
 }
 
-.dock {
+/* The mic dock, with the live subtitle stacked above it. Anchored to its bottom
+   edge so the dock holds at --dock-bottom while the caption grows upward. */
+.dockArea {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
   bottom: var(--dock-bottom);
   z-index: 20;
+  /* Span the kiosk frame so the subtitle's max-width resolves against the frame,
+     not the browser viewport — on a letterboxed desktop the two differ, and a
+     caption sized to the viewport spilled out past the frame on both sides. */
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(14 * var(--s));
 }
 
 .chatLayer {

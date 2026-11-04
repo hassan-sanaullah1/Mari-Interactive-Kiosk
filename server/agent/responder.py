@@ -13,23 +13,59 @@ import re
 from collections.abc import AsyncIterator
 
 from .. import rag
+from ..normalization import TLDS
 from ..providers import llm
 from .context_budget import fit_history, fit_system_prompt, history_messages, max_tokens
 from .greeting import is_greeting, said_salam
 from .policy import failure_reply, fallback_reply
-from .reply_fixes import force_salam, gender_agreement
+from .reply_fixes import force_salam, gender_agreement, strip_thinking
 from .script_fixes import latin_terms
 
 logger = logging.getLogger(__name__)
 
-_SENTENCE_END_RE = re.compile(r"[.!?۔؟…]+[\"'”’)]?\s|\n+")
+# A dot inside a domain is not the end of a sentence. The model writes the website with
+# a space after each dot ("marienergies. com. pk."), which split one sentence into three
+# and sent "com." and "pk." to the TTS as their own utterances, so the dots were never
+# spoken. The lookahead keeps the domain whole; spoken_urls() then says it as one phrase.
+# The TLDs are normalization's own list, so the two cannot drift apart.
+_DOMAIN_TAIL = rf"(?!\s*(?:{'|'.join(TLDS)})\b)"
+
+_SENTENCE_END_RE = re.compile(rf"[.!?۔؟…]+{_DOMAIN_TAIL}[\"'”’)]?\s|\n+")
+# The same lookahead, usable on its own for the character-by-character splitter below.
+_DOMAIN_TAIL_RE = re.compile(_DOMAIN_TAIL)
+
+_THINK_OPEN = "<think>"
+_THINK_CLOSE = "</think>"
+
+
+def _strip_think_stream(buf: str, inside: bool) -> tuple[str, bool]:
+    """Remove think-tag content from a streaming buffer, returning (cleaned, still_inside)."""
+    out = ""
+    while True:
+        if inside:
+            close = buf.find(_THINK_CLOSE)
+            if close == -1:
+                return out, True
+            buf = buf[close + len(_THINK_CLOSE) :]
+            inside = False
+        else:
+            opens = buf.find(_THINK_OPEN)
+            if opens == -1:
+                return out + buf, False
+            out += buf[:opens]
+            buf = buf[opens + len(_THINK_OPEN) :]
+            inside = True
 
 
 def split_sentences(text: str) -> list[str]:
     out, buf = [], ""
-    for ch in text:
+    for i, ch in enumerate(text):
         buf += ch
         if ch in ".!?۔؟…\n" and len(buf.strip()) > 1:
+            # Same domain guard as _SENTENCE_END_RE: "marienergies. com. pk." is one
+            # sentence, not three, or the TTS is handed "com." on its own.
+            if ch == "." and _DOMAIN_TAIL_RE.match(text, i + 1) is None:
+                continue
             out.append(buf.strip())
             buf = ""
     if buf.strip():
@@ -62,7 +98,7 @@ async def respond(
 ) -> str:
     """The whole reply in one call. Raises on LLM failure; the caller falls back."""
     messages, reply_tokens = await build_messages(text, lang, history, avatar)
-    reply = await llm.complete(messages, reply_tokens)
+    reply = strip_thinking(await llm.complete(messages, reply_tokens))
     if is_greeting(text):
         reply = force_salam(reply, lang, returning=said_salam(text))
     return gender_agreement(latin_terms(reply, lang), lang, avatar)
@@ -78,10 +114,13 @@ class _SentenceSplitter:
 
     def __init__(self) -> None:
         self._buffer = ""
+        self._in_think = False
 
     def feed(self, delta: str) -> list[str]:
         """Add streamed text; return whatever complete sentences that produced."""
         self._buffer += delta
+        # Strip <think>…</think> blocks that Qwen 3.5 sometimes leaks.
+        self._buffer, self._in_think = _strip_think_stream(self._buffer, self._in_think)
         complete = []
         while (match := _SENTENCE_END_RE.search(self._buffer)) is not None:
             cut = match.end()
@@ -98,6 +137,7 @@ class _SentenceSplitter:
 
     def reset(self) -> None:
         self._buffer = ""
+        self._in_think = False
 
 
 class _ReplyFixer:
@@ -154,7 +194,7 @@ async def respond_sentences(
                     llm.CONNECT_ATTEMPTS,
                     exc,
                 )
-                await asyncio.sleep(llm.RETRY_BACKOFF * (attempt + 1))
+                await asyncio.sleep(llm.RETRY_BACKOFF[attempt])
                 continue
             logger.warning(
                 "LLM reply failed after %d attempt(s), falling back to demo line: %s",

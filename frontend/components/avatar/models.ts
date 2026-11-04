@@ -251,40 +251,25 @@ const FEMALE: AvatarConfig = {
 };
 
 /**
- * glb1.glb — the alternate presenter. Still a RAW export (see `bytes`), though
- * at 49MB/27MB it is now the cheaper of the two rigs to download.
+ * Waist_coat_male1.glb — the alternate presenter, replacing glb1.glb.
+ * Still a RAW export (see `bytes`), at 49MB/27MB.
  *
- * A drop-in for the male_initial13 export it replaces, and verified as one
- * rather than assumed:
- *
- *   - ANIMATION. Same 295 rotation tracks under the same names, same 29.80s at
- *     30fps. Summed over every track the per-frame curves differ by at most
- *     3.83 deg (mean 0.13), which is re-export rounding and not content — so
- *     the loop windows below carried over unchanged, and re-scoring them
- *     against this clip confirms them (see each window).
- *   - FACE. All 52 morph target names in the same order, and the head
- *     (lambert5), arms, eyes, both teeth rows, tongue, brows, beard and
- *     eyelashes compare byte-identical to 13 — rest positions and all 52
- *     deltas, max difference exactly zero. So lipsync, blink and the
- *     lip-outline multipliers fitted in server/personas.toml need nothing.
- *
- * What changed is below the waist and the garment. `Std_Skin_Leg` is gone
- * (legs and feet are no longer separate skin geometry, and `Std_Nails` drops
- * from 1112 vertices to 680 with the toes), and the kurta gains a waistcoat on
- * two new materials, `waistcoat:lambert2` and `waistcoat:lambert3`. Neither
- * waistcoat material authors a roughnessFactor, and glTF defaults that to fully
- * matte — the correction is in tuning.ts, the same one dress2's kameez needs.
+ * A drop-in for glb1: same 52 ARKit morph targets in the same order on
+ * Mesh.003, same CINEMA_4D_Main animation (885 channels), same material
+ * names (lambert5, Std_Skin_Arm, waistcoat:lambert2/3, standardSurface2,
+ * pasted__pasted__lambert6, etc.). Loop windows, lipsync, blink, and the
+ * lip-outline multipliers in server/personas.toml carry over unchanged.
  *
  * The hair is `standardSurface2` again, so the hair keys in tuning.ts stay put.
  */
 const MALE: AvatarConfig = {
   id: "male",
-  url: "/models/glb1.glb.gz",
+  url: "/models/Waist_coat_male1.glb.gz",
   // Served as the pre-compressed .gz (next.config.ts), so `encoded` is what crosses
   // the wire and `decoded` is what the reader counts — the ratio keeps the loading
   // percentage honest. 49MB raw, 27MB gzipped. Still the RAW export: run
   // scripts/optimize_glb.py before this rig goes in front of anyone on a slow link.
-  bytes: { decoded: 48863788, encoded: 26858655 },
+  bytes: { decoded: 48863368, encoded: 27194112 },
   segments: {
     // Two full breath cycles of the at-rest idle. The idle here is strictly
     // periodic at 30 frames, so a whole number of cycles closes on itself: the

@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import styles from "./ChatPanel.module.css";
 import { ChatIcon, CloseIcon, SendIcon } from "./Icons";
+import OnScreenKeyboard from "./OnScreenKeyboard";
 import { uiCopy, type Gender, type Lang } from "@/lib/i18n";
 import type { Message } from "@/hooks/use-voice-session";
 
@@ -33,18 +34,11 @@ export default function ChatPanel({
   const logRef = useRef<HTMLDivElement>(null);
   const seenRef = useRef(0);
   const [unread, setUnread] = useState(0);
+  // The kiosk has no physical keyboard, so the on-screen one is shown by
+  // default; the visitor can fold it away to read more of the conversation.
+  const [keyboardOpen, setKeyboardOpen] = useState(true);
   const t = uiCopy(lang, gender);
   const rtl = lang === "ur";
-
-  // The kiosk has no physical keyboard, so an on-screen one has to appear with
-  // the chat panel. A web page cannot launch a desktop app, so the state is
-  // published in the window title and the desktop watcher
-  // (~/.local/bin/mari-kiosk-osk) polls it with wmctrl. The title is the one
-  // piece of page state an outside process can read without a debug port.
-  useEffect(() => {
-    const base = document.title.replace(/ \u2022 CHAT$/, "");
-    document.title = open ? base + " \u2022 CHAT" : base;
-  }, [open]);
 
   // Pin to the newest turn as the reply streams in.
   useLayoutEffect(() => {
@@ -119,6 +113,14 @@ export default function ChatPanel({
           placeholder={t.placeholder}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
+          // Tapping the box brings the keyboard back after it has been folded
+          // away. Without this the only way back was to close and reopen the
+          // whole chat panel, which is not something a visitor would guess.
+          // onFocus alone is not enough: the box keeps focus while the
+          // keyboard is hidden (its keys deliberately never steal focus), so a
+          // second tap fires no focus event. onPointerDown fires on every tap.
+          onFocus={() => setKeyboardOpen(true)}
+          onPointerDown={() => setKeyboardOpen(true)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
@@ -138,6 +140,17 @@ export default function ChatPanel({
           <SendIcon className={styles.sendIcon} />
         </button>
       </div>
+
+      {/* Remove these lines (and the import) to drop the on-screen keyboard;
+          nothing else depends on it. */}
+      {keyboardOpen && (
+        <OnScreenKeyboard
+          value={draft}
+          onChange={setDraft}
+          onClose={() => setKeyboardOpen(false)}
+          rtl={rtl}
+        />
+      )}
     </section>
   );
 }

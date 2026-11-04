@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1
-# MARI backend — FastAPI web server (server/app.py). CPU image: local English STT
-# (faster-whisper) and everything else is plain HTTP/WebSocket calls to external
-# providers (vLLM, Soniox, Uplift) plus gRPC to the Audio2Face-3D NIM. No GPU needed.
+# MARI backend — FastAPI web server (server/app.py). CPU image by default: local English
+# STT (faster-whisper) and everything else is plain HTTP/WebSocket calls to external
+# providers (vLLM, Soniox, Uplift) plus gRPC to the Audio2Face-3D NIM. No GPU needed,
+# unless INSTALL_CUDA=true puts the STT model on one (docker-compose.cuda.yml).
 #
 # Layers run from slowest-changing to fastest, so a code change rebuilds only the last
 # one. Exact version pinned so the early layers stay cached between builds.
@@ -20,13 +21,22 @@ WORKDIR /app
 #    cache mount keeps already-downloaded wheels out of the image and across rebuilds.
 #    INSTALL_KOKORO opts into the local Kokoro English voice (torch, transformers,
 #    spacy); default off, so the normal build and the deployed image stay without them.
+#    INSTALL_CUDA opts into running the English STT model on the GPU (cuBLAS, cuDNN);
+#    also default off, for the same reason.
 ARG INSTALL_KOKORO=false
-COPY requirements.txt requirements-kokoro.txt /app/
+ARG INSTALL_CUDA=false
+COPY requirements.txt requirements-kokoro.txt requirements-cuda.txt /app/
 COPY vendor /app/vendor
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r requirements.txt \
     && pip install --no-deps /app/vendor/nvidia_ace-1.2.0-py3-none-any.whl \
-    && if [ "$INSTALL_KOKORO" = "true" ]; then pip install -r requirements-kokoro.txt; fi
+    && if [ "$INSTALL_KOKORO" = "true" ]; then pip install -r requirements-kokoro.txt; fi \
+    && if [ "$INSTALL_CUDA" = "true" ]; then pip install -r requirements-cuda.txt; fi
+
+# ctranslate2 dlopen()s cuBLAS and cuDNN by bare soname, and pip puts them under the
+# nvidia/* packages rather than on the default loader path. Harmless when INSTALL_CUDA
+# is false: the directories simply do not exist and the loader skips them.
+ENV LD_LIBRARY_PATH=/usr/local/lib/python3.11/site-packages/nvidia/cublas/lib:/usr/local/lib/python3.11/site-packages/nvidia/cudnn/lib
 
 # 3. Source code. The knowledge base, prompts and normalization all live inside server/.
 COPY server /app/server

@@ -11,6 +11,23 @@ import re
 
 from ..personas import get_persona
 
+# ── Think-tag stripping ───────────────────────────────────────────
+# Qwen 3.5 is told enable_thinking=False, but sometimes leaks <think>…</think>
+# chain-of-thought blocks into the reply anyway.
+
+_THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+_DANGLING_THINK_RE = re.compile(r"<think>.*", re.DOTALL)
+
+
+def strip_thinking(reply: str) -> str:
+    """Remove any <think>…</think> reasoning blocks the model leaked."""
+    if "<think>" not in reply:
+        return reply
+    cleaned = _THINK_BLOCK_RE.sub("", reply)
+    cleaned = _DANGLING_THINK_RE.sub("", cleaned)
+    return cleaned.strip()
+
+
 SALAM_UR = "السلام علیکم"
 SALAM_EN = "Assalamualaikum"
 # The returned salam, for a visitor who greeted with one.

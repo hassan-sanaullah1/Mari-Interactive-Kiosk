@@ -382,7 +382,7 @@
   "resolved": {
     "presenter": {
       "id": "male",
-      "model": "/models/glb1.glb.gz",
+      "model": "/models/Waist_coat_male1.glb.gz",
       "headTargetY": 1.6
     },
     "theme": "light",

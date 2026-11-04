@@ -46,6 +46,7 @@ const waiters = new Map<string, () => void>();
 let active: { uid: string; clock: ClipClock } | null = null;
 let cursor = 0;
 let weightsOut: Float32Array = new Float32Array(0);
+const sampled: { names: string[]; weights: Float32Array } = { names: [], weights: weightsOut };
 
 /**
  * Hold after the last known frame before going idle. Short: batched frame
@@ -307,5 +308,10 @@ export function sample(): { names: string[]; weights: Float32Array } | null {
     const vb = b[i + 1] ?? 0;
     weightsOut[i] = (va + (vb - va) * alpha) * clip.gains[i];
   }
-  return { names: clip.names, weights: weightsOut };
+  // Refilled rather than rebuilt: this runs every rendered frame, and a fresh
+  // object each time is garbage for the collector. `weights` is re-assigned
+  // because weightsOut is replaced when a clip with a different shape arrives.
+  sampled.names = clip.names;
+  sampled.weights = weightsOut;
+  return sampled;
 }

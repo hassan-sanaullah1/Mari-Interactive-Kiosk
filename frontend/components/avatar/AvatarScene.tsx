@@ -290,6 +290,15 @@ export function DynamicLighting({
   const kickLightRef = useRef<THREE.SpotLight>(null);
   const topLightRef = useRef<THREE.SpotLight>(null);
   const faceLightRef = useRef<THREE.SpotLight>(null);
+  // Handed to crossfadeStudios each frame and refilled in place.
+  const lightSlots = useRef<Record<LightName, THREE.Light | null>>({
+    key: null,
+    fill: null,
+    top: null,
+    rim: null,
+    kick: null,
+    face: null,
+  });
   const smoothedVolume = useRef(0);
 
   // 0 = fully dark studio, 1 = fully light. Eased like everything else, so a
@@ -323,19 +332,16 @@ export function DynamicLighting({
     const studio = rooms[theme];
     const config = studio.states[state];
 
-    crossfadeStudios(
-      {
-        key: keyLightRef.current,
-        fill: fillLightRef.current,
-        top: topLightRef.current,
-        rim: rimLightRef.current,
-        kick: kickLightRef.current,
-        face: faceLightRef.current,
-      },
-      studios,
-      mix,
-      rooms,
-    );
+    // Refilled, not rebuilt: a fresh six-field object per frame is garbage for
+    // the same reason the Colors and Vector3s above are built once.
+    const lights = lightSlots.current;
+    lights.key = keyLightRef.current;
+    lights.fill = fillLightRef.current;
+    lights.top = topLightRef.current;
+    lights.rim = rimLightRef.current;
+    lights.kick = kickLightRef.current;
+    lights.face = faceLightRef.current;
+    crossfadeStudios(lights, studios, mix, rooms);
 
     if (keyLightRef.current) {
       keyLightRef.current.intensity = THREE.MathUtils.lerp(

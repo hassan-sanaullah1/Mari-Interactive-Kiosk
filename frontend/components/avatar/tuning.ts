@@ -318,7 +318,8 @@ export interface RigTuning {
   nonCastingMaterials: Set<string>;
   /** A2F weight calibration, or null for a rig with no morphs to calibrate. */
   a2f: { gain: number; shapeGains: Record<string, number> } | null;
-  /** Uniform scale on both wrist bones (hands + fingers). 1 = as authored. */
+  /** Uniform multiplier on both wrist bones (hands + fingers), over whatever
+   *  the rig's own clip animates them to. 1 = exactly as authored. */
   handScale: number;
   /** Multipliers on the two back lights (rim, kick) for this rig, both themes. */
   backLight: { rim: number; kick: number };
@@ -389,7 +390,6 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
 
     a2f: { gain: 0.9, shapeGains: { jawopen: 0.375 } },
     handScale: 1,
-
     /** Her hair is matte, so the back lights do exactly what they're tuned to do. */
     backLight: { rim: 1, kick: 1 },
     lightThemeLighting: { exposure: 0.8, ambient: 0.2, fill: 1, environment: 0.75 },
@@ -407,9 +407,10 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
     lensMm: 135,
     cameraDistanceM: 4.92,
 
-    /** This export names the head material lambert5, not Std_Skin_Head. glb1
-     *  dropped Std_Skin_Leg — legs and feet are no longer separate skin
-     *  geometry — so head and arms are the whole of his skin now. */
+    /** This export names the head material lambert5, not Std_Skin_Head.
+     *  Std_Skin_Leg was dropped in an earlier export — legs and feet are no
+     *  longer separate skin geometry — so head and arms are the whole of his
+     *  skin now. */
     skinMaterials: new Set(["lambert5", "Std_Skin_Arm"]),
     skinEmissive: 0.08,
     /** This export authors real roughness on every material — nothing to correct. */
@@ -419,7 +420,7 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
      *
      *  The kurta (pasted__pasted__lambert6) had a 0.62 tint here too, carried
      *  over from male_initial13 where it corrected a kurta genuinely brighter
-     *  than its waistcoat needed. glb1's own kameez02.jpg texture already
+     *  than its waistcoat needed. This export's kameez02.jpg texture already
      *  sits at the right level on its own — measured off the raw textures,
      *  luminance 0.58 against the waistcoat's untouched 0.33, the same ~1.8x
      *  contrast the artist painted into them. Carrying the 0.62 over here
@@ -437,7 +438,7 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
 
     /** Keyed to this export's hair material name, which has changed before. */
     alphaTest: { standardSurface2: 0.08 },
-    /** male_initial13 authored real roughness on every material; glb1 omits
+    /** male_initial13 authored real roughness on every material; this export omits
      *  roughnessFactor on the kurta and on one of the two new waistcoat
      *  materials, and glTF defaults that to fully matte. Same correction, and
      *  the same reason, as the female rig's kameez. `waistcoat:lambert3`
@@ -460,10 +461,11 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
     nonCastingMaterials: new Set(["waistcoat:lambert2", "waistcoat:lambert3"]),
 
     a2f: { gain: 0.9, shapeGains: { jawopen: 0.375 } },
-    /** 1 = hands as authored. Lower (~0.9) to shrink them; below ~0.85 the
-     *  wrist shows a visible step at the cuff. */
+    /** A multiplier over the clip's own wrist curve, which already takes his
+     *  hands to 0.87 for the talking gesture and 1.0 at rest — so 1 here is
+     *  the authored sizing, not a constant. Lower (~0.9) to shrink them
+     *  further; below ~0.85 effective the wrist shows a step at the cuff. */
     handScale: 1,
-
     /** Both off: the rim mirrors off his clearcoated hair and the kick off
      *  the kurta's bright albedo. */
     backLight: { rim: 0, kick: 0 },
