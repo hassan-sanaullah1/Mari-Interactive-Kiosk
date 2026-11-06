@@ -61,6 +61,29 @@ async def _reingest() -> dict:
     return report.as_dict()
 
 
+@router.post("/upload/shutdown")
+async def admin_shutdown(x_admin_token: str | None = Header(default=None)) -> JSONResponse:
+    """Ask the host-side shutdown agent to power off the kiosk PC.
+
+    The agent listens on host.docker.internal:9999 (installed separately as a
+    systemd unit). The backend never has host-shutdown privilege; it only asks.
+    """
+    _check_token(x_admin_token)
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.post("http://host.docker.internal:9999/shutdown",
+                                   headers={"X-Admin-Token": os.environ.get("MARI_ADMIN_TOKEN", "")})
+            if r.status_code != 200:
+                raise HTTPException(status_code=502, detail={"error": {"code": "agent_error", "message": f"agent returned {r.status_code}: {r.text[:200]}"}})
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail={"error": {"code": "agent_unreachable", "message": f"shutdown agent not running on host:9999 ({type(exc).__name__}: {exc})"}})
+    logger.info("admin: shutdown requested")
+    return JSONResponse({"status": "shutting_down"})
+
+
 @router.get("/upload/logo.png")
 async def admin_logo() -> FileResponse:
     """The Mari Energies logo shown on the admin page header."""
@@ -156,21 +179,27 @@ _PAGE_HTML = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mari Kiosk · Knowledge</title>
+<title>Mari Kiosk · Admin</title>
 <style>
   :root {
     --blue: #0077dc;
     --blue-hover: #0f88ee;
     --blue-soft: rgba(0, 119, 220, 0.08);
-    --surface: #f4f5f7;         /* page bg, kiosk light token */
-    --surface-raised: #ffffff;   /* cards */
-    --surface-sunken: #e3e5e9;   /* inputs, subtle wells */
+    --blue-tint: rgba(0, 119, 220, 0.12);
+    --page: #f4f5f7;
+    --surface: #ffffff;
+    --surface-sunken: #f0f2f5;
     --surface-hover: #e8eaee;
+    --sidebar: #ffffff;
+    --sidebar-item: rgba(20, 22, 26, 0.72);
+    --sidebar-item-hover: rgba(20, 22, 26, 0.05);
+    --sidebar-item-active: rgba(0, 119, 220, 0.1);
+    --sidebar-border: rgba(20, 22, 26, 0.08);
     --text: #14161a;
     --text-dim: rgba(20, 22, 26, 0.6);
     --text-faint: rgba(20, 22, 26, 0.42);
     --border: rgba(20, 22, 26, 0.08);
-    --border-strong: rgba(20, 22, 26, 0.18);
+    --border-strong: rgba(20, 22, 26, 0.16);
     --danger: #d32f2f;
     --danger-hover: #b92626;
     --danger-soft: rgba(211, 47, 47, 0.08);
@@ -179,60 +208,184 @@ _PAGE_HTML = """<!doctype html>
     --shadow-sm: 0 1px 2px rgba(20, 22, 26, 0.04), 0 1px 3px rgba(20, 22, 26, 0.06);
     --shadow-md: 0 4px 10px rgba(20, 22, 26, 0.06), 0 2px 4px rgba(20, 22, 26, 0.04);
     --shadow-lg: 0 20px 48px rgba(20, 22, 26, 0.18), 0 6px 14px rgba(20, 22, 26, 0.08);
-    --radius: 16px;
+    --radius: 14px;
     --radius-sm: 10px;
     --radius-pill: 999px;
+    --sidebar-w: 240px;
+    --topbar-h: 60px;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
   body {
     margin: 0;
     font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-    font-size: 15px;
+    font-size: 14px;
     line-height: 1.5;
     color: var(--text);
-    background: var(--surface);
+    background: var(--page);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
-  .wrap { max-width: 820px; margin: 0 auto; padding: 40px 24px 80px; }
+  .hidden { display: none !important; }
 
-  /* Header */
-  .header { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
-  .logo {
-    width: 48px; height: 48px; border-radius: 12px;
-    background: #ffffff;
-    border: 1px solid var(--border);
-    padding: 6px;
-    display: flex; align-items: center; justify-content: center;
-    box-shadow: var(--shadow-sm);
-    flex-shrink: 0;
-  }
-  .logo img { width: 100%; height: 100%; object-fit: contain; display: block; image-rendering: -webkit-optimize-contrast; }
-  .header h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
-  .header .sub { margin: 2px 0 0; color: var(--text-dim); font-size: 13px; }
-
-  /* Cards */
-  .card {
-    background: var(--surface-raised);
+  /* ========== LOGIN (unchanged position: centered) ========== */
+  .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .login-card {
+    width: 100%; max-width: 400px;
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 24px;
-    margin-top: 20px;
+    padding: 32px;
+    box-shadow: var(--shadow-md);
+  }
+  .login-header { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
+  .logo-tile {
+    width: 80px; height: 80px; border-radius: 16px;
+    background: #ffffff; border: 1px solid var(--border); padding: 10px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: var(--shadow-sm); flex-shrink: 0;
+  }
+  .logo-tile img { width: 100%; height: 100%; object-fit: contain; display: block; image-rendering: -webkit-optimize-contrast; }
+  .login-header h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+  .login-header .sub { color: var(--text-dim); font-size: 13px; margin-top: 2px; }
+
+  /* ========== APP SHELL ========== */
+  .app-shell { display: flex; min-height: 100vh; }
+
+  /* --- Sidebar --- */
+  .sidebar {
+    width: var(--sidebar-w);
+    background: #fafbfc;
+    color: var(--sidebar-item);
+    display: flex; flex-direction: column;
+    position: fixed; top: 0; bottom: 0; left: 0;
+    border-right: 1px solid var(--border);
+  }
+  .nav-item.active { position: relative; }
+  .nav-item.active::before {
+    content: ""; position: absolute; left: -10px; top: 6px; bottom: 6px;
+    width: 3px; background: var(--blue); border-radius: 0 3px 3px 0;
+  }
+  .sidebar-brand {
+    padding: 18px 16px;
+    display: flex; align-items: center; gap: 14px;
+    border-bottom: 1px solid var(--sidebar-border);
+    min-height: 112px;
+  }
+  .sidebar-brand .logo-tile { width: 80px; height: 80px; padding: 8px; border-radius: 14px; }
+  .sidebar-brand .brand-text { color: var(--text); font-weight: 600; font-size: 14px; letter-spacing: -0.005em; }
+  .sidebar-brand .brand-sub { color: var(--text-faint); font-size: 11px; margin-top: 1px; }
+
+  .sidebar-nav { flex: 1; padding: 12px 10px; display: flex; flex-direction: column; gap: 2px; }
+  .nav-section { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); padding: 14px 10px 6px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 8px;
+    color: var(--sidebar-item); text-decoration: none; font-weight: 500; font-size: 13px;
+    cursor: pointer; transition: background 120ms ease, color 120ms ease;
+    border: 0; background: transparent; width: 100%; text-align: left;
+  }
+  .nav-item:hover:not(.disabled) { background: var(--sidebar-item-hover); color: var(--text); }
+  .nav-item.active { background: var(--sidebar-item-active); color: var(--blue); font-weight: 600; }
+  .nav-item.active .nav-icon { color: var(--blue); }
+  .nav-item.disabled { color: var(--text-faint); cursor: not-allowed; opacity: 0.7; }
+  .nav-item.disabled .badge { margin-left: auto; font-size: 10px; background: var(--surface-sunken); color: var(--text-faint); padding: 2px 6px; border-radius: 4px; font-weight: 500; letter-spacing: 0.02em; }
+  .nav-icon { width: 16px; height: 16px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; color: var(--text-dim); }
+  .nav-item.danger-item { color: var(--danger); }
+  .nav-item.danger-item .nav-icon { color: var(--danger); }
+  .nav-item.danger-item:hover:not(:disabled) { background: var(--danger-soft); color: var(--danger); }
+  .nav-icon svg { width: 100%; height: 100%; }
+  .sidebar-footer { padding: 12px 10px; border-top: 1px solid var(--sidebar-border); }
+
+  /* --- Main area --- */
+  .main { flex: 1; margin-left: var(--sidebar-w); display: flex; flex-direction: column; min-width: 0; }
+  .topbar {
+    height: var(--topbar-h);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 28px;
+    position: sticky; top: 0; z-index: 10;
+  }
+  .topbar-title { display: flex; flex-direction: column; }
+  .topbar-crumb { font-size: 11px; color: var(--text-faint); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+  .topbar h1 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.005em; }
+
+  .user-menu { position: relative; }
+  .user-trigger {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 10px 6px 6px;
+    background: transparent; border: 1px solid transparent;
+    border-radius: var(--radius-pill); cursor: pointer;
+    font: inherit; color: var(--text);
+    transition: background 120ms ease, border-color 120ms ease;
+  }
+  .user-trigger:hover { background: var(--surface-sunken); border-color: var(--border); }
+  .user-avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--blue); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 12px; letter-spacing: 0.02em;
+  }
+  .user-name { font-size: 13px; font-weight: 500; }
+  .user-caret { color: var(--text-faint); font-size: 10px; }
+  .user-dropdown {
+    position: absolute; top: calc(100% + 6px); right: 0;
+    min-width: 180px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); box-shadow: var(--shadow-md);
+    padding: 6px; z-index: 20;
+  }
+  .user-dropdown button {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; padding: 8px 10px;
+    background: transparent; border: 0; border-radius: 6px;
+    color: var(--text); font: inherit; font-size: 13px; text-align: left;
+    cursor: pointer;
+  }
+  .user-dropdown button:hover { background: var(--surface-sunken); }
+  .user-dropdown .divider { height: 1px; background: var(--border); margin: 4px 0; }
+  .user-dropdown .meta { padding: 8px 10px; }
+  .user-dropdown .meta-label { font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.04em; }
+  .user-dropdown .meta-value { font-size: 13px; color: var(--text); font-weight: 500; margin-top: 2px; }
+
+  /* --- Content --- */
+  .content {
+    padding: 28px;
+    max-width: 1100px; width: 100%;
+    margin: 0 auto;
+  }
+  .page-header { margin-bottom: 20px; }
+  .page-header h2 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.015em; }
+  .page-header p { margin: 4px 0 0; color: var(--text-dim); font-size: 14px; }
+
+  /* --- Cards --- */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 20px;
     box-shadow: var(--shadow-sm);
   }
-  .card-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-  .card-title h2 { margin: 0; font-size: 15px; font-weight: 600; color: var(--text); letter-spacing: -0.005em; }
-  .card-title .hint { color: var(--text-faint); font-size: 12px; }
+  .card-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .card-head h3 { margin: 0; font-size: 14px; font-weight: 600; }
+  .card-head .hint { color: var(--text-faint); font-size: 12px; }
+  .card-body { padding: 20px; }
+  .card-body.p0 { padding: 0; }
 
-  /* Form */
-  label.field-label { display: block; font-size: 13px; color: var(--text-dim); margin-bottom: 8px; font-weight: 500; }
+  /* --- Forms --- */
+  label.field-label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 6px; font-weight: 500; }
   input[type=password], input[type=text] {
-    width: 100%; padding: 12px 14px;
-    background: var(--surface-raised);
+    width: 100%; padding: 10px 12px;
+    background: var(--surface);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-sm);
-    color: var(--text); font: inherit;
+    color: var(--text); font: inherit; font-size: 14px;
     transition: border-color 160ms ease, box-shadow 160ms ease;
   }
   input[type=password]:focus, input[type=text]:focus {
@@ -240,106 +393,106 @@ _PAGE_HTML = """<!doctype html>
     box-shadow: 0 0 0 3px var(--blue-soft);
   }
 
-  /* Buttons */
+  /* --- Buttons --- */
   button {
-    padding: 10px 18px;
+    padding: 9px 18px;
     background: var(--blue); color: #fff;
-    border: 0; border-radius: var(--radius-pill);
-    font: inherit; font-weight: 600; font-size: 14px;
+    border: 0; border-radius: 999px;
+    font: inherit; font-weight: 500; font-size: 13.5px; line-height: 1;
     cursor: pointer;
-    transition: background 160ms ease, transform 80ms ease, box-shadow 160ms ease;
+    transition: background 160ms ease, transform 90ms ease, box-shadow 160ms ease, color 160ms ease;
     display: inline-flex; align-items: center; gap: 6px;
+    box-shadow: 0 2px 8px rgba(0, 119, 220, 0.25), 0 1px 2px rgba(20, 22, 26, 0.04);
   }
-  button:hover:not(:disabled) { background: var(--blue-hover); }
-  button:active:not(:disabled) { transform: translateY(1px); }
-  button:disabled { opacity: 0.4; cursor: not-allowed; }
-  button.ghost {
-    background: var(--surface-sunken); color: var(--text);
-    border: 1px solid var(--border-strong);
-    font-weight: 500;
-  }
-  button.ghost:hover:not(:disabled) { background: var(--surface-hover); }
-  button.danger { background: var(--danger); }
-  button.danger:hover:not(:disabled) { background: var(--danger-hover); }
-  button.small { padding: 6px 12px; font-size: 13px; }
+  button:hover:not(:disabled) { background: var(--blue-hover); box-shadow: 0 3px 12px rgba(0, 119, 220, 0.32), 0 1px 2px rgba(20, 22, 26, 0.06); }
+  button:active:not(:disabled) { transform: scale(0.97); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 
-  /* Drop zone */
+  /* Ghost: kiosk pill style — white surface, soft shadow, blue text on hover */
+  button.ghost {
+    background: var(--surface); color: var(--text);
+    border: 0;
+    font-weight: 500;
+    box-shadow: 0 2px 8px rgba(20, 22, 26, 0.08), 0 1px 3px rgba(20, 22, 26, 0.06), inset 0 0 0 1px rgba(20, 22, 26, 0.08);
+  }
+  button.ghost:hover:not(:disabled) { background: var(--surface); color: var(--blue); box-shadow: 0 3px 12px rgba(20, 22, 26, 0.12), 0 1px 3px rgba(20, 22, 26, 0.08), inset 0 0 0 1px rgba(0, 119, 220, 0.4); }
+
+  button.danger { background: var(--danger); box-shadow: 0 2px 8px rgba(211, 47, 47, 0.28), 0 1px 2px rgba(20, 22, 26, 0.04); }
+  button.danger:hover:not(:disabled) { background: var(--danger-hover); box-shadow: 0 3px 12px rgba(211, 47, 47, 0.36), 0 1px 2px rgba(20, 22, 26, 0.06); }
+
+  button.primary-lg { padding: 12px 22px; font-size: 14px; font-weight: 600; }
+
+  /* --- Drop zone --- */
   .drop {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 6px;
     border: 2px dashed var(--border-strong);
-    border-radius: var(--radius);
-    padding: 36px 24px;
+    border-radius: var(--radius-sm);
+    padding: 32px 20px;
     text-align: center; color: var(--text-dim);
     cursor: pointer;
     transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
   }
-  .drop:hover { border-color: var(--blue); color: var(--text); background: var(--blue-soft); }
-  .drop.hover { border-color: var(--blue); background: var(--blue-soft); color: var(--text); }
+  .drop:hover, .drop.hover { border-color: var(--blue); background: var(--blue-soft); color: var(--text); }
   .drop input { display: none; }
-  .drop-icon { font-size: 28px; line-height: 1; color: var(--blue); margin-bottom: 4px; }
-  .drop-main { font-weight: 600; font-size: 15px; color: var(--text); }
+  .drop-icon { font-size: 26px; line-height: 1; color: var(--blue); margin-bottom: 2px; }
+  .drop-main { font-weight: 600; font-size: 14px; color: var(--text); }
   .drop-sub { font-size: 12px; color: var(--text-faint); }
 
-  /* Toolbar above the file list */
+  /* --- Toolbar + file rows --- */
   .bulkbar {
     display: flex; align-items: center; gap: 12px;
-    padding: 10px 14px;
+    padding: 10px 20px;
     background: var(--surface-sunken);
-    border-radius: var(--radius-sm);
-    margin-bottom: 10px;
+    border-bottom: 1px solid var(--border);
     font-size: 13px; color: var(--text-dim);
   }
-  .bulkbar.hidden { display: none; }
-  .hidden { display: none !important; }
+  .bulkbar.hidden { display: none !important; }
   .bulkbar label { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text); font-weight: 500; }
-  .bulkbar .count { color: var(--blue); font-weight: 600; }
+  .bulkbar .count { color: var(--blue); font-weight: 600; font-size: 12px; }
 
-  /* File rows */
   .list { display: flex; flex-direction: column; }
   .row {
     display: flex; align-items: center; gap: 12px;
-    padding: 12px 14px;
-    border-radius: var(--radius-sm);
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
     transition: background 120ms ease;
   }
+  .row:last-child { border-bottom: 0; }
   .row:hover { background: var(--surface-sunken); }
   .row .pick { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; cursor: pointer; }
-  .row input[type=checkbox] {
-    width: 18px; height: 18px; cursor: pointer; accent-color: var(--blue);
-    flex-shrink: 0;
-  }
+  .row input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--blue); flex-shrink: 0; }
   .file-icon {
-    width: 36px; height: 36px; flex-shrink: 0;
-    border-radius: 9px;
-    background: var(--blue-soft);
-    color: var(--blue);
+    width: 32px; height: 32px; flex-shrink: 0;
+    border-radius: 7px;
+    background: var(--blue-soft); color: var(--blue);
     display: flex; align-items: center; justify-content: center;
-    font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
   }
   .file-info { min-width: 0; flex: 1; }
-  .file-name { font-weight: 600; font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-name { font-weight: 600; font-size: 13.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .file-meta { color: var(--text-faint); font-size: 12px; margin-top: 2px; }
-  .file-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .file-actions { display: flex; gap: 6px; flex-shrink: 0; }
   .empty {
-    text-align: center; color: var(--text-faint); padding: 32px 16px;
-    font-size: 14px;
+    text-align: center; color: var(--text-faint);
+    padding: 40px 16px; font-size: 13px;
   }
 
-  /* Messages */
+  /* --- Messages --- */
   .msg {
-    margin-top: 14px;
-    padding: 12px 14px;
+    margin: 16px 20px 0;
+    padding: 10px 14px;
     border-radius: var(--radius-sm);
     font-size: 13px;
     display: flex; align-items: center; gap: 8px;
   }
   .msg.ok { background: var(--ok-soft); color: var(--ok); border: 1px solid rgba(46, 125, 50, 0.18); }
   .msg.err { background: var(--danger-soft); color: var(--danger); border: 1px solid rgba(211, 47, 47, 0.18); }
-  .msg.hidden { display: none; }
+  .msg.hidden { display: none !important; }
   .msg b { color: inherit; font-weight: 700; }
+  .login-card .msg { margin: 14px 0 0; }
 
-  /* Modal */
+  /* --- Modal --- */
   .mask {
     position: fixed; inset: 0;
     background: rgba(20, 22, 26, 0.5);
@@ -348,100 +501,164 @@ _PAGE_HTML = """<!doctype html>
     z-index: 50;
     animation: fadeIn 140ms ease;
   }
-  .mask.hidden { display: none; }
+  .mask.hidden { display: none !important; }
   .dialog {
-    background: var(--surface-raised);
-    border-radius: var(--radius);
-    padding: 24px;
-    max-width: 440px; width: 90%;
+    background: var(--surface); border-radius: var(--radius);
+    padding: 24px; max-width: 440px; width: 90%;
     box-shadow: var(--shadow-lg);
     animation: slideUp 180ms ease;
   }
-  .dialog h3 { margin: 0 0 8px; font-size: 17px; font-weight: 600; letter-spacing: -0.005em; }
-  .dialog p { margin: 0 0 18px; color: var(--text-dim); font-size: 14px; line-height: 1.5; }
+  .dialog h3 { margin: 0 0 8px; font-size: 16px; font-weight: 600; letter-spacing: -0.005em; }
+  .dialog p { margin: 0 0 18px; color: var(--text-dim); font-size: 13.5px; line-height: 1.55; }
   .dialog .fname { color: var(--text); font-weight: 600; word-break: break-all; }
   .dialog .buttons { display: flex; gap: 8px; justify-content: flex-end; }
   .dialog .file-list { max-height: 140px; overflow: auto; margin-top: 8px; padding: 8px; background: var(--surface-sunken); border-radius: 8px; }
   .dialog .file-list div { font-size: 13px; padding: 2px 0; }
 
-  /* Spinner */
   .spinner {
-    display: inline-block;
-    width: 13px; height: 13px;
+    display: inline-block; width: 12px; height: 12px;
     border: 2px solid var(--border-strong);
     border-top-color: var(--blue);
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
+    border-radius: 50%; animation: spin 0.7s linear infinite;
     vertical-align: middle;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   @keyframes slideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
-  /* Login card is centered and slim */
-  #login { max-width: 420px; margin: 80px auto 0; }
-
-  @media (max-width: 640px) {
-    .wrap { padding: 24px 16px 64px; }
-    .card { padding: 20px; }
-    .drop { padding: 28px 16px; }
-    .file-actions button.small { padding: 6px 10px; }
+  /* --- Responsive --- */
+  @media (max-width: 760px) {
+    .sidebar { transform: translateX(-100%); transition: transform 180ms ease; z-index: 30; }
+    .sidebar.open { transform: translateX(0); }
+    .main { margin-left: 0; }
+    .topbar { padding: 0 16px; }
+    .content { padding: 20px 16px; }
+    .mobile-nav-toggle { display: inline-flex !important; }
+  }
+  .mobile-nav-toggle {
+    display: none;
+    width: 36px; height: 36px; margin-right: 10px;
+    background: transparent; border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); padding: 0;
+    align-items: center; justify-content: center; font-size: 16px;
   }
 </style>
 </head>
 <body>
 
-<div class="wrap">
-  <div id="login" class="card">
-    <div class="header" style="margin-bottom:18px">
-      <div class="logo"><img src="/upload/logo.png" alt="Mari Energies"></div>
+<!-- LOGIN -->
+<div id="login" class="login-wrap">
+  <div class="login-card">
+    <div class="login-header">
+      <div class="logo-tile"><img src="/upload/logo.png" alt="Mari Energies"></div>
       <div>
         <h1>Mari Kiosk</h1>
-        <div class="sub">Knowledge Base Admin</div>
+        <div class="sub">Admin Panel</div>
       </div>
     </div>
     <label class="field-label" for="tok">Admin password</label>
     <input id="tok" type="password" autocomplete="current-password" placeholder="Enter password">
-    <div style="margin-top:14px"><button id="enter">Sign in</button></div>
+    <div style="margin-top:16px"><button id="enter" class="primary-lg" style="width:100%;justify-content:center">Sign in</button></div>
     <div id="loginMsg" class="msg hidden"></div>
   </div>
+</div>
 
-  <div id="app" class="hidden">
-    <div class="header">
-      <div class="logo"><img src="/upload/logo.png" alt="Mari Energies"></div>
+<!-- APP -->
+<div id="app" class="app-shell hidden">
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo-tile"><img src="/upload/logo.png" alt="Mari Energies"></div>
       <div>
-        <h1>Knowledge Base</h1>
-        <div class="sub">Upload, review and manage the files the kiosk answers from.</div>
+        <div class="brand-text">Mari Kiosk</div>
+        <div class="brand-sub">Admin Panel</div>
       </div>
     </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">Manage</div>
+      <button class="nav-item active" data-section="files">
+        <span class="nav-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h3.3a1.5 1.5 0 0 1 1.06.44l.94.93a1.5 1.5 0 0 0 1.06.44H12.5A1.5 1.5 0 0 1 14 5.31V12.5A1.5 1.5 0 0 1 12.5 14h-9A1.5 1.5 0 0 1 2 12.5v-9z"/></svg></span>
+        Knowledge base
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <button class="nav-item danger-item" id="sidebarShutdown">
+        <span class="nav-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2v6"/><path d="M4 4.5a6 6 0 1 0 8 0"/></svg></span>
+        Shut down kiosk
+      </button>
+      <button class="nav-item" id="sidebarLogout">
+        <span class="nav-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3H4a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h6"/><path d="M8 8h6M12 5l3 3-3 3"/></svg></span>
+        Log out
+      </button>
+    </div>
+  </aside>
 
-    <div class="card">
-      <div class="card-title">
-        <h2>Upload</h2>
-        <span class="hint">Markdown files only · max 5 MB each</span>
+  <!-- Main -->
+  <div class="main">
+    <header class="topbar">
+      <div style="display:flex;align-items:center;min-width:0">
+        <button class="mobile-nav-toggle" id="mobileNavToggle" aria-label="Open menu">☰</button>
+        <div class="topbar-title">
+          <span class="topbar-crumb">Manage</span>
+          <h1 id="pageTitle">Knowledge base</h1>
+        </div>
       </div>
-      <label for="fileInput" class="drop" id="drop">
-        <input id="fileInput" type="file" accept=".md,.markdown" multiple>
-        <div class="drop-icon">⇪</div>
-        <div class="drop-main">Drop .md files here or click to browse</div>
-        <div class="drop-sub">Multiple files supported · indexed automatically</div>
-      </label>
-      <div id="uploadMsg" class="msg hidden"></div>
-    </div>
+      <div class="user-menu">
+        <button class="user-trigger" id="userTrigger">
+          <div class="user-avatar">A</div>
+          <span class="user-name">Admin</span>
+          <span class="user-caret">▼</span>
+        </button>
+        <div class="user-dropdown hidden" id="userDropdown">
+          <div class="meta">
+            <div class="meta-label">Signed in as</div>
+            <div class="meta-value">Admin</div>
+          </div>
+          <div class="divider"></div>
+          <button id="topbarLogout">
+            <span style="color:var(--danger)">Log out</span>
+          </button>
+        </div>
+      </div>
+    </header>
 
-    <div class="card">
-      <div class="card-title">
-        <h2>Current files</h2>
-        <button class="ghost small" id="refresh">Refresh</button>
+    <main class="content">
+      <div class="page-header">
+        <h2>Knowledge base</h2>
+        <p>Upload, review, and manage the Markdown files the kiosk answers questions from.</p>
       </div>
-      <div id="bulkbar" class="bulkbar hidden">
-        <label><input type="checkbox" id="selectAll"> Select all</label>
-        <span id="selCount" class="count"></span>
-        <div style="flex:1"></div>
-        <button class="danger small" id="bulkDel" disabled>Delete selected</button>
+
+      <div class="card">
+        <div class="card-head">
+          <h3>Upload files</h3>
+          <span class="hint">.md or .markdown · max 5 MB each</span>
+        </div>
+        <div class="card-body">
+          <label for="fileInput" class="drop" id="drop">
+            <input id="fileInput" type="file" accept=".md,.markdown" multiple>
+            <div class="drop-icon">⇪</div>
+            <div class="drop-main">Drop files here or click to browse</div>
+            <div class="drop-sub">Multiple files supported · indexed automatically</div>
+          </label>
+        </div>
+        <div id="uploadMsg" class="msg hidden"></div>
       </div>
-      <div id="list" class="list">Loading…</div>
-    </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h3>Current files</h3>
+          <button class="ghost" id="refresh">Refresh</button>
+        </div>
+        <div id="bulkbar" class="bulkbar hidden">
+          <label><input type="checkbox" id="selectAll"> Select all</label>
+          <span id="selCount" class="count"></span>
+          <div style="flex:1"></div>
+          <button class="danger" id="bulkDel" disabled>Delete selected</button>
+        </div>
+        <div id="list" class="list"><div class="empty">Loading…</div></div>
+      </div>
+    </main>
   </div>
 </div>
 
@@ -471,14 +688,19 @@ async function api(path, opts={}) {
 
 function fmtSize(n) { if (n < 1024) return n + " B"; if (n < 1024*1024) return (n/1024).toFixed(1) + " KB"; return (n/1024/1024).toFixed(2) + " MB"; }
 function fmtTime(ts) {
-  const d = new Date(ts * 1000);
-  const now = new Date();
-  const diff = (now - d) / 1000;
+  const d = new Date(ts * 1000); const now = new Date(); const diff = (now - d) / 1000;
   if (diff < 60) return "just now";
   if (diff < 3600) return Math.floor(diff/60) + " min ago";
   if (diff < 86400) return Math.floor(diff/3600) + " h ago";
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
+
+function escapeHtml(s) {
+  const Q = String.fromCharCode(34);
+  return String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])).split(Q).join("&quot;");
+}
+
+function setMsg(id, kind, html) { const el = $(id); el.className = "msg " + kind; el.innerHTML = html; el.classList.remove("hidden"); }
 
 async function loadList() {
   const el = $("list");
@@ -503,7 +725,7 @@ async function loadList() {
           </div>
         </label>
         <div class="file-actions">
-          <button class="ghost small" data-view="${encodeURIComponent(f.name)}">View</button>
+          <button class="ghost" data-view="${encodeURIComponent(f.name)}">View</button>
         </div>`;
       el.appendChild(row);
     }
@@ -512,7 +734,7 @@ async function loadList() {
     $("bulkbar").classList.remove("hidden");
     $("selectAll").checked = false;
     updateBulkBar();
-  } catch (e) { el.innerHTML = `<div class="msg err">${escapeHtml(e.message)}</div>`; }
+  } catch (e) { el.innerHTML = `<div class="empty" style="color:var(--danger)">${escapeHtml(e.message)}</div>`; }
 }
 
 async function viewFile(name) {
@@ -561,11 +783,6 @@ async function uploadFiles(files) {
   await loadList();
 }
 
-function setMsg(id, kind, html) { const el = $(id); el.className = "msg " + kind; el.innerHTML = html; el.classList.remove("hidden"); }
-function escapeHtml(s) { const Q = String.fromCharCode(34); return String(s).replace(/[&<>]/g, c => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;"
-  }[c])).split(Q).join("&quot;"); }
-
 function selectedNames() { return Array.from(document.querySelectorAll(".pickbox")).filter(cb => cb.checked).map(cb => decodeURIComponent(cb.dataset.name)); }
 function updateBulkBar() {
   const picks = document.querySelectorAll(".pickbox");
@@ -576,6 +793,16 @@ function updateBulkBar() {
   all.checked = picks.length > 0 && sel.length === picks.length;
   all.indeterminate = sel.length > 0 && sel.length < picks.length;
 }
+
+function logout() {
+  TOKEN = "";
+  sessionStorage.removeItem("mari_admin_token");
+  $("app").classList.add("hidden");
+  $("login").classList.remove("hidden");
+  $("tok").value = "";
+  $("userDropdown").classList.add("hidden");
+}
+
 $("selectAll").addEventListener("change", (e) => {
   document.querySelectorAll(".pickbox").forEach(cb => cb.checked = e.target.checked);
   updateBulkBar();
@@ -620,6 +847,32 @@ const drop = $("drop");
 ["dragenter","dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("hover"); }));
 ["dragleave","drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("hover"); }));
 drop.addEventListener("drop", e => { if (e.dataTransfer?.files?.length) uploadFiles(e.dataTransfer.files); });
+
+$("userTrigger").addEventListener("click", (e) => {
+  e.stopPropagation();
+  $("userDropdown").classList.toggle("hidden");
+});
+document.addEventListener("click", (e) => {
+  if (!$("userMenu")?.contains?.(e.target)) $("userDropdown").classList.add("hidden");
+});
+$("sidebarLogout").onclick = logout;
+async function shutdownKiosk() {
+  const ok = await openModal(null, {
+    title: "Shut down the kiosk?",
+    bodyHtml: "The kiosk PC will power off completely. It will need to be powered back on <b>manually</b> by pressing the physical power button."
+  });
+  if (!ok) return;
+  setMsg("uploadMsg", "ok", '<span class="spinner"></span> Sending shutdown command\u2026');
+  try {
+    await api("/upload/shutdown", { method: "POST" });
+    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:system-ui;font-size:16px;color:#14161a;background:#f4f5f7;padding:24px;text-align:center"><div><div style="font-size:48px;margin-bottom:12px">\u23fb</div>Kiosk is shutting down&hellip;<div style="color:rgba(20,22,26,0.6);font-size:13px;margin-top:8px">This window can be closed.</div></div></div>';
+  } catch (e) { setMsg("uploadMsg", "err", "Shutdown failed: " + escapeHtml(e.message)); }
+}
+$("sidebarShutdown").onclick = shutdownKiosk;
+
+$("topbarLogout").onclick = logout;
+
+$("mobileNavToggle").addEventListener("click", () => $("sidebar").classList.toggle("open"));
 
 if (TOKEN) {
   api("/upload/kb").then(() => { $("login").classList.add("hidden"); $("app").classList.remove("hidden"); loadList(); })
