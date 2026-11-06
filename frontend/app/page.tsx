@@ -6,11 +6,13 @@ import AvatarStage from "@/components/AvatarStage";
 import ChatPanel from "@/components/ChatPanel";
 import ControlDock from "@/components/ControlDock";
 import Subtitle from "@/components/Subtitle";
+import SubtitleToggle from "@/components/SubtitleToggle";
 import LanguageBar from "@/components/LanguageBar";
 import LoadingScreen from "@/components/LoadingScreen";
 import { useVoiceSession } from "@/hooks/use-voice-session";
 import { applyTheme, readTheme, type Theme } from "@/lib/theme";
 import { applyAvatar, readAvatar } from "@/lib/avatar";
+import { applySubtitles, DEFAULT_SUBTITLES_ON, readSubtitles } from "@/lib/subtitles";
 import { avatarConfig, DEFAULT_AVATAR, type AvatarId } from "@/components/avatar/models";
 import { uiCopy, type Lang } from "@/lib/i18n";
 
@@ -22,6 +24,9 @@ export default function Page() {
   // effect below corrects it before the model is fetched.
   const [avatar, setAvatar] = useState<AvatarId>(DEFAULT_AVATAR);
   const [chatOpen, setChatOpen] = useState(false);
+  // Same reason as `avatar` above: this renders on the server too, so it starts
+  // on the default and the effect below corrects it from storage after mount.
+  const [subtitlesOn, setSubtitlesOn] = useState(DEFAULT_SUBTITLES_ON);
   // False until the avatar reports it has loaded AND is posed — see
   // AvatarModel's onReady. The rest of the page mounts and loads underneath
   // regardless (the background art, the voice session, the avatar's own glTF
@@ -44,6 +49,7 @@ export default function Page() {
   useEffect(() => {
     setTheme(readTheme());
     setAvatar(readAvatar());
+    setSubtitlesOn(readSubtitles());
   }, []);
 
   // Warm the OTHER theme's background in the browser's HTTP cache once the page
@@ -70,6 +76,17 @@ export default function Page() {
   };
 
   /**
+   * Captions on/off. Deliberately does NOT touch the voice session: the reply is
+   * spoken either way and the chat log keeps every word, so this hides the
+   * on-screen echo and nothing else. A turn already in flight simply stops (or
+   * starts) being captioned mid-sentence.
+   */
+  const changeSubtitles = (on: boolean) => {
+    setSubtitlesOn(on);
+    applySubtitles(on);
+  };
+
+  /**
    * Switching presenters re-arms the loading overlay, because it is a fresh
    * multi-megabyte download and a fresh parse. Without this the old rig stays
    * on screen, apparently frozen, until the new one is posed — and coming back
@@ -86,6 +103,21 @@ export default function Page() {
     setAvatarReady(false);
     setAvatar(id);
     applyAvatar(id);
+  };
+
+  /**
+   * Switching language hard-stops the session first, for the same reason a
+   * presenter switch does: a turn already in flight was started in the old
+   * language and keeps it (langRef is captured when the turn is sent, and the
+   * server transcribes against the language in {"start"}), so letting it run on
+   * means the words spoken AFTER the switch are still transcribed as the
+   * previous language. Ending the turn makes the next one open cleanly in the
+   * language now selected. The transcript stays — only the turn ends.
+   */
+  const changeLang = (l: Lang) => {
+    if (l === lang) return;
+    voice.stop();
+    setLang(l);
   };
 
   useEffect(() => {
@@ -119,7 +151,7 @@ export default function Page() {
       <LanguageBar
         className={styles.langBar}
         lang={lang}
-        onLang={setLang}
+        onLang={changeLang}
         avatar={avatar}
         onAvatar={changeAvatar}
         theme={theme}
@@ -131,7 +163,7 @@ export default function Page() {
           subtitle appearing or clearing grows the column upward without
           nudging the buttons. */}
       <div className={styles.dockArea}>
-        <Subtitle lang={lang} line={voice.spokenLine} />
+        <Subtitle lang={lang} line={subtitlesOn ? voice.spokenLine : ""} />
         <ControlDock
           lang={lang}
           gender={presenterGender}
@@ -144,6 +176,11 @@ export default function Page() {
           onTogglePause={voice.togglePause}
         />
       </div>
+
+      {/* Bottom-right row, left to right: captions, then the chat launcher.
+          Both are positioned from the right edge in their own stylesheets, so
+          they hold together at any --s. */}
+      <SubtitleToggle lang={lang} on={subtitlesOn} onToggle={changeSubtitles} />
 
       <ChatPanel
         lang={lang}

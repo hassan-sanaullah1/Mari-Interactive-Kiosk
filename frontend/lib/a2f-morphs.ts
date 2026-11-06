@@ -136,7 +136,7 @@ export function applyA2FLipsync(
 
       // Sum first, write second — accumulating leaves the door open for two
       // clip shapes resolving onto the same morph index without clobbering.
-      for (let t = 0; t < touched.length; t++) accum[touched[t]] = 0;
+      for (const idx of touched) accum[idx] = 0;
       for (let i = 0; i < drives.length; i++) {
         const idx = drives[i];
         if (idx < 0) continue;
@@ -160,8 +160,7 @@ export function applyA2FLipsync(
     let residual = 0;
     for (const { mesh, touched } of state.meshes) {
       const influences = mesh.morphTargetInfluences!;
-      for (let t = 0; t < touched.length; t++) {
-        const idx = touched[t];
+      for (const idx of touched) {
         // Clamped: an unclamped `delta * 10` past 1 overshoots zero and flips
         // sign every frame, so one long frame gap (a backgrounded tab) blows
         // the face apart and leaves it stuck there.

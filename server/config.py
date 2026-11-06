@@ -77,6 +77,7 @@ SONIOX_KEY = env("APP_SONIOX_API_KEY")
 SONIOX_URL = env("APP_SONIOX_BASE_URL", "wss://stt-rt.jp.soniox.com/transcribe-websocket")
 SONIOX_MODEL = env("APP_SONIOX_MODEL", "stt-rt-v4")
 
+
 # ── Urdu TTS — UpliftAI (REST, returns mp3) ─────────────────────────
 UPLIFT_KEY = env("APP_UPLIFT_API_KEY")
 UPLIFT_BASE = env("APP_UPLIFT_TTS_BASE_URL", "https://ap-southeast-1.api.upliftai.org").rstrip("/")
@@ -142,6 +143,17 @@ EN_TTS = env("APP_EN_TTS", "uplift")  # "uplift" | "local" (kokoro) | "remote"
 
 # local faster-whisper
 WHISPER_LOCAL_MODEL = env("APP_ASR_MODEL_SIZE", "base.en")
+# Silent local backstop for Urdu: when Soniox cannot be reached (no network, or the key
+# is deactivated) the turn is transcribed by the local Whisper instead, with nothing the
+# visitor can see. Defaults to the same size as English STT so the two share one loaded
+# model on the GPU rather than holding two copies in VRAM.
+ENABLE_URDU_STT_FALLBACK = env("APP_ENABLE_URDU_STT_FALLBACK", "1").lower() not in (
+    "0",
+    "false",
+    "no",
+    "off",
+)
+UR_FALLBACK_MODEL = env("APP_UR_ASR_MODEL_SIZE", WHISPER_LOCAL_MODEL)
 
 # remote Whisper (fallback if APP_EN_STT=remote)
 WHISPER_URL = env("APP_REMOTE_WHISPER_URL")

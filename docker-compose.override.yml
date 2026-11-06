@@ -6,6 +6,18 @@ services:
       - "8010:8010"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    environment:
+      MARI_ADMIN_TOKEN: ${MARI_ADMIN_TOKEN:-}
+    volumes:
+      # LAN admin uploads to /admin land here; also a bind mount so uploads survive
+      # future container rebuilds (the baked-in server/data would otherwise shadow them).
+      - ./server/data:/app/server/data
+      # Keep /app/server/admin.py and the patched /app/server/app.py visible to the
+      # container without a rebuild. Narrow mounts only, so the rest of /app/server
+      # stays as it was baked into the image.
+      - ./server/admin.py:/app/server/admin.py:ro
+      - ./server/app.py:/app/server/app.py:ro
+      - ./server/static:/app/server/static:ro
   frontend:
     ports:
       - "3000:3000"

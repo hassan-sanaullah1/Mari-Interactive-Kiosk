@@ -12,7 +12,7 @@
      nowrap line below has something to be clipped against — capped to a share of
      the frame so it can never reach either edge. */
   width: 100%;
-  max-width: min(calc(460 * var(--s)), 90%);
+  max-width: min(calc(520 * var(--s)), 94%);
   pointer-events: none;
 }
 
@@ -34,11 +34,11 @@
   font-size: calc(16 * var(--s));
   line-height: 1.35;
   text-align: center;
-  /* Exactly one horizontal line — never wrap. A sentence longer than the box is
-     clipped with an ellipsis rather than stacking rows above the mic. */
+  /* Exactly one horizontal line — never wrap. The component shrinks the font to
+     make the whole sentence fit this one line, so it is shown in full with no
+     ellipsis. overflow:hidden stays only as a 1px rounding guard. */
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   animation: subtitle-in 180ms ease-out;
 }
 

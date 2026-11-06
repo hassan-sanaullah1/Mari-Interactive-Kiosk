@@ -12,11 +12,11 @@ type Props = {
 };
 
 /**
- * How far the text may shrink before an ellipsis takes over, as a share of the
- * CSS font size. A normal reply sentence fits well above this; the floor only
- * stops a pathologically long one from becoming unreadable.
+ * A hard safety floor on the font scale, only so a bug can't drive the size to
+ * zero. It sits far below anything a real reply sentence reaches, so the whole
+ * line is always shown in full — never clipped with an ellipsis.
  */
-const MIN_SCALE = 0.5;
+const MIN_SCALE = 0.2;
 
 /**
  * Live caption of the sentence the presenter is speaking, shown one line at a
@@ -39,7 +39,7 @@ export default function Subtitle({ lang, line }: Props) {
       el.style.fontSize = "";
       const basePx = parseFloat(getComputedStyle(el).fontSize);
       const minPx = basePx * MIN_SCALE;
-      for (let guard = 0; guard < 8 && el.scrollWidth > el.clientWidth + 1; guard++) {
+      for (let guard = 0; guard < 16 && el.scrollWidth > el.clientWidth + 1; guard++) {
         const cur = parseFloat(getComputedStyle(el).fontSize);
         const next = cur * (el.clientWidth / el.scrollWidth) * 0.96;
         if (next <= minPx) {

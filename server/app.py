@@ -21,6 +21,8 @@ from fastapi import FastAPI, Request, Response, WebSocket
 from pydantic import BaseModel
 
 from . import avatar, config, providers, rag
+
+from .admin import router as admin_router
 from .agent.policy import failure_reply, fallback_reply
 from .agent.responder import respond
 from .agent.session import VoiceSession
@@ -32,6 +34,7 @@ configure_logging()
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="MARI · Voice")
+app.include_router(admin_router)
 
 # Container health probes; their INFO lines are dropped (see logging_setup.is_quiet).
 _PROBE_PATHS = frozenset({"/health/live", "/health/ready"})
@@ -78,6 +81,9 @@ async def _startup() -> None:
     )
     if local_ur is not None:
         asyncio.create_task(providers.warm("ur", local_ur))
+    # The local Urdu backstop. Shares English's model when the sizes match, so this is
+    # usually just a cache hit rather than a second load.
+    asyncio.create_task(providers.warm_urdu_fallback())
     asyncio.create_task(avatar.warm())
     # Minutes on a cold container; turns are answered from the core brief meanwhile.
     asyncio.create_task(rag.startup())

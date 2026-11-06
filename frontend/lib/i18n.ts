@@ -24,6 +24,9 @@ const COPY = {
     speaking: "Speaking",
     paused: "Paused",
     chat: "Chat",
+    subtitles: "Subtitles",
+    subtitlesOn: "Turn subtitles on",
+    subtitlesOff: "Turn subtitles off",
     placeholder: "Ask anything",
     presenter: "Presenter",
     slowConnection: "Slow connection…",
@@ -39,6 +42,11 @@ const COPY = {
     speaking: "بول رہی ہے",
     paused: "رکی ہوئی",
     chat: "گفتگو",
+    // "Subtitles" as a label, and the two actions on it. Not gendered: these
+    // describe a control the visitor operates, not what the presenter is doing.
+    subtitles: "سب ٹائٹلز",
+    subtitlesOn: "سب ٹائٹلز آن کریں",
+    subtitlesOff: "سب ٹائٹلز آف کریں",
     placeholder: "کچھ بھی پوچھیں",
     presenter: "پیشکار",
     slowConnection: "سست کنکشن…",

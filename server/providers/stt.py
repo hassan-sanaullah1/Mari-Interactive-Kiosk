@@ -37,8 +37,8 @@ _VOCAB_HINT_EN = (
     "Faheem Haider, PSX, OGDCL, Maryam."
 )
 _VOCAB_HINT_UR = (
-    "ماری انرجیز، ماری پیٹرولیم، ایم پی سی ایل، ماری گیس فیلڈ، ڈھرکی، ماری سروسز، "
-    "ماری منرلز، ماری ٹیکنالوجیز، سکائی فورٹی سیون، جیم انرجی، فہیم حیدر، پی ایس ایکس"
+    "ماڑی انرجیز، ماڑی پیٹرولیم، ایم پی سی ایل، ماڑی گیس فیلڈ، ڈھرکی، ماڑی سروسز، "
+    "ماڑی منرلز، ماڑی ٹیکنالوجیز، سکائی فورٹی سیون، جیم انرجی، فہیم حیدر، پی ایس ایکس"
 )
 
 
@@ -271,7 +271,10 @@ class SonioxStream:
 class WhisperLocalSTT(STTProvider):
     """faster-whisper, in-process (GPU if available)."""
 
-    _model = None  # class-level cache: one model instance per process
+    # Keyed by model size so two sizes cannot share one slot. With English and Urdu both
+    # on large-v3 this means they share a single loaded model: same key, one copy in VRAM,
+    # and only the decode `language` differs per turn.
+    _models: dict = {}  # class-level cache: one model instance per size, per process
     # app.py warms every presenter concurrently and they all share that one instance.
     # Unlocked, two of those tasks clear the None check together and each builds its own
     # model; the loser is simply dropped. That was ~150 MB of waste with base.en, but a
@@ -279,17 +282,22 @@ class WhisperLocalSTT(STTProvider):
     # also running Audio2Face.
     _model_lock = threading.Lock()
 
-    def __init__(self, model_size: str = ""):
+    def __init__(self, model_size: str = "", language: str = "en"):
         self.model_size = model_size or config.WHISPER_LOCAL_MODEL
+        # Decode language, and which vocab hint biases it. The model itself is
+        # language-agnostic, so instances differing only in language share one load.
+        self.language = language
 
     def _get_model(self):
-        if WhisperLocalSTT._model is not None:
-            return WhisperLocalSTT._model
+        cached = WhisperLocalSTT._models.get(self.model_size)
+        if cached is not None:
+            return cached
         with WhisperLocalSTT._model_lock:
             # Re-checked with the lock held: whoever waited here while the first caller
             # built the model must use it rather than build a second.
-            if WhisperLocalSTT._model is not None:
-                return WhisperLocalSTT._model
+            cached = WhisperLocalSTT._models.get(self.model_size)
+            if cached is not None:
+                return cached
             import ctranslate2
             from faster_whisper import WhisperModel
 
@@ -303,8 +311,13 @@ class WhisperLocalSTT(STTProvider):
             # answering, several seconds slower, with nothing in the log to say why.
             if ctranslate2.get_cuda_device_count() > 0:
                 try:
+                    # int8_float16, not float16: large-v3 in float16 held ~3.9 GB and on a
+                    # card also running Audio2Face that left ~0.8 GB free, so some turns
+                    # died with "CUDA failed with error out of memory" and came back as an
+                    # empty transcript. int8 weights with float16 compute roughly halve the
+                    # footprint at no quality cost worth hearing on kiosk speech.
                     model = WhisperModel(
-                        self.model_size, device="cuda", compute_type="float16"
+                        self.model_size, device="cuda", compute_type="int8_float16"
                     )
                     # Constructing the model does not touch cuBLAS or cuDNN, so an image
                     # that has the driver but not those libraries loads cleanly here and
@@ -312,17 +325,20 @@ class WhisperLocalSTT(STTProvider):
                     # moves that failure to startup, where the CPU fallback can take over.
                     import numpy as np
 
-                    list(model.transcribe(np.zeros(1600, dtype=np.float32), language="en")[0])
-                    WhisperLocalSTT._model = model
+                    list(
+                        model.transcribe(
+                            np.zeros(1600, dtype=np.float32), language=self.language
+                        )[0]
+                    )
+                    WhisperLocalSTT._models[self.model_size] = model
                     logger.info("whisper %s loaded on cuda (float16)", self.model_size)
-                    return WhisperLocalSTT._model
+                    return model
                 except Exception as exc:
                     logger.warning("whisper cuda unusable, falling back to cpu: %s", exc)
-            WhisperLocalSTT._model = WhisperModel(
-                self.model_size, device="cpu", compute_type="int8"
-            )
+            model = WhisperModel(self.model_size, device="cpu", compute_type="int8")
+            WhisperLocalSTT._models[self.model_size] = model
             logger.info("whisper %s loaded on cpu (int8)", self.model_size)
-            return WhisperLocalSTT._model
+            return model
 
     def warm(self) -> None:
         self._get_model()
@@ -366,11 +382,11 @@ class WhisperLocalSTT(STTProvider):
             # (57s of audio): leaks 1/8 -> 0/8, total STT 2.53s -> 2.56s.
             segments, _ = model.transcribe(
                 audio,
-                language="en",
+                language=self.language,
                 beam_size=5,
                 vad_filter=True,
                 condition_on_previous_text=False,
-                initial_prompt=_vocab_hint("en"),
+                initial_prompt=_vocab_hint(self.language),
             )
             return "".join(s.text for s in segments).strip()
 
@@ -442,15 +458,43 @@ _MISHEARD_MARI_EN = re.compile(
     rf"|\b(?:{_MARI_SOUND_ALIKES}){_NOT_MARDI_GRAS}\b{_MARI_FOLLOWED}",
     re.IGNORECASE,
 )
-_MISHEARD_MARI_UR = re.compile(r"میری(?=\s*انرجیز|\s*پیٹرولیم|\s*گیس|\s*کے|\s*کیا|\s*کون)")
+# The brand is ماڑی (retroflex ڑ). The recognizer emits the tapped ماری, or mishears it as
+# میری ("my"), so both are corrected — but only before a word that marks the company, since
+# bare ماری is a real word ("killed") and bare میری is "my". ماڑی itself is matched too so a
+# correct transcript is left unchanged rather than skipped.
+_MISHEARD_MARI_UR = re.compile(
+    r"(?:ماڑی|ماری|میری)(?=\s*انرجیز|\s*پیٹرولیم|\s*گیس|\s*سروسز|\s*منرلز|\s*ٹیکنالوجیز"
+    r"|\s*کے|\s*کیا|\s*کون)"
+)
 
 
 def _fix_misheard_mari(text: str, lang: str) -> str:
     if not text:
         return text
     if lang == "ur":
-        return _MISHEARD_MARI_UR.sub("ماری", text)
+        return _MISHEARD_MARI_UR.sub("ماڑی", text)
     return _MISHEARD_MARI_EN.sub("Mari", text)
+
+
+_urdu_fallback: WhisperLocalSTT | None = None
+
+
+def get_urdu_fallback_stt() -> WhisperLocalSTT:
+    """Local Urdu Whisper, used when Soniox cannot be reached. With APP_UR_ASR_MODEL_SIZE
+    equal to the English size this shares English's loaded model rather than adding a
+    second copy to VRAM; only the decode language differs."""
+    global _urdu_fallback
+    if _urdu_fallback is None:
+        _urdu_fallback = WhisperLocalSTT(model_size=config.UR_FALLBACK_MODEL, language="ur")
+    return _urdu_fallback
+
+
+async def stt_local_ur(pcm: bytes) -> str:
+    """Transcribe Urdu PCM locally, with the same Mari correction the Soniox path gets."""
+    if not pcm:
+        return ""
+    text = await get_urdu_fallback_stt().transcribe_pcm(pcm)
+    return _fix_misheard_mari(text, "ur")
 
 
 async def stt(wav: bytes, lang: str) -> str:

@@ -1,0 +1,54 @@
+/* Captions on/off, in the bottom row immediately left of the chat launcher.
+
+   Same chrome surface and diameter as the theme switch and the presenter button
+   in the left cluster — UI.png draws every one of those discs in one colour, so
+   this one follows the theme with them rather than taking the launcher's blue.
+   Blue is reserved here for the two controls that start something (the mic and
+   the chat); a view preference is chrome.
+
+   Width is the constraint in this row. At the 402-unit portrait reference the
+   left cluster ends at 301 and the launcher starts at 341, so a full-diameter
+   disc plus the 12.5-unit cluster gap did not fit in those 40 units. Rather
+   than shrink the button below its neighbours, the row's own gaps were tightened
+   (--row-gap in globals.css) and the two right-hand buttons share the smaller
+   --row-gap-tight; see the measurement note in docs/. */
+
+.toggle {
+  position: absolute;
+  /* Sits one launcher-width plus the tight gap in from the right edge, so it
+     stays glued to the launcher's left side at any --s. */
+  right: calc(var(--edge-x) + var(--launcher) + var(--row-gap-tight));
+  bottom: var(--edge-y);
+  z-index: 20;
+  width: var(--launcher);
+  height: var(--launcher);
+  border-radius: 50%;
+  background: var(--surface);
+  display: grid;
+  place-items: center;
+  color: var(--text);
+  box-shadow: 0 calc(2 * var(--s)) calc(14 * var(--s)) rgba(0, 0, 0, 0.34);
+  transition: background 140ms ease, color 180ms ease, transform 140ms ease;
+}
+
+.toggle:hover {
+  background: var(--surface-hover);
+}
+
+.toggle:active {
+  transform: scale(0.94);
+}
+
+/* Off reads as switched-off rather than merely unselected: the icon drops to the
+   dim text colour, matching how the rest of the UI marks an inactive control.
+   The struck-through glyph carries it too, so this is not colour alone. */
+.off {
+  color: var(--text-dim);
+}
+
+/* 48%, the launcher's icon share, so the caption frame optically matches the
+   chat glyph beside it rather than the smaller 44% theme icon. */
+.icon {
+  width: 48%;
+  height: 48%;
+}

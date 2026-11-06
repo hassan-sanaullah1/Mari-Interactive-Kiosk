@@ -32,3 +32,4 @@ qdrant-client>=1.12       # async client; hybrid prefetch + server-side RRF fusi
 pydantic-settings>=2.4    # MARI_RAG_* configuration
 pdfplumber>=0.11          # PDF ingestion (keeps layout, so paragraphs survive)
 markdown-it-py>=3.0       # markdown normalisation
+python-multipart

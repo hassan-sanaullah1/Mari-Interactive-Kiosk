@@ -96,39 +96,16 @@ export function ToneMappingSync({ toneMapping }: { toneMapping: THREE.ToneMappin
  */
 export function ShadowSoftness({ radius, strength }: { radius: number; strength: number }) {
   const scene = useThree((s) => s.scene);
-  // Looking for the lights is not per-frame work: a traverse walks the whole rig
-  // (1202 objects on the female model) to reach a handful of lights. The rigs
-  // carry no lights of their own (no KHR_lights_punctual in any .glb), so every
-  // caster is a direct child of the scene, put there by the light rig React
-  // renders. The children are compared by identity, not by count, so a rig swap
-  // that happens to keep the same number of lights still refreshes the list.
-  const seenChildren = useRef<THREE.Object3D[]>([]);
-  const casters = useRef<THREE.DirectionalLight[]>([]);
   useFrame(() => {
-    const children = scene.children;
-    const seen = seenChildren.current;
-    let isChanged = children.length !== seen.length;
-    for (let i = 0; !isChanged && i < children.length; i++) isChanged = children[i] !== seen[i];
-    if (isChanged) {
-      seenChildren.current = children.slice();
-      const found: THREE.DirectionalLight[] = [];
-      scene.traverse((object) => {
-        const light = object as THREE.DirectionalLight;
-        if (light.isLight && light.castShadow && light.shadow) found.push(light);
-      });
-      casters.current = found;
-    }
-    // The writes stay per-frame: the studio crossfade sets each light's shadow
-    // intensity on its own frame callback, and this has to land after it.
-    const lights = casters.current;
-    for (let i = 0; i < lights.length; i++) {
-      const light = lights[i];
+    scene.traverse((object) => {
+      const light = object as THREE.DirectionalLight;
+      if (!light.isLight || !light.castShadow || !light.shadow) return;
       if (light.shadow.radius !== radius) {
         light.shadow.radius = radius;
         light.shadow.blurSamples = 16;
       }
       if (strength > 0) light.shadow.intensity = strength;
-    }
+    });
   });
   return null;
 }

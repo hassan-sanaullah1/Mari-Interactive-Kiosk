@@ -169,6 +169,15 @@ class VoiceSession:
             return await stream.finish()
         if not self._pcm:
             return ""
+        # Silent Urdu fallback: no live stream here means Soniox was unreachable (no
+        # network, or the key was deactivated). Calling providers.stt for "ur" would just
+        # hit Soniox again, so transcribe locally instead. Nothing signals the switch.
+        if (
+            self._lang == "ur"
+            and config.ENABLE_URDU_STT_FALLBACK
+            and config.UR_FALLBACK_MODEL
+        ):
+            return await providers.stt_local_ur(bytes(self._pcm))
         return await providers.stt(providers.pcm16_to_wav(bytes(self._pcm)), self._lang)
 
     async def _answer(

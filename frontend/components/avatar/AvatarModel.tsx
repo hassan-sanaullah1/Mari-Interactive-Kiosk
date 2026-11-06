@@ -1384,6 +1384,33 @@ export default function AvatarModel({
     };
   }, [morphMeshes, gl]);
 
+  // ── REST THE FACE ON MOUNT AND UNMOUNT ──────────────────────
+  /**
+   * Zero the face morphs when this rig mounts and again when it is torn down.
+   *
+   * drei caches the parsed glTF by URL, so a presenter's SkinnedMeshes — and the
+   * morphTargetInfluences this file mutates in place — outlive the component and
+   * come back on the next mount holding whatever values they were last left at.
+   * A rig torn down mid-word (a presenter switch, or a stop/pause that lands
+   * inside applyA2FLipsync's ~100ms decay) is therefore cached with the mouth
+   * still open; and the incoming mount starts with a fresh A2FMorphState whose
+   * `active` is false and whose `meshes` are empty, so that decay path never runs
+   * and nothing relaxes the stale jawOpen until the next clip happens to play —
+   * the mouth sits wide open across the switch. Resetting on both edges (the same
+   * reset the long-background-tab handler above performs) guarantees every rig
+   * arrives at rest and is left at rest in the cache, independent of what
+   * interrupted it. The reset is idempotent and useFrame re-drives the morphs
+   * from scratch, so it cannot fight live playback.
+   */
+  useEffect(() => {
+    const restFace = () => {
+      for (const mesh of morphMeshes) mesh.morphTargetInfluences?.fill(0);
+    };
+    restFace();
+    a2fStateRef.current = createA2FMorphState();
+    return restFace;
+  }, [morphMeshes]);
+
   // ── PER-FRAME UPDATE ────────────────────────────────────────
   // Priority -1: runs before default-priority callbacks, so anything else that
   // reads morphTargetInfluences in the same frame sees this frame's values.

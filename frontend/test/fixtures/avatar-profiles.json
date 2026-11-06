@@ -8,15 +8,15 @@
     }
    },
    "alphaTest": {
-    "pasted__lambert2": 0.22
+    "hairs2": 0.22
    },
    "backLight": {
     "kick": 1,
     "rim": 1
    },
    "bytes": {
-    "decoded": 72205648,
-    "encoded": 52279109
+    "decoded": 49683784,
+    "encoded": 38754637
    },
    "cameraDistanceM": null,
    "darkThemeLighting": {
@@ -46,6 +46,7 @@
    },
    "makeupDesaturation": 0.01,
    "materialEnvIntensity": {
+    "hairs2": 0.15,
     "lambert10": 0.8,
     "lambert11": 2.2,
     "lambert12": 0.55,
@@ -53,18 +54,17 @@
     "lambert16": 1.8,
     "lambert17": 0.55,
     "lambert9": 0.8,
-    "pasted__lambert10": 0.2,
-    "pasted__lambert2": 0.15
+    "pasted__lambert10": 0.2
    },
    "materialRoughness": {
     "Kameez:lambert2": 0.5,
+    "hairs2": 0.32,
     "lambert10": 0.35,
     "lambert11": 0.08,
     "lambert15": 0.35,
     "lambert16": 0.25,
     "lambert9": 0.35,
-    "pasted__lambert10": 0.9,
-    "pasted__lambert2": 0.32
+    "pasted__lambert10": 0.9
    },
    "materialSpecular": {},
    "materialTint": {},
@@ -74,20 +74,20 @@
    "segments": {
     "breathing": {
      "loop": [
-      3,
-      7
+      2.0,
+      5.966666666666667
      ]
     },
     "listening": {
      "loop": [
-      9.9,
-      15.633333333333333
+      8.0,
+      12.533333333333333
      ]
     },
     "talking": {
      "loop": [
-      26.466666666666665,
-      34.2
+      16.466666666666665,
+      26.0
      ]
     }
    },
@@ -100,7 +100,7 @@
     ]
    },
    "skinRoughness": null,
-   "url": "/models/dress2_v6.glb.gz",
+   "url": "/models/female_dress2.glb.gz",
    "widthSqueeze": 1
   },
   "male": {

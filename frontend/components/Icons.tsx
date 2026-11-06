@@ -113,3 +113,60 @@ export function MaleAvatarIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+/**
+ * Captions on / off — the standard "CC" mark: two C letterforms inside a
+ * rounded frame, struck through diagonally in the "off" form.
+ *
+ * "CC" is lettering rather than a drawn symbol, which the presenter toggle
+ * deliberately avoids, but it is the universal caption mark and is read as a
+ * symbol rather than as English — so it carries across to Urdu where the word
+ * would not. The strike is part of the glyph rather than a separate overlay so
+ * the two forms stay the same size.
+ *
+ * The Cs are stroked arcs with a gap on the right, as the reference mark draws
+ * them: each is a full circle minus its right-hand quarter.
+ */
+export function CaptionsIcon({
+  className,
+  off = false,
+}: {
+  className?: string;
+  off?: boolean;
+}) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      {/* Rounded frame. Stroked, not filled, so the disc colour shows through
+          and the mark reads the same on the light and dark surfaces. */}
+      <rect
+        x="1.9"
+        y="4.3"
+        width="20.2"
+        height="15.4"
+        rx="4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2.1}
+      />
+      {/* The two Cs. */}
+      <g
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2.1}
+        strokeLinecap="round"
+      >
+        <path d="M10.1 10.2a2.9 2.9 0 1 0 0 3.6" />
+        <path d="M18.2 10.2a2.9 2.9 0 1 0 0 3.6" />
+      </g>
+      {off && (
+        <path
+          d="M3.6 20.9 20.4 3.1"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2.2}
+          strokeLinecap="round"
+        />
+      )}
+    </svg>
+  );
+}

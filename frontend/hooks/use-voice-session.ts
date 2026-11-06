@@ -203,12 +203,8 @@ export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
   /** Whether the turn whose {"end"} is deferred had speech in it. */
   const endSpokeRef = useRef(false);
   const assistantIdRef = useRef<string | null>(null);
-  /**
-   * Media elements can only be routed through an AnalyserNode once, and the chain
-   * stays in the AudioContext's graph until it is disconnected. Each element's
-   * release function is kept here for whichever path ends it.
-   */
-  const analysersRef = useRef(new WeakMap<HTMLAudioElement, () => void>());
+  /** Media elements can only be routed through an AnalyserNode once. */
+  const analysedRef = useRef(new WeakSet<HTMLAudioElement>());
   /**
    * The conversation so far, mirrored out of React state so the socket callbacks
    * (which close over their turn) always read the current transcript. This is the
@@ -302,15 +298,15 @@ export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
 
   const attachAnalyser = useCallback((el: HTMLAudioElement) => {
     const ac = acRef.current;
-    if (!ac || analysersRef.current.has(el)) return;
+    if (!ac || analysedRef.current.has(el)) return;
     try {
       const src = ac.createMediaElementSource(el);
+      analysedRef.current.add(el);
       const an = ac.createAnalyser();
       an.fftSize = 512;
       src.connect(an);
       an.connect(ac.destination);
       const buf = new Uint8Array(an.frequencyBinCount);
-      let frame = 0;
       const tick = () => {
         if (el.paused || el.ended) {
           levelRef.current = 0;
@@ -323,31 +319,12 @@ export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
           sum += v * v;
         }
         levelRef.current = Math.min(1, Math.sqrt(sum / buf.length) * 3.6);
-        frame = requestAnimationFrame(tick);
+        requestAnimationFrame(tick);
       };
-      analysersRef.current.set(el, () => {
-        cancelAnimationFrame(frame);
-        src.disconnect();
-        an.disconnect();
-      });
       tick();
     } catch {
       /* analyser unavailable — the button just won't react to the waveform */
     }
-  }, []);
-
-  /**
-   * Take an element's analyser out of the audio graph. One is attached per reply
-   * sentence and nothing else ever disconnects it, so without this a kiosk that
-   * runs all day piles up a chain per sentence it has spoken. Safe to call twice,
-   * and for an element that never got one.
-   */
-  const releaseAnalyser = useCallback((el: HTMLAudioElement | null) => {
-    if (!el) return;
-    const release = analysersRef.current.get(el);
-    if (!release) return;
-    analysersRef.current.delete(el);
-    release();
   }, []);
 
   const createQueue = useCallback(() => {
@@ -381,7 +358,6 @@ export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
       const next = () => {
         if (item.clip) endClip(item.clip);
         URL.revokeObjectURL(item.url);
-        releaseAnalyser(el);
         audioElRef.current = null;
         playNext();
       };
@@ -429,7 +405,7 @@ export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
       },
     };
     return queue;
-  }, [attachAnalyser, releaseAnalyser, endOfTurn]);
+  }, [attachAnalyser, endOfTurn]);
 
   /**
    * Wire a socket's reply side: transcript/text events, and the per-sentence
@@ -745,13 +721,12 @@ export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
     try {
       audioElRef.current?.pause();
     } catch {}
-    releaseAnalyser(audioElRef.current);
     audioElRef.current = null;
     assistantIdRef.current = null;
     setPartial("");
     setSpokenLine("");
     setMode("idle");
-  }, [releaseAnalyser, teardownMic]);
+  }, [teardownMic]);
 
   /** End the turn and wipe the transcript — the dock's ✕ in every state. */
   const endAndClear = useCallback(() => {
@@ -866,7 +841,6 @@ export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
       try {
         audioElRef.current?.pause();
       } catch {}
-      releaseAnalyser(audioElRef.current);
       audioElRef.current = null;
       turnRef.current++; // cancel a spoken turn still waiting on the mic
       startingRef.current = null;
@@ -911,7 +885,7 @@ export function useVoiceSession(lang: Lang, avatar: AvatarId = DEFAULT_AVATAR) {
       };
       ws.onerror = () => setError("chat-failed");
     },
-    [bindReplyStream, createQueue, ensureAudioContext, historyPayload, releaseAnalyser, teardownMic],
+    [bindReplyStream, createQueue, ensureAudioContext, historyPayload, teardownMic],
   );
 
   useEffect(() => () => stop(), [stop]);

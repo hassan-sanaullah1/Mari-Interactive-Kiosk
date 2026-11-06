@@ -66,9 +66,15 @@
   --pill-seg: calc(127 * var(--s));
   --pill-pad: calc(5 * var(--s));
   --pill-font: calc(21 * var(--s));
+  /* Side padding inside a word segment. 0.32 * --pill-h is the reference
+     geometry; landscape keeps it, portrait slims it (see the portrait block). */
+  --pill-seg-pad: calc(0.32 * var(--pill-h));
   --pill-gap: calc(22 * var(--s));
   --theme-btn: calc(59 * var(--s));
   --launcher: calc(63 * var(--s));
+  /* Gap between the captions toggle and the chat launcher. Landscape has room
+     to spare in the bottom row, so it just matches --pill-gap on the left. */
+  --row-gap-tight: var(--pill-gap);
 
   /* Distance from the viewport edges for the bottom control row. */
   --edge-x: calc(78 * var(--s));
@@ -111,9 +117,24 @@
     --pill-seg: calc(79 * var(--s));
     --pill-pad: calc(5 * var(--s));
     --pill-font: calc(15 * var(--s));
-    --pill-gap: calc(12.5 * var(--s));
+    /* 6, not the reference 14.4 (0.32 * 45). Measured in a browser at the
+       402-unit reference width, "English" and "اردو" need 71 and 68 units of
+       text, so the reference padding made the pill 207 units wide — and the
+       five controls this row now carries (pill + presenter + theme on the left,
+       captions + chat on the right) came to 389 against the 370 available
+       between the edges. The row overflowed with gaps at zero, and on a
+       360-wide screen the clusters measurably collided. Slimming the padding
+       frees ~26 units; the words keep their full size, --pill-font is
+       untouched. See docs/kiosk-layout.md. */
+    --pill-seg-pad: calc(6 * var(--s));
+    /* 3.5, not the reference 12.5: what is left for the four gaps in this row
+       once the six controls have taken their width. */
+    --pill-gap: calc(3.5 * var(--s));
     --theme-btn: calc(46 * var(--s));
     --launcher: calc(45 * var(--s));
+    /* Gap between the captions toggle and the chat launcher — the same 3.5 as
+       --pill-gap, so all four gaps in this row read as one spacing. */
+    --row-gap-tight: var(--pill-gap);
 
     --edge-x: calc(16 * var(--s));
     --edge-y: calc(25.5 * var(--s));

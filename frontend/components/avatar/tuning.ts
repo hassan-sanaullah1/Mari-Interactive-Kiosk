@@ -354,7 +354,7 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
        *  lambert23) into one 111k-vertex mesh on this single material, so the
        *  card value carries over here and the scalp's own 0.35 is gone with the
        *  separate scalp geometry it was cutting. */
-      pasted__lambert2: 0.22,
+      hairs2: 0.22,
     },
 
     materialRoughness: {
@@ -369,7 +369,7 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
       lambert10: 0.35, // lower teeth
       lambert15: 0.35, // tongue, wet
       /** Hair: a tighter specular lobe lets the top light lay a sheen on the crown. */
-      pasted__lambert2: 0.32,
+      hairs2: 0.32,
     },
     materialSpecular: {},
     materialEnvIntensity: {
@@ -382,7 +382,7 @@ export const RIG_TUNING: Record<AvatarId, RigTuning> = {
       lambert17: 0.55,
       lambert12: 0.55,
       /** Hair: near-black cards handed a bright room back read as grey sheen. */
-      pasted__lambert2: 0.15,
+      hairs2: 0.15,
       /** Dupatta, dulled again — shine comes from reflection as well as roughness. */
       "pasted__lambert10": 0.2,
     },

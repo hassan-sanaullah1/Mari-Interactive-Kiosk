@@ -28,7 +28,9 @@
 .seg {
   min-width: var(--pill-seg);
   height: calc(var(--pill-h) - 2 * var(--pill-pad));
-  padding: 0 calc(0.32 * var(--pill-h));
+  /* Token, so the portrait layout can slim it without changing the font size;
+     see --pill-seg-pad in globals.css for the measurement that set it. */
+  padding: 0 var(--pill-seg-pad);
   border-radius: 999px;
   font-size: var(--pill-font);
   font-weight: 500;

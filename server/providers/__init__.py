@@ -19,8 +19,10 @@ from .stt import (
     WhisperLocalSTT,
     WhisperRemoteSTT,
     get_stt_provider,
+    get_urdu_fallback_stt,
     pcm16_to_wav,
     stt,
+    stt_local_ur,
     wav_to_pcm16,
 )
 from .tts import KokoroLocalTTS, KokoroRemoteTTS, MatchaTTS, UpliftTTS, get_tts_provider
@@ -38,9 +40,12 @@ __all__ = [
     "WhisperRemoteSTT",
     "get_stt_provider",
     "get_tts_provider",
+    "get_urdu_fallback_stt",
     "pcm16_to_wav",
     "stt",
+    "stt_local_ur",
     "warm",
+    "warm_urdu_fallback",
     "wav_to_pcm16",
 ]
 
@@ -65,3 +70,21 @@ async def warm(lang: str = "en", avatar: str | None = None) -> None:
             await asyncio.to_thread(tts_provider.warm)
         except Exception:
             pass
+
+
+async def warm_urdu_fallback() -> None:
+    """Preload the local Urdu model so the first Soniox-failure turn pays only transcription.
+    A no-op when it shares English's model, which warm() has already loaded."""
+    import asyncio
+    import logging
+
+    from .. import config
+
+    if not (config.ENABLE_URDU_STT_FALLBACK and config.UR_FALLBACK_MODEL):
+        return
+    try:
+        await asyncio.to_thread(get_urdu_fallback_stt().warm)
+    except Exception as exc:
+        logging.getLogger(__name__).warning(
+            "urdu fallback model unavailable, Soniox has no local backstop: %s", exc
+        )

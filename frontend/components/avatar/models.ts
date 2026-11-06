@@ -172,7 +172,7 @@ const f = (frame: number) => frame / FPS;
  */
 const FEMALE: AvatarConfig = {
   id: "female",
-  url: "/models/dress2_v6.glb.gz",
+  url: "/models/female_dress2.glb.gz",
   // Served as the pre-compressed .gz (next.config.ts). Run through
   // optimize_glb.py with --keep-windows matching the three loop windows
   // below (converted to this clip's own 24fps: 72-168, 238-375, 635-821 —
@@ -182,7 +182,7 @@ const FEMALE: AvatarConfig = {
   // morph target names are untouched (verified: mesh/skin/node/material
   // counts and target names identical to the un-optimized export). 72MB raw
   // dropped to 46MB, 52MB gzipped dropped to 36MB.
-  bytes: { decoded: 46294600, encoded: 35687593 },
+  bytes: { decoded: 49683784, encoded: 38754637 },
   segments: {
     // The search's global best, [60,90] (body gap 0.00deg), shipped first and
     // was wrong: minimising the pose gap alone says nothing about whether the
@@ -205,7 +205,7 @@ const FEMALE: AvatarConfig = {
     // gap), so the 2.5s it plays carries the same 7 moving joints at the same
     // amplitudes as the full window — the slice and the whole are the same
     // motion. That argument does NOT transfer to the other two phases.
-    breathing: { loop: [f(90), f(210)] },
+    breathing: { loop: [f(60), f(179)] },
     // Body gap 4.76deg, hand/arm gap 0.32deg, cloth seam 9.8 frames. The
     // loosest seam of the three, and the phase simply does not offer a tight
     // one — v3's header says the same about its own listening window.
@@ -220,7 +220,7 @@ const FEMALE: AvatarConfig = {
     // at full amplitude, because it re-enters at loop[0] and plays 94% of
     // itself (5.40s) every lap. Trading a slightly wider crossfade for 2.6x
     // the motion the viewer actually sees is the right side of that deal.
-    listening: { loop: [f(297), f(469)] },
+    listening: { loop: [f(240), f(376)] },
     // Body gap 0.25deg, hand/arm gap 0.19deg, cloth seam 74.7 frames. This is
     // v3's own talking window, re-scored against this clip rather than
     // inherited — further evidence the body animation did not change.
@@ -240,7 +240,7 @@ const FEMALE: AvatarConfig = {
     // Cloth seam is the one number that got worse (46 -> 74.7 frames), taken
     // deliberately: the 0.35s crossfade is there to absorb cloth drift at a
     // seam, and nothing absorbs replaying a 1-second sliver of a gesture.
-    talking: { loop: [f(794), f(1026)] },
+    talking: { loop: [f(494), f(780)] },
   },
   hasMorphs: true,
   grammaticalGender: "f",
