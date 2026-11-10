@@ -215,16 +215,24 @@ class QdrantStore:
     async def count(self) -> int:
         return (await self.client.count(self.settings.qdrant_collection, exact=True)).count
 
-    async def fetch_section(self, section: str, limit: int = 32) -> list[Hit]:
-        """Every chunk of one top-level section, in document order.
+    async def fetch_section(self, section: str, source: str, limit: int = 32) -> list[Hit]:
+        """Every chunk of one top-level section of one file, in document order.
 
-        Filters on the indexed `section` field (a heading-path prefix match would be a
-        scan). Scores stay zero: these chunks were not ranked.
+        Filters on the indexed `section` and `source` fields (a heading-path prefix match
+        would be a scan). Scores stay zero: these chunks were not ranked.
+
+        `source` is part of the filter because a section name is only unique within a
+        file. Two documents with a chapter called "Introduction" or "Safety" would
+        otherwise complete each other's sections, putting one file's content in an
+        answer about the other.
         """
         points, _ = await self.client.scroll(
             collection_name=self.settings.qdrant_collection,
             scroll_filter=models.Filter(
-                must=[models.FieldCondition(key="section", match=models.MatchValue(value=section))]
+                must=[
+                    models.FieldCondition(key="section", match=models.MatchValue(value=section)),
+                    models.FieldCondition(key="source", match=models.MatchValue(value=source)),
+                ]
             ),
             limit=limit,
             with_payload=True,

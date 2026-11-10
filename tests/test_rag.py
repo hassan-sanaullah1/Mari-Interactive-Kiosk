@@ -214,13 +214,15 @@ class _FakeStore:
     def __init__(self, sections: dict[str, list[str]]) -> None:
         self.sections = sections
         self.asked: list[str] = []
+        self.asked_sources: list[str] = []
 
-    async def fetch_section(self, section: str, limit: int = 32):
+    async def fetch_section(self, section: str, source: str, limit: int = 32):
         self.asked.append(section)
+        self.asked_sources.append(source)
         return [
             Hit(
                 text=text,
-                source="kb.md",
+                source=source,
                 heading_path=f"{section} > sub",
                 chunk_index=i,
                 score=0.0,
@@ -230,10 +232,12 @@ class _FakeStore:
         ]
 
 
-def _ranked(section: str, text: str, score: float = 0.9) -> RetrievedChunk:
+def _ranked(
+    section: str, text: str, score: float = 0.9, source: str = "kb.md"
+) -> RetrievedChunk:
     return RetrievedChunk(
         text=text,
-        source="kb.md",
+        source=source,
         heading_path=f"{section} > sub",
         score=score,
         fusion_score=score,
@@ -317,11 +321,24 @@ def test_expansion_can_be_turned_off() -> None:
     assert added == 0 and len(chunks) == 1
 
 
+def test_expansion_asks_only_for_the_ranked_chunks_own_file() -> None:
+    """A section name is unique within a file, not across the corpus.
+
+    Two documents with a chapter called "Safety" would otherwise complete each other's
+    sections, putting one file's content into an answer about the other.
+    """
+    store = _FakeStore({"Safety": ["alpha text", "beta text"]})
+    r = _expander(store)
+    asyncio.run(r._expand_section([_ranked("Safety", "alpha text", source="alpha.docx")]))
+    assert store.asked == ["Safety"]
+    assert store.asked_sources == ["alpha.docx"]
+
+
 def test_a_store_failure_leaves_the_ranked_chunks_untouched() -> None:
     """Completeness is an improvement, not a promise — it must never fail a turn."""
 
     class _Broken(_FakeStore):
-        async def fetch_section(self, section: str, limit: int = 32):
+        async def fetch_section(self, section: str, source: str, limit: int = 32):
             raise RuntimeError("qdrant is down")
 
     r = _expander(_Broken({}))

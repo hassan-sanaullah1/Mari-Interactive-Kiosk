@@ -30,6 +30,10 @@ const nextConfig: NextConfig = {
       { source: "/api/chat", destination: `${API_ORIGIN}/chat` },
       { source: "/api/voice", destination: `${API_ORIGIN}/voice` },
       { source: "/api/healthz", destination: `${API_ORIGIN}/healthz` },
+      // The admin panel's API (server/admin.py), whose routes live under /upload/*
+      // on the backend. Proxied under /api/admin/* so the Next page at /admin keeps
+      // that path for itself: a rewrite on /admin/* would swallow the page.
+      { source: "/api/admin/:path*", destination: `${API_ORIGIN}/upload/:path*` },
     ];
   },
   // Next's on-the-fly gzip stays ON for ordinary responses (HTML/JS/CSS), where

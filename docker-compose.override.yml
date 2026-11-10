@@ -16,8 +16,13 @@ services:
       # container without a rebuild. Narrow mounts only, so the rest of /app/server
       # stays as it was baked into the image.
       - ./server/admin.py:/app/server/admin.py:ro
+      # The admin panel's credential store, imported by admin.py.
+      - ./server/admin_credentials.py:/app/server/admin_credentials.py:ro
       - ./server/app.py:/app/server/app.py:ro
-      - ./server/static:/app/server/static:ro
+      # admin.py reads its upload cap from config.ADMIN_MAX_UPLOAD_MB, so the
+      # two files have to be the same vintage: mounting admin.py alone left the
+      # container with the image's older config and the backend would not start.
+      - ./server/config.py:/app/server/config.py:ro
   frontend:
     ports:
       - "3000:3000"

@@ -330,14 +330,17 @@ class Retriever:
         ]
         return self._gate(chunks, s.score_threshold)
 
-    def _sections_to_complete(self, chunks: list[RetrievedChunk]) -> list[str]:
-        """The section that owns rank 1, and only that one.
+    def _sections_to_complete(self, chunks: list[RetrievedChunk]) -> list[tuple[str, str]]:
+        """The (section, source) that owns rank 1, and only that one.
 
         Completing more sections raised recall but filled the context with the company
         overview and made answers worse (see docs/retrieval-tuning-notes.md).
+
+        The source travels with the section name because a section is only unique within
+        its own file; see QdrantStore.fetch_section.
         """
         top = chunks[0].heading_path.split(" > ")[0].strip()
-        return [top] if top else []
+        return [(top, chunks[0].source)] if top else []
 
     def _gate(self, chunks: list[RetrievedChunk], threshold: float) -> list[RetrievedChunk]:
         """Apply the threshold to the result as a whole, not to each chunk.
@@ -378,13 +381,15 @@ class Retriever:
         budget = s.section_expansion_chars
         added: list[RetrievedChunk] = []
 
-        for name in sections[: s.section_expansion_sections]:
+        for name, source in sections[: s.section_expansion_sections]:
             if len(added) >= s.section_expansion_max_chunks or budget <= 0:
                 break
             try:
-                siblings = await self.store.fetch_section(name)
+                siblings = await self.store.fetch_section(name, source)
             except Exception:  # noqa: BLE001 - completeness is an improvement, not a promise
-                logger.debug("section expansion failed for %r", name, exc_info=True)
+                logger.debug(
+                    "section expansion failed for %r in %r", name, source, exc_info=True
+                )
                 continue
             for hit in siblings:
                 if len(added) >= s.section_expansion_max_chunks or budget <= 0:

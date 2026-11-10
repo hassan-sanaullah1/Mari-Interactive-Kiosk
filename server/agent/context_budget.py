@@ -29,7 +29,21 @@ LLM_CHARS_PER_TOKEN_URDU = 1.8
 LLM_CHARS_PER_TOKEN_LATIN = 3.5
 _URDU_SCRIPT = re.compile(r"[\u0600-\u06ff\u0750-\u077f\ufb50-\ufdff\ufe70-\ufeff]")
 # Headroom for the chat template's own scaffolding and tokenizer disagreement.
-LLM_CONTEXT_SAFETY_TOKENS = 256
+#
+# 1536, not the original 256. The per-script estimate above was calibrated on prose,
+# where it over-counts (measured 0.86 real/estimated across ten retrieval prompts) and
+# 256 was ample. It under-counts on the content the trim actually produces: markdown
+# tables and dense names, ranks and reference numbers each cost far more tokens than
+# their character count suggests. A measured share-price prompt estimated 6,740 tokens
+# and really held 7,856 (ratio 1.17); with 400 reserved reply tokens that is 8,256
+# against the model's 8,192, and vLLM rejects the whole request with a 400. The visitor
+# then hears the "model unreachable" stand-in, which is both wrong and alarming.
+#
+# 1536 covers the measured 1,116-token shortfall with room to spare. It costs retrieved
+# context on the few questions that fill the budget, which is the right trade: a
+# slightly shorter answer still informs, a 400 does not. The real fix is pricing tables
+# and name-dense text properly in estimate_tokens; see docs/kb-formats.md.
+LLM_CONTEXT_SAFETY_TOKENS = 1536
 
 # Enough history for "and what about Urdu?" to resolve, not a full transcript.
 MAX_HISTORY_TURNS = 8

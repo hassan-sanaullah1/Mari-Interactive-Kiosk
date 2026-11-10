@@ -47,6 +47,14 @@ PORT = int(env("MARI_PORT", "8010"))
 APP_ENV = env("APP_ENV", "local")
 APP_COMMIT = env("APP_COMMIT", "local")
 
+# ── knowledge-base admin portal ─────────────────────────────────────
+# Per-file upload ceiling. Office formats and PDFs carry images and styling, so the
+# same amount of text is far larger on disk than its markdown equivalent: a scanned
+# 300-page book can exceed 100 MB while a dense text PDF of the same length is under
+# 10. Bytes are a crude proxy for the thing that actually costs — chunk count — so
+# this is a guard against absurd uploads, not a tuned limit.
+ADMIN_MAX_UPLOAD_MB = int(env("MARI_ADMIN_MAX_UPLOAD_MB", "60"))
+
 KNOWLEDGE_FILE = Path(
     env("APP_KNOWLEDGE_FILE", str(ROOT / "server" / "data" / "mari_energies_knowledge_base.md"))
 )
