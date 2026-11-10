@@ -33,3 +33,5 @@ pydantic-settings>=2.4    # MARI_RAG_* configuration
 pdfplumber>=0.11          # PDF ingestion (keeps layout, so paragraphs survive)
 markdown-it-py>=3.0       # markdown normalisation
 python-multipart
+python-docx>=1.1          # .docx ingestion (Word heading styles -> markdown)
+openpyxl>=3.1             # .xlsx ingestion (sheets -> markdown tables)

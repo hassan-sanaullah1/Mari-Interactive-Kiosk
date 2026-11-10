@@ -14,10 +14,17 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from .chunking import Chunk, CountTokens, chunk_markdown, chunk_text, strip_frontmatter
+from .converters import CONVERTERS, LEGACY_SUFFIXES, ConversionError
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_SUFFIXES = {".md", ".markdown", ".txt", ".pdf"}
+SUPPORTED_SUFFIXES = {".md", ".markdown", ".txt", ".pdf"} | set(CONVERTERS)
+
+# Converted formats are emitted as markdown, so they are chunked by chunk_markdown
+# rather than chunk_text. ".txt" and ".pdf" deliberately keep their original
+# chunk_text path: they are already tuned against this corpus and the golden
+# fixtures pin their output.
+_MARKDOWN_SUFFIXES = {".md", ".markdown"} | set(CONVERTERS)
 
 
 def file_hash(path: Path) -> str:
@@ -81,6 +88,10 @@ def parse(path: Path) -> str:
         return parse_markdown(path)
     if suffix == ".pdf":
         return parse_pdf(path)
+    if (hint := LEGACY_SUFFIXES.get(suffix)) is not None:
+        raise ConversionError(hint)
+    if (convert := CONVERTERS.get(suffix)) is not None:
+        return convert(path)
     return parse_text(path)
 
 
@@ -106,7 +117,7 @@ def chunks_for(
         count_tokens=count_tokens,
         metadata=metadata,
     )
-    if path.suffix.lower() in {".md", ".markdown"}:
+    if path.suffix.lower() in _MARKDOWN_SUFFIXES:
         return chunk_markdown(text, path.name, **kwargs)
     return chunk_text(text, path.name, **kwargs)
 

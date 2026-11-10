@@ -28,8 +28,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_ALLOWED_SUFFIXES = {".md", ".markdown"}
-_MAX_BYTES = 5 * 1024 * 1024  # 5 MB per file
+# Mirrors the RAG layer, so the portal and the ingester can never disagree.
+from .rag.documents import SUPPORTED_SUFFIXES as _ALLOWED_SUFFIXES
+# Office formats and PDFs carry images and styling, so the same amount of text is
+# much larger on disk than the markdown equivalent.
+_MAX_BYTES = 25 * 1024 * 1024  # 25 MB per file
 
 
 def _check_token(provided: str | None) -> None:
@@ -45,7 +48,7 @@ def _safe_target(filename: str, corpus_dir: Path) -> Path:
     if not name or name.startswith(".") or name in {"README.md", "sky47_knowledge_base.md"}:
         raise HTTPException(status_code=400, detail={"error": {"code": "bad_name", "message": f"filename {name!r} not allowed"}})
     if Path(name).suffix.lower() not in _ALLOWED_SUFFIXES:
-        raise HTTPException(status_code=400, detail={"error": {"code": "bad_type", "message": "only .md / .markdown files are accepted"}})
+        raise HTTPException(status_code=400, detail={"error": {"code": "bad_type", "message": f"unsupported file type; accepted: {', '.join(sorted(_ALLOWED_SUFFIXES))}"}})
     target = (corpus_dir / name).resolve()
     if corpus_dir.resolve() not in target.parents and target.parent != corpus_dir.resolve():
         raise HTTPException(status_code=400, detail={"error": {"code": "bad_path", "message": "path escapes corpus directory"}})
@@ -136,7 +139,8 @@ async def admin_upload(request: Request, file: UploadFile, x_admin_token: str | 
 
     # Stream to a sibling temp file, then atomically rename. Avoids a half-written file
     # being discovered mid-ingest.
-    tmp = corpus_dir / f".incoming-{uuid.uuid4().hex}.md"
+    suffix = Path(file.filename).suffix.lower()
+    tmp = corpus_dir / f".incoming-{uuid.uuid4().hex}{suffix}"
     size = 0
     try:
         with tmp.open("wb") as fh:
@@ -158,6 +162,15 @@ async def admin_upload(request: Request, file: UploadFile, x_admin_token: str | 
 
     logger.info("admin: uploaded %s (%d bytes)", target.name, size)
     report = await _reingest()
+    if (reason := report.get("failed", {}).get(target.name)) is not None:
+        # Remove it again: a file in the corpus that cannot be parsed will be retried
+        # on every ingest and never answer anything.
+        target.unlink(missing_ok=True)
+        await _reingest()
+        raise HTTPException(
+            status_code=422,
+            detail={"error": {"code": "conversion_failed", "message": reason}},
+        )
     return JSONResponse({"saved": target.name, "size": size, "ingest": report})
 
 
@@ -632,14 +645,14 @@ _PAGE_HTML = """<!doctype html>
       <div class="card">
         <div class="card-head">
           <h3>Upload files</h3>
-          <span class="hint">.md or .markdown · max 5 MB each</span>
+          <span class="hint">Markdown, text, PDF, Word, Excel, CSV · max 25 MB each</span>
         </div>
         <div class="card-body">
           <label for="fileInput" class="drop" id="drop">
-            <input id="fileInput" type="file" accept=".md,.markdown" multiple>
+            <input id="fileInput" type="file" accept=".md,.markdown,.txt,.pdf,.docx,.xlsx,.xlsm,.csv,.tsv" multiple>
             <div class="drop-icon">⇪</div>
             <div class="drop-main">Drop files here or click to browse</div>
-            <div class="drop-sub">Multiple files supported · indexed automatically</div>
+            <div class="drop-sub">.md .txt .pdf .docx .xlsx .csv · multiple files · indexed automatically</div>
           </label>
         </div>
         <div id="uploadMsg" class="msg hidden"></div>
@@ -718,7 +731,7 @@ async function loadList() {
       row.innerHTML = `
         <label class="pick">
           <input type="checkbox" class="pickbox" data-name="${encodeURIComponent(f.name)}">
-          <div class="file-icon">MD</div>
+          <div class="file-icon">${escapeHtml((f.name.split(".").pop() || "").toUpperCase().slice(0,4))}</div>
           <div class="file-info">
             <div class="file-name">${escapeHtml(f.name)}</div>
             <div class="file-meta">${fmtSize(f.size)} · ${fmtTime(f.mtime)}</div>
@@ -765,7 +778,7 @@ function openModal(name, opts) {
 
 async function uploadFiles(files) {
   for (const f of files) {
-    if (!/\.(md|markdown)$/i.test(f.name)) { setMsg("uploadMsg", "err", "Only .md files are accepted: " + escapeHtml(f.name)); continue; }
+    if (!/\.(md|markdown|txt|pdf|docx|xlsx|xlsm|csv|tsv)$/i.test(f.name)) { setMsg("uploadMsg", "err", "Unsupported file type: " + escapeHtml(f.name)); continue; }
     setMsg("uploadMsg", "ok", `<span class="spinner"></span> Uploading <b>${escapeHtml(f.name)}</b>…`);
     try {
       const fd = new FormData(); fd.append("file", f, f.name);
