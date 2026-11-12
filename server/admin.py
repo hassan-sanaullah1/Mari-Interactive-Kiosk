@@ -16,6 +16,7 @@ same QdrantStore + EmbeddingService the running retriever already warmed. No res
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import uuid
@@ -27,6 +28,7 @@ from pydantic import BaseModel
 
 from . import admin_credentials
 # Mirrors the RAG layer, so the portal and the ingester can never disagree.
+from .rag import documents
 from .rag.documents import SUPPORTED_SUFFIXES as _ALLOWED_SUFFIXES
 from . import config
 from .rag.ingestion import IngestionService
@@ -41,17 +43,35 @@ router = APIRouter()
 # rough proxy for what a large upload actually costs.
 _MAX_BYTES = config.ADMIN_MAX_UPLOAD_MB * 1024 * 1024
 
+# What each accepted format is served as. Markdown and the delimited formats are sent
+# as text/plain rather than their own types: a browser downloads text/markdown and
+# text/csv instead of showing them, and the point of "View" is to look without saving.
+# Office formats have no in-browser viewer, so they download - which is the honest
+# outcome, not a bug.
+_MEDIA_TYPES = {
+    ".md": "text/plain; charset=utf-8",
+    ".markdown": "text/plain; charset=utf-8",
+    ".txt": "text/plain; charset=utf-8",
+    ".csv": "text/plain; charset=utf-8",
+    ".tsv": "text/plain; charset=utf-8",
+    ".pdf": "application/pdf",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".xlsm": "application/vnd.ms-excel.sheet.macroEnabled.12",
+}
 
-def _check_token(provided: str | None, user: str | None = None) -> None:
+
+def _check_token(provided: str | None, user: str | None) -> None:
     """Both credentials, or 401. 503 when none are configured at all.
 
-    The username falls back to the stored one when the caller sends no X-Admin-User
-    header, so a token-only client still works.
+    A missing X-Admin-User header is a FAILED check, not a skipped one. An earlier
+    version substituted the stored username when the header was absent, so a caller
+    who knew only the password was let straight in and the username protected
+    nothing. Both halves are now always compared, in constant time.
     """
     if not admin_credentials.is_configured():
         raise HTTPException(status_code=503, detail={"error": {"code": "admin_disabled", "message": "MARI_ADMIN_TOKEN is not set on the server"}})
-    candidate_user = user if user is not None else admin_credentials.current_user()
-    if not admin_credentials.verify(candidate_user, provided):
+    if not admin_credentials.verify(user, provided):
         raise HTTPException(status_code=401, detail={"error": {"code": "unauthorized", "message": "bad or missing admin credentials"}})
 
 
@@ -99,7 +119,20 @@ async def admin_get(name: str, x_admin_token: str | None = Header(default=None),
     target = _safe_target(name, settings.corpus_dir)
     if not target.exists():
         raise HTTPException(status_code=404, detail={"error": {"code": "not_found", "message": f"{name} not in corpus"}})
-    return FileResponse(target, media_type="text/markdown", filename=target.name)
+    # The browser decides how to display a file from its Content-Type, so every
+    # format has to be labelled honestly. Serving a PDF or a spreadsheet as
+    # text/markdown - which this did for every file - is what made the admin panel's
+    # "View" show pages of binary gibberish.
+    media_type = _MEDIA_TYPES.get(target.suffix.lower(), "application/octet-stream")
+    # `inline` offers the file to the browser's own viewer (its PDF reader, or plain
+    # text) instead of forcing a download; FileResponse's `filename` would set
+    # `attachment` and always download. The name is still given, so "Save as" in the
+    # viewer suggests the right one.
+    return FileResponse(
+        target,
+        media_type=media_type,
+        headers={"Content-Disposition": f'inline; filename="{target.name}"'},
+    )
 
 
 @router.post("/upload/kb")
@@ -137,6 +170,21 @@ async def admin_upload(file: UploadFile, x_admin_token: str | None = Header(defa
                 pass
 
     logger.info("admin: uploaded %s (%d bytes)", target.name, size)
+
+    # Refuse anything the ingester cannot take BEFORE re-indexing. A 286-page PDF once
+    # grew the process to 12.5 GB and the kernel killed the backend; the file stayed in
+    # the corpus, so every restart tried again and the kiosk would not come up. Checking
+    # here means the file is removed and the corpus is left exactly as it was.
+    try:
+        await asyncio.to_thread(documents.chunks_for_preflight, target)
+    except Exception as exc:
+        target.unlink(missing_ok=True)
+        logger.warning("admin: rejected %s: %s", target.name, exc)
+        raise HTTPException(
+            status_code=422,
+            detail={"error": {"code": "too_complex", "message": str(exc)}},
+        ) from exc
+
     report = await _reingest()
     if (reason := report.get("failed", {}).get(target.name)) is not None:
         # Remove it again: a file in the corpus that cannot be parsed will be retried

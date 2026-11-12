@@ -18,6 +18,7 @@ import time
 from collections.abc import Awaitable, Callable
 
 from fastapi import FastAPI, Request, Response, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from . import avatar, config, providers, rag
@@ -34,6 +35,30 @@ configure_logging()
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="MARI · Voice")
+
+# The admin page posts large knowledge-base files straight here instead of through
+# Next's /api/admin/* rewrite: Next 15.5 TRUNCATES a proxied request body at 10 MB
+# and offers no setting to raise it (clientMaxBodySize arrived in a later release),
+# so a 30 MB PDF reached the backend as a corrupt fragment. A direct post is
+# cross-origin - the page is served from :3000 and this runs on :8010 - so the
+# browser needs these headers before it will send one.
+#
+# Deliberately narrow: only the admin routes, only the two methods the upload and its
+# preflight use, and only the credential headers. Nothing here grants access; every
+# admin route still checks the username and password (server/admin.py).
+app.add_middleware(
+    CORSMiddleware,
+    # Any origin, because the kiosk is reached by IP, by mari-MS-7E44.local and by
+    # localhost depending on who is looking, and the set is not known at build time.
+    # Safe here only because the API carries no cookies: credentials travel as
+    # headers, so a hostile page cannot ride an existing session.
+    allow_origin_regex=".*",
+    allow_credentials=False,
+    allow_methods=["POST", "OPTIONS"],
+    allow_headers=["X-Admin-User", "X-Admin-Token", "Content-Type"],
+    max_age=600,
+)
+
 app.include_router(admin_router)
 
 # Container health probes; their INFO lines are dropped (see logging_setup.is_quiet).

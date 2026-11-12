@@ -10,6 +10,28 @@
 /** Where the rewrite in next.config.ts forwards admin calls to FastAPI. */
 const BASE = "/api/admin";
 
+/**
+ * Next 15.5 truncates a proxied request body at 10 MB and has no setting to raise it,
+ * so a larger upload reaches the backend as a corrupt fragment. Anything above this
+ * is posted straight to FastAPI instead; everything else keeps using the same-origin
+ * proxy, which needs no CORS.
+ */
+const PROXY_BODY_LIMIT = 8 * 1024 * 1024;
+
+/**
+ * The backend's own origin, for the uploads that cannot go through the proxy.
+ *
+ * Derived from the page's hostname rather than configured: the kiosk is reached by IP,
+ * by mari-MS-7E44.local and by localhost, and the right answer is always "the same
+ * host, port 8010". Mirrors how lib/endpoints.ts resolves the WebSocket.
+ */
+function backendOrigin(): string {
+  const { protocol, hostname, port, host } = window.location;
+  // Served by next dev/start on :3000 -> FastAPI is the separate process on :8010.
+  // Any other origin -> assume one host in front of both.
+  return port === "3000" ? `${protocol}//${hostname}:8010` : `${protocol}//${host}`;
+}
+
 /** What the operator typed on the sign-in screen. */
 export type Credentials = {
   user: string;
@@ -54,9 +76,11 @@ export class AdminError extends Error {
   }
 }
 
-function authHeaders({ token }: Credentials): HeadersInit {
-  // The backend checks the token alone; the username is a sign-in gate in the page.
-  return { "X-Admin-Token": token };
+function authHeaders({ user, token }: Credentials): HeadersInit {
+  // BOTH halves, on every request. The server compares each one and a missing header
+  // fails the check outright - it does not fall back to the stored username, which is
+  // what previously let a caller in on the password alone.
+  return { "X-Admin-User": user, "X-Admin-Token": token };
 }
 
 /**
@@ -119,7 +143,37 @@ export async function listFiles(creds: Credentials): Promise<KbFile[]> {
 export async function uploadFile(creds: Credentials, file: File): Promise<UploadResult> {
   const form = new FormData();
   form.append("file", file, file.name);
-  return request<UploadResult>("/kb", creds, { method: "POST", body: form });
+  // Small files keep the same-origin proxy. A large one goes straight to the backend,
+  // because the proxy would silently cut its body at 10 MB.
+  const direct = file.size > PROXY_BODY_LIMIT;
+  const url = direct ? `${backendOrigin()}/upload/kb` : `${BASE}/kb`;
+  return sendUpload(url, creds, form);
+}
+
+/** POST a multipart body and read the same error shape `request` does. */
+async function sendUpload(
+  url: string,
+  creds: Credentials,
+  form: FormData,
+): Promise<UploadResult> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: authHeaders(creds),
+    body: form,
+  });
+  const raw = await response.text();
+  let body: unknown = null;
+  if (raw) {
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      body = { detail: raw.slice(0, 200) };
+    }
+  }
+  if (!response.ok) {
+    throw new AdminError(errorMessage(body, response.statusText), response.status);
+  }
+  return body as UploadResult;
 }
 
 export async function deleteFile(creds: Credentials, name: string): Promise<void> {

@@ -12,10 +12,19 @@ type Props = {
   selected: ReadonlySet<string>;
   onToggle: (name: string) => void;
   onToggleAll: (checked: boolean) => void;
+  /** Open one file in a new tab, in whatever viewer the browser has for it. */
+  onView: (name: string) => void;
 };
 
 /** The corpus as a table, with a checkbox column driving the toolbar's bulk actions. */
-export default function FileTable({ files, loading, selected, onToggle, onToggleAll }: Props) {
+export default function FileTable({
+  files,
+  loading,
+  selected,
+  onToggle,
+  onToggleAll,
+  onView,
+}: Props) {
   const allChecked = files.length > 0 && selected.size === files.length;
 
   return (
@@ -41,18 +50,19 @@ export default function FileTable({ files, loading, selected, onToggle, onToggle
             <th>File name</th>
             <th>Size</th>
             <th>Added</th>
+            <th />
           </tr>
         </thead>
         <tbody>
           {loading ? (
             <tr>
-              <td colSpan={4} className={styles.empty}>
+              <td colSpan={5} className={styles.empty}>
                 <span className={styles.spinner} /> Loading…
               </td>
             </tr>
           ) : files.length === 0 ? (
             <tr>
-              <td colSpan={4} className={styles.empty}>
+              <td colSpan={5} className={styles.empty}>
                 No files yet. Upload one above to get started.
               </td>
             </tr>
@@ -85,6 +95,21 @@ export default function FileTable({ files, loading, selected, onToggle, onToggle
                   </td>
                   <td>{formatSize(file.size)}</td>
                   <td>{formatDate(file.mtime)}</td>
+                  <td>
+                    <div className={styles.rowActions}>
+                      <button
+                        type="button"
+                        className={styles.linkBtn}
+                        // Stop the click reaching the row, which would tick the box.
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onView(file.name);
+                        }}
+                      >
+                        View
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               );
             })

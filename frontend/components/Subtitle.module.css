@@ -8,9 +8,9 @@
 .wrap {
   display: flex;
   justify-content: center;
-  /* A definite width (of the dock column, which spans the frame) so the single
-     nowrap line below has something to be clipped against — capped to a share of
-     the frame so it can never reach either edge. */
+  /* A definite width (of the dock column, which spans the frame) for the caption
+     to wrap against, capped to a share of the frame so it never reaches either
+     edge. The column is anchored at its bottom, so extra lines grow upward. */
   width: 100%;
   max-width: min(calc(520 * var(--s)), 94%);
   pointer-events: none;
@@ -20,8 +20,9 @@
   margin: 0;
   max-width: 100%;
   min-width: 0;
-  padding: calc(8 * var(--s)) calc(18 * var(--s));
-  border-radius: calc(16 * var(--s));
+  /* In em so the box hugs the text at whatever size the layout picks. */
+  padding: 0.4em 0.9em;
+  border-radius: 0.8em;
   /* Barely-there scrim: just enough to lift the text off the artwork. */
   background: rgba(16, 18, 20, 0.26);
   color: #ffffff;
@@ -31,15 +32,26 @@
      -webkit- prefix for Safari, which the kiosk's browser may be. */
   backdrop-filter: blur(calc(5 * var(--s)));
   -webkit-backdrop-filter: blur(calc(5 * var(--s)));
-  font-size: calc(16 * var(--s));
+  /* One size for every sentence; a long one wraps rather than shrinking.
+     Set per layout in globals.css. */
+  font-size: var(--subtitle-font);
   line-height: 1.35;
   text-align: center;
-  /* Exactly one horizontal line — never wrap. The component shrinks the font to
-     make the whole sentence fit this one line, so it is shown in full with no
-     ellipsis. overflow:hidden stays only as a 1px rounding guard. */
-  white-space: nowrap;
-  overflow: hidden;
+  /* pretty, not balance: balance halves a two-line sentence, which left the
+     full-width scrim half empty either side. pretty fills the lines and only
+     keeps a lone last word from dangling. */
+  white-space: normal;
+  text-wrap: pretty;
+  /* A token with no break point (a URL, a long number) still wraps instead of
+     pushing the box past the frame edge. */
+  overflow-wrap: anywhere;
   animation: subtitle-in 180ms ease-out;
+}
+
+/* Naskh needs the taller line globals.css gives Urdu text, or wrapped lines
+   collide. Stated here because .line's own line-height would otherwise win. */
+.line[lang="ur"] {
+  line-height: var(--urdu-line-height);
 }
 
 /* Light theme: a light frosted scrim with dark text, matching how the rest of

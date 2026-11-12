@@ -8,6 +8,7 @@ import ConfirmDialog from "@/components/admin/ConfirmDialog";
 import FileTable from "@/components/admin/FileTable";
 import SelectionToolbar from "@/components/admin/SelectionToolbar";
 import UploadDrop from "@/components/admin/UploadDrop";
+import FilePreview from "@/components/admin/FilePreview";
 import ChangeCredentialsDialog from "@/components/admin/ChangeCredentialsDialog";
 import { KeyIcon, SignOutIcon } from "@/components/admin/AdminIcons";
 import { useAdminSession } from "@/hooks/use-admin-session";
@@ -29,6 +30,8 @@ export default function AdminPage() {
 
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [pendingDelete, setPendingDelete] = useState<PendingDelete>(null);
+  // The file whose preview panel is open, or null when none is.
+  const [previewing, setPreviewing] = useState<string | null>(null);
   const [changingCredentials, setChangingCredentials] = useState(false);
 
   // Drop any selected name whose file is gone, so the toolbar's count can never
@@ -148,6 +151,7 @@ export default function AdminPage() {
             onToggleAll={(checked) =>
               setSelected(checked ? new Set(session.files.map((f) => f.name)) : new Set())
             }
+            onView={setPreviewing}
           />
 
           {session.error ? (
@@ -157,6 +161,15 @@ export default function AdminPage() {
           ) : null}
         </section>
       </main>
+
+      {previewing ? (
+        <FilePreview
+          creds={session.creds}
+          name={previewing}
+          onClose={() => setPreviewing(null)}
+          onDownload={(name) => void actions.download([name])}
+        />
+      ) : null}
 
       {pendingDelete ? (
         <ConfirmDialog

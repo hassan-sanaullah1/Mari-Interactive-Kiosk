@@ -79,6 +79,9 @@
   /* Distance from the viewport edges for the bottom control row. */
   --edge-x: calc(78 * var(--s));
   --edge-y: calc(52 * var(--s));
+
+  /* Live caption above the mic: one fixed size, long sentences wrap. */
+  --subtitle-font: calc(16 * var(--s));
 }
 
 /* --- portrait: a separate 402x874 design space, measured off mobile_UI.png ---
@@ -117,6 +120,11 @@
     --pill-seg: calc(79 * var(--s));
     --pill-pad: calc(5 * var(--s));
     --pill-font: calc(15 * var(--s));
+    /* Live caption: 4.5, sized so most reply sentences fit one line across the
+       portrait frame while staying ~14mm tall on the 55" venue panel. Measured
+       over the eval baseline replies: 65% one line, all within two; 5 drops
+       to 57% and needs a third line for some. */
+    --subtitle-font: calc(4.5 * var(--s));
     /* 6, not the reference 14.4 (0.32 * 45). Measured in a browser at the
        402-unit reference width, "English" and "اردو" need 71 and 68 units of
        text, so the reference padding made the pill 207 units wide — and the

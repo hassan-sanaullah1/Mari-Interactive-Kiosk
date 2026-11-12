@@ -23,6 +23,10 @@ services:
       # two files have to be the same vintage: mounting admin.py alone left the
       # container with the image's older config and the backend would not start.
       - ./server/config.py:/app/server/config.py:ro
+      # The retrieval layer: admin.py calls documents.chunks_for_preflight(), so
+      # the two have to be the same vintage. Mounting admin.py alone left the
+      # container calling a function its baked-in documents.py did not have.
+      - ./server/rag:/app/server/rag:ro
   frontend:
     ports:
       - "3000:3000"

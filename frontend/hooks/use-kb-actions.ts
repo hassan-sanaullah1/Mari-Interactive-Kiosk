@@ -9,6 +9,13 @@ import {
   type Credentials,
 } from "@/lib/admin-api";
 
+/**
+ * The largest file the portal will send. Well below the backend's own cap: the
+ * practical ceiling here is the proxy timeout and the memory an ingest needs, not
+ * the byte count the server will accept.
+ */
+const MAX_UPLOAD_BYTES = 60 * 1024 * 1024;
+
 /** A transient message under the page: progress, success or failure. */
 export type Note = { text: string; isError: boolean } | null;
 
@@ -67,6 +74,21 @@ export function useKbActions(
   const upload = useCallback(
     async (chosen: File[]) => {
       if (!creds) return;
+      // Checked here, not only on the server: Next's rewrite proxy abandons a large
+      // upload body after about 30 seconds and returns its own "Internal Server
+      // Error", so a server-side rejection of a big file never reaches this page.
+      // Rejecting it before the transfer starts gives the real reason immediately.
+      const tooBig = chosen.filter((f) => f.size > MAX_UPLOAD_BYTES);
+      if (tooBig.length > 0) {
+        const names = tooBig.map((f) => `${f.name} (${Math.round(f.size / 1024 / 1024)} MB)`);
+        say(
+          `Too large to upload: ${names.join(", ")}. The limit is ` +
+            `${MAX_UPLOAD_BYTES / 1024 / 1024} MB per file - please split the document.`,
+          true,
+        );
+      }
+      chosen = chosen.filter((f) => f.size <= MAX_UPLOAD_BYTES);
+      if (chosen.length === 0) return;
       let saved = 0;
       const failed: string[] = [];
       for (const file of chosen) {

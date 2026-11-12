@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 from .chunking import Chunk, CountTokens, chunk_markdown, chunk_text, strip_frontmatter
@@ -19,6 +19,25 @@ from .converters import CONVERTERS, LEGACY_SUFFIXES, ConversionError
 logger = logging.getLogger(__name__)
 
 SUPPORTED_SUFFIXES = {".md", ".markdown", ".txt", ".pdf"} | set(CONVERTERS)
+
+# Refuse a PDF longer than this rather than let it run the machine out of memory.
+# Extraction is streamed page by page (see parse_pdf), so the ceiling is really about
+# the chunk list and the embedding queue that follow: a 286-page report produces
+# roughly 1,500 chunks. This is deliberately conservative for the kiosk's 15 GB box
+# and can be raised once ingestion runs out of process.
+# PDFs are read in batches of this many pages (see pdf_page_batches), so a long
+# document costs no more memory than a short one. Measured on a real 286-page annual
+# report: 295 MB peak for the whole file, against 2,121 MB before batching.
+PDF_BATCH_PAGES = 25
+
+# A ceiling even so, because the CHUNKS accumulate even though the text does not:
+# 1,000 pages is roughly 1,700 chunks waiting to be embedded.
+MAX_PDF_PAGES = 1000
+
+# Everything that is not a PDF is read into memory whole before chunking, so the file
+# size IS the memory cost. Office formats expand several times over once converted to
+# markdown, which is why this is well below the upload cap.
+MAX_TEXT_BYTES = 60 * 1024 * 1024
 
 # Converted formats are emitted as markdown, so they are chunked by chunk_markdown
 # rather than chunk_text. ".txt" and ".pdf" deliberately keep their original
@@ -79,7 +98,41 @@ def parse_pdf(path: Path) -> str:
             text = re.sub(r"(?<![.!?:;])\n(?=[a-z(])", " ", text)
             if text.strip():
                 pages.append(text.strip())
+            # Release this page's parsed layout objects before moving on.
+            #
+            # pdfplumber caches them on the Page, and `pdf.pages` holds every Page for
+            # the life of the document - so without this the parsed form of the WHOLE
+            # file is resident at once. A real 286-page annual report reached 2.1 GB
+            # here and the kernel's OOM killer took the backend down with it (measured:
+            # 12.5 GB RSS before the kill). Closing each page as it is read holds the
+            # same document at about 173 MB.
+            page.close()
     return "\n\n".join(pages)
+
+
+def pdf_page_batches(path: Path, batch_pages: int) -> Iterator[str]:
+    """Yield the PDF's text `batch_pages` at a time, newest batch only in memory.
+
+    A long report is chunked batch by batch rather than as one string, so peak memory
+    depends on the BATCH size, not the document size: a 286-page report costs the same
+    as a 40-page one. Paragraph chunking is local to a few lines, so splitting on a
+    page boundary costs at most the one paragraph that straddles it.
+    """
+    import pdfplumber
+
+    with pdfplumber.open(path) as pdf:
+        batch: list[str] = []
+        for page in pdf.pages:
+            text = page.extract_text() or ""
+            text = re.sub(r"(?<![.!?:;])\n(?=[a-z(])", " ", text)
+            if text.strip():
+                batch.append(text.strip())
+            page.close()
+            if len(batch) >= batch_pages:
+                yield "\n\n".join(batch)
+                batch = []
+        if batch:
+            yield "\n\n".join(batch)
 
 
 def parse(path: Path) -> str:
@@ -105,10 +158,6 @@ def chunks_for(
     doc_hash: str = "",
 ) -> list[Chunk]:
     """Parse and chunk one file, choosing the chunker that fits its structure."""
-    text = parse(path)
-    if not text.strip():
-        return []
-
     metadata = {"doc_hash": doc_hash, "file_type": path.suffix.lower().lstrip(".")}
     kwargs = dict(
         chunk_tokens=chunk_tokens,
@@ -117,6 +166,24 @@ def chunks_for(
         count_tokens=count_tokens,
         metadata=metadata,
     )
+
+    # A PDF is read in page batches so that peak memory follows the batch size rather
+    # than the document: holding a 286-page report's text and chunks at once is what
+    # once drove this process to 12.5 GB and had the kernel kill it.
+    if path.suffix.lower() == ".pdf":
+        chunks: list[Chunk] = []
+        for batch_text in pdf_page_batches(path, PDF_BATCH_PAGES):
+            if batch_text.strip():
+                chunks.extend(chunk_text(batch_text, path.name, **kwargs))
+        # chunk_text numbers from zero within each batch; renumber so the indices are
+        # unique across the document, which the store uses as part of the point id.
+        for index, chunk in enumerate(chunks):
+            chunk.chunk_index = index
+        return chunks
+
+    text = parse(path)
+    if not text.strip():
+        return []
     if path.suffix.lower() in _MARKDOWN_SUFFIXES:
         return chunk_markdown(text, path.name, **kwargs)
     return chunk_text(text, path.name, **kwargs)
@@ -140,3 +207,39 @@ def discover(corpus_dir: Path, exclude: Sequence[str] = ()) -> list[Path]:
         and not p.name.startswith(".")
         and p.name.lower() not in skip
     )
+
+def chunks_for_preflight(path: Path) -> None:
+    """Raise if this file cannot be ingested safely. Cheap checks only.
+
+    Called by the admin upload before the corpus is re-indexed, so a file that would
+    exhaust the machine is rejected while it can still simply be deleted. Parsing is
+    the expensive half, so this does only what is needed to decide: page count for a
+    PDF, byte size for everything else.
+    """
+    suffix = path.suffix.lower()
+    if suffix == ".pdf":
+        import pdfplumber
+
+        try:
+            with pdfplumber.open(path) as pdf:
+                pages = len(pdf.pages)
+        except Exception as exc:
+            # A truncated or damaged PDF: say so in one second rather than letting the
+            # parser grind through a broken xref for minutes. A 30 MB upload once
+            # arrived truncated at 10 MB and took seven minutes to fail.
+            raise ValueError(
+                "this PDF could not be read - it may be damaged or incompletely "
+                f"uploaded ({type(exc).__name__}). Try uploading it again."
+            ) from exc
+        if pages > MAX_PDF_PAGES:
+            raise ValueError(
+                f"this PDF has {pages} pages and the limit is {MAX_PDF_PAGES}. "
+                "Please split it and upload the parts separately."
+            )
+        return
+    size = path.stat().st_size
+    if size > MAX_TEXT_BYTES:
+        raise ValueError(
+            f"this file is {size // 1024 // 1024} MB and the limit for its type is "
+            f"{MAX_TEXT_BYTES // 1024 // 1024} MB."
+        )

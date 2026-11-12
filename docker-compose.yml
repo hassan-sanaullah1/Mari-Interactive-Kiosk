@@ -30,6 +30,17 @@ services:
       context: .
       dockerfile: server/Dockerfile
     restart: unless-stopped
+    # A ceiling, so a runaway ingest can only kill THIS container - which Docker then
+    # restarts - instead of taking the whole machine down with it. Ingesting a
+    # 286-page PDF once grew the process to 12.5 GB and the kernel's OOM killer ended
+    # the session; everything on the box went with it.
+    #
+    # 13g, not something tighter: the models alone hold about 10 GB resident at idle
+    # (faster-whisper large-v3 plus the FastEmbed dense and sparse models), so a lower
+    # cap would kill the backend during a normal startup. This leaves roughly 3 GB of
+    # working room for a turn and an ingest, and keeps about 2 GB of the host's 15 GB
+    # for Qdrant, the TTS container and the rest of the system.
+    mem_limit: 13g
     # Provider keys: a local .env, or the one Coolify writes from its variables.
     env_file:
       - path: .env

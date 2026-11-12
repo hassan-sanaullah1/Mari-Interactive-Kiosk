@@ -4,6 +4,17 @@ import type { NextConfig } from "next";
 const API_ORIGIN = process.env.MARI_API_ORIGIN ?? "http://127.0.0.1:8010";
 
 const nextConfig: NextConfig = {
+  // Two limits sit between the admin page and the backend, and BOTH have to allow a
+  // large knowledge-base file through.
+  //
+  //   proxyTimeout          the rewrite gives up after 30 s by default and answers
+  //                         with its own 500, so the backend's real reply (a clear
+  //                         422, or a success) never reaches the page.
+  // Next 15.5 also TRUNCATES a proxied request body at 10 MB and has no option to
+  // raise it (clientMaxBodySize is a later release), so a file larger than that
+  // cannot go through this rewrite at all - the admin page posts those straight to
+  // the backend instead. See lib/admin-api.ts.
+  experimental: { proxyTimeout: 600_000 },
   // Standalone build for Docker: outputs a minimal server (node server.js) with only
   // the traced production deps, instead of requiring the full node_modules at runtime.
   output: "standalone",
